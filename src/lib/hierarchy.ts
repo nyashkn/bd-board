@@ -159,3 +159,12 @@ export function writeExpanded(
     // storage unavailable (private mode, quota): the tree just starts collapsed next time
   }
 }
+
+/** Active work first (in progress, open, deferred), closed beads split off to fold away. */
+export function splitClosed(beads: Bead[]): { active: Bead[]; closed: Bead[] } {
+  const sorted = [...beads].sort(compareHierarchy)
+  return {
+    active: sorted.filter((b) => b.status !== 'closed'),
+    closed: sorted.filter((b) => b.status === 'closed'),
+  }
+}

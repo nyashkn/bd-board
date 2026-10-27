@@ -10,6 +10,8 @@ import {
   parseLabelsParam,
   serializeLabels,
   priorityLabel,
+  priorityFilterLabel,
+  visibleLabels,
 } from './sort'
 
 import type { Bead } from './types'
@@ -194,5 +196,26 @@ describe('label filter', () => {
     expect(keepEpicLane(false, false, 0, true)).toBe(false)
     // Epic whose children are all filtered out is still dropped.
     expect(keepEpicLane(true, false, 0, false)).toBe(false)
+  })
+})
+
+describe('toolbar labels', () => {
+  const all = Array.from({ length: 12 }, (_, i) => ({
+    label: `l${i}`,
+    count: 12 - i,
+  }))
+  it('shows the top N and pins selected labels', () => {
+    const a = visibleLabels(all, [], 8)
+    expect(a.shown).toHaveLength(8)
+    expect(a.hidden).toHaveLength(4)
+    const b = visibleLabels(all, ['l11'], 8)
+    expect(b.shown.map((l) => l.label)).toContain('l11')
+    expect(b.hidden.map((l) => l.label)).not.toContain('l11')
+  })
+  it('names the priority filter', () => {
+    expect(priorityFilterLabel([])).toBe('Priority')
+    expect(priorityFilterLabel([1, 0])).toBe('P0–P1')
+    expect(priorityFilterLabel([0, 2])).toBe('P0, P2')
+    expect(priorityFilterLabel([3])).toBe('P3')
   })
 })

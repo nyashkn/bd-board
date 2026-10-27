@@ -8,6 +8,7 @@ import {
   readExpanded,
   rowState,
   shortId,
+  splitClosed,
   writeExpanded,
 } from './hierarchy'
 import { beadMatches } from './sort'
@@ -144,5 +145,19 @@ describe('expand state', () => {
       bead({ id: 'b', parent: 'a' }),
     ])
     expect([...expandableIds(map)]).toEqual(['a'])
+  })
+})
+
+describe('splitClosed', () => {
+  it('puts open and in-progress work first and folds closed away', () => {
+    const { active, closed } = splitClosed([
+      bead({ id: 'x-1', status: 'closed' }),
+      bead({ id: 'x-2', status: 'open' }),
+      bead({ id: 'x-3', status: 'in_progress' }),
+      bead({ id: 'x-10', status: 'closed' }),
+      bead({ id: 'x-4', status: 'deferred' }),
+    ])
+    expect(active.map((b) => b.id)).toEqual(['x-3', 'x-2', 'x-4'])
+    expect(closed.map((b) => b.id)).toEqual(['x-1', 'x-10'])
   })
 })

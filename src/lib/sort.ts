@@ -145,3 +145,27 @@ export function keepEpicLane(
     (noChildren && epicMatches)
   )
 }
+
+/**
+ * Label chips for the toolbar: the `top` most used plus every selected one (pinned), the rest
+ * go behind "more". `all` is already ordered by use.
+ */
+export function visibleLabels<T extends { label: string }>(
+  all: T[],
+  selected: string[],
+  top = 8,
+): { shown: T[]; hidden: T[] } {
+  const shown = all.filter((l, i) => i < top || selected.includes(l.label))
+  return { shown, hidden: all.filter((l) => !shown.includes(l)) }
+}
+
+/** Trigger text for the priority filter: "Priority" when off, else "P0–P1" or "P0, P2". */
+export function priorityFilterLabel(priorities: number[]): string {
+  if (priorities.length === 0) return 'Priority'
+  const ps = [...priorities].sort((a, b) => a - b)
+  const contiguous =
+    ps.length > 1 && ps[ps.length - 1] - ps[0] === ps.length - 1
+  return contiguous
+    ? `P${ps[0]}–P${ps[ps.length - 1]}`
+    : ps.map((p) => `P${p}`).join(', ')
+}
