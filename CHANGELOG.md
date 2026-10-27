@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Compact relative ages ("created 12d ago", "updated 3h ago") on bead cards and in the bead modal sidebar, with the full timestamp as tooltip (`src/lib/age.ts`).
 - Closed recency window (`closed=1d|7d|30d|90d|all`, default 7d, remembered in `localStorage`, URL wins) for the Closed column, swimlanes, Hierarchy and lists, with "N of M" counts and a "show all" link. Completed epics are hidden or shown by the same window and show "Done · took 5d" when visible.
 - Epic progress bar, `closed/total`, percent and open/in progress/blocked breakdown in swimlane headers and on every epic row in Hierarchy; nested sub-epics counted once per descendant.
+- Hierarchy rows show state: a status glyph (shape and colour) and word, "waits on" the open blocker, comment count, assignee initials and age; closed and deferred rows are muted and closed titles struck through, in-progress rows carry a 2px tint.
+- Hierarchy starts collapsed, with children ordered in progress, open, deferred, closed (then priority, then id with numbers compared as numbers). The expanded set is remembered per project in `localStorage` (`bd-board:hierarchy-expanded:<project>`), with "Expand all" and "Collapse all". While a filter is active the matching paths are open and the stored set is left alone.
+- Hierarchy uses the Board's filter bar (search, priority, label chips, ready, assignee, closed window; same URL params). A match keeps its ancestor path, other siblings are hidden, and a "12 matches in 4 epics" line says what is shown.
+- Epics with no tasks yet appear on the Board's Epics view as a header-only lane ("no tasks yet", "waits on", "scoped 18d ago") and on Hierarchy rows. Column headers on the Epics view add "+N epics" because epics are lanes, not cards.
+- `Bead.waiting_on` and `Bead.ready`, filled from `bd blocked --json` and `bd ready --json -n 0` in both the TS adapter and the Rust desktop commands (the read-only shim already allowed both).
+
+### Changed
+
+- Blocked and Ready now agree with `bd`. Blocked is every bead waiting on an open dependency (what `bd blocked` lists, any status except closed), no longer only `status=blocked`; the Blocked column, sidebar count, dashboard card and epic breakdown use it. Ready is `bd ready`: it no longer treats a closed blocker as still blocking and no longer counts deferred beads. On a-real-project the old Ready omitted 5 open beads whose blockers are all closed and counted 1 deferred bead (net 4 short of `bd ready`), and Blocked was 0 against 19. If bd cannot answer (old bd, failed call) the UI falls back to status only (the previous behaviour). The card's red blocked count now counts open blockers only.
 
 ### Fixed
 
