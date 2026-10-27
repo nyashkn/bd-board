@@ -19,7 +19,7 @@ import { InteractiveRow } from '@/components/ui/interactive-row'
 import { AgeLine } from '@/components/age-line'
 import { SubtaskProgress } from '@/components/subtask-progress'
 import { cn, initials } from '@/lib/utils'
-import { groupBeadLinks, isEpic, mapStatus } from '@/lib/types'
+import { beadColumn, groupBeadLinks, isEpic, mapStatus } from '@/lib/types'
 import { PRIORITY_TEXT_CLASS } from '@/lib/sort'
 import { useReadonly } from '@/components/readonly-badge'
 
@@ -87,7 +87,7 @@ function NestedChildren({
                   <span
                     className={cn(
                       'size-1.5 shrink-0 rounded-full',
-                      STATUS_DOT_CLASS[mapStatus(child.status).column],
+                      STATUS_DOT_CLASS[beadColumn(child)],
                     )}
                     aria-hidden="true"
                   />
@@ -160,6 +160,8 @@ export function BeadCard({
   const childBeads = bead.childBeads ?? []
   const childCount = bead.children?.length ?? childBeads.length
   const { blockedBy, blocking, related } = groupBeadLinks(bead.links)
+  // bd's list of OPEN blockers when known; a closed blocker no longer counts.
+  const waitingCount = bead.waiting_on?.length ?? blockedBy.length
   const priority = Math.max(0, Math.min(4, bead.priority))
 
   const style = overlay
@@ -254,11 +256,11 @@ export function BeadCard({
                 label={`${childCount} ${childCount === 1 ? 'subtask' : 'subtasks'}`}
               />
             ) : null}
-            {blockedBy.length > 0 ? (
+            {waitingCount > 0 ? (
               <LinkStat
                 icon={Ban}
-                count={blockedBy.length}
-                label={`blocked by ${blockedBy.length}`}
+                count={waitingCount}
+                label={`waiting on ${waitingCount} open`}
                 className="text-status-blocked"
               />
             ) : null}

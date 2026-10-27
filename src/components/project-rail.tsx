@@ -28,7 +28,7 @@ import {
   setStoredSidebarCollapsed,
 } from '@/lib/sidebar-collapse'
 import { isReady } from '@/lib/sort'
-import { mapStatus } from '@/lib/types'
+import { beadColumn } from '@/lib/types'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -209,9 +209,7 @@ export function ProjectRail() {
   })
   const beads = project ? (beadsQuery.data ?? []) : []
   const readyCount = beads.filter(isReady).length
-  const blockedCount = beads.filter(
-    (b) => mapStatus(b.status).column === 'blocked',
-  ).length
+  const blockedCount = beads.filter((b) => beadColumn(b) === 'blocked').length
 
   const [identity, setIdentity] = useState<string | null>(null)
   useEffect(() => {

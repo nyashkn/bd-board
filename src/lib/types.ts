@@ -77,6 +77,13 @@ export interface Bead {
   children?: string[]
   childBeads?: Bead[]
   links?: BeadLink[]
+  /**
+   * Ids of the OPEN beads this one waits on, from `bd blocked --json` ([] = bd says none). Undefined when bd
+   * could not report it (old bd, failed call): consumers then fall back to status only.
+   */
+  waiting_on?: string[]
+  /** Membership in `bd ready --json`; undefined when bd could not report it. */
+  ready?: boolean
   spec_id?: string
   external_ref?: string
   metadata?: Record<string, string>
@@ -165,6 +172,15 @@ export function mapStatus(raw: string): {
     default:
       return { column: 'open' }
   }
+}
+
+/**
+ * Board column of a bead. A bead waiting on an open dependency (what `bd blocked` lists) sits
+ * in Blocked whatever its status, except once closed.
+ */
+export function beadColumn(b: Pick<Bead, 'status' | 'waiting_on'>): BeadColumn {
+  const column = mapStatus(b.status).column
+  return column !== 'closed' && b.waiting_on?.length ? 'blocked' : column
 }
 
 export function isEpic(b: { issue_type: string }): boolean {

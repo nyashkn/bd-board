@@ -1,0 +1,934 @@
+{
+  "list": [
+    {
+      "id": "ldb-0x3",
+      "title": "ldb-0x3",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-0x3",
+          "depends_on_id": "ldb-7rz.9",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-2gf",
+      "title": "ldb-2gf",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "bug",
+      "dependencies": [
+        {
+          "issue_id": "ldb-2gf",
+          "depends_on_id": "ldb-7rz.9",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-7rz.9",
+      "title": "ldb-7rz.9",
+      "status": "closed",
+      "priority": 1,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-7rz.9",
+          "depends_on_id": "ldb-7rz.5",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-7rz.9",
+          "depends_on_id": "ldb-7rz",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-7rz.9",
+          "depends_on_id": "ldb-7rz.7",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-7rz.4",
+      "title": "ldb-7rz.4",
+      "status": "closed",
+      "priority": 1,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-7rz.4",
+          "depends_on_id": "ldb-7rz.1",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-7rz.4",
+          "depends_on_id": "ldb-7rz",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-03g.7.2",
+      "title": "ldb-03g.7.2",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-03g.7.2",
+          "depends_on_id": "ldb-03g.7",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-cj2",
+      "title": "ldb-cj2",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-cj2",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-cj2",
+          "depends_on_id": "ldb-b6n.14",
+          "type": "relates-to"
+        }
+      ]
+    },
+    {
+      "id": "ldb-vp0",
+      "title": "ldb-vp0",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-vp0",
+          "depends_on_id": "ldb-cj2",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-vp0",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-wai",
+      "title": "ldb-wai",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-wai",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-b6n.10",
+      "title": "ldb-b6n.10",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "feature",
+      "dependencies": [
+        {
+          "issue_id": "ldb-b6n.10",
+          "depends_on_id": "ldb-b6n.8",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-b6n.10",
+          "depends_on_id": "ldb-b6n",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-b6n.11",
+      "title": "ldb-b6n.11",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "feature",
+      "dependencies": [
+        {
+          "issue_id": "ldb-b6n.11",
+          "depends_on_id": "ldb-b6n",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-b6n.11",
+          "depends_on_id": "ldb-b6n.8",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-b6n.8",
+      "title": "ldb-b6n.8",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "feature",
+      "dependencies": [
+        {
+          "issue_id": "ldb-b6n.8",
+          "depends_on_id": "ldb-b6n",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-b6n.5",
+      "title": "ldb-b6n.5",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "feature",
+      "dependencies": [
+        {
+          "issue_id": "ldb-b6n.5",
+          "depends_on_id": "ldb-b6n.4",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-b6n.5",
+          "depends_on_id": "ldb-b6n",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-b6n.3",
+      "title": "ldb-b6n.3",
+      "status": "in_progress",
+      "priority": 1,
+      "issue_type": "feature",
+      "dependencies": [
+        {
+          "issue_id": "ldb-b6n.3",
+          "depends_on_id": "ldb-b6n",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-b6n.3",
+          "depends_on_id": "ldb-b6n.1",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-b6n.4",
+      "title": "ldb-b6n.4",
+      "status": "closed",
+      "priority": 1,
+      "issue_type": "feature",
+      "dependencies": [
+        {
+          "issue_id": "ldb-b6n.4",
+          "depends_on_id": "ldb-b6n",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-b6n.1",
+      "title": "ldb-b6n.1",
+      "status": "in_progress",
+      "priority": 1,
+      "issue_type": "feature",
+      "dependencies": [
+        {
+          "issue_id": "ldb-b6n.1",
+          "depends_on_id": "ldb-b6n",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-4bt",
+      "title": "ldb-4bt",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "epic",
+      "dependencies": [
+        {
+          "issue_id": "ldb-4bt",
+          "depends_on_id": "ldb-f3h",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-kxl",
+      "title": "ldb-kxl",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "epic",
+      "dependencies": [
+        {
+          "issue_id": "ldb-kxl",
+          "depends_on_id": "ldb-4bt",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-7f8",
+      "title": "ldb-7f8",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "epic",
+      "dependencies": [
+        {
+          "issue_id": "ldb-7f8",
+          "depends_on_id": "ldb-hpp",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-f3h",
+      "title": "ldb-f3h",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "epic",
+      "dependencies": [
+        {
+          "issue_id": "ldb-f3h",
+          "depends_on_id": "ldb-7f8",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-hpp",
+      "title": "ldb-hpp",
+      "status": "open",
+      "priority": 1,
+      "issue_type": "epic",
+      "dependencies": [
+        {
+          "issue_id": "ldb-hpp",
+          "depends_on_id": "ldb-vo3",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-vo3",
+      "title": "ldb-vo3",
+      "status": "closed",
+      "priority": 1,
+      "issue_type": "epic",
+      "dependencies": [
+        {
+          "issue_id": "ldb-vo3",
+          "depends_on_id": "ldb-4g6",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-7rz.8",
+      "title": "ldb-7rz.8",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-7rz.8",
+          "depends_on_id": "ldb-7rz.5",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-7rz.8",
+          "depends_on_id": "ldb-7rz.4",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-7rz.8",
+          "depends_on_id": "ldb-7rz.6",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-7rz.8",
+          "depends_on_id": "ldb-7rz",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-7rz.6",
+      "title": "ldb-7rz.6",
+      "status": "closed",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-7rz.6",
+          "depends_on_id": "ldb-7rz.2",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-7rz.6",
+          "depends_on_id": "ldb-7rz",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-7rz.6",
+          "depends_on_id": "ldb-7rz.4",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-7rz.6",
+          "depends_on_id": "ldb-7rz.3",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-7rz.5",
+      "title": "ldb-7rz.5",
+      "status": "closed",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-7rz.5",
+          "depends_on_id": "ldb-7rz",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-7rz.5",
+          "depends_on_id": "ldb-7rz.2",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-03g.7.6",
+      "title": "ldb-03g.7.6",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-03g.7.6",
+          "depends_on_id": "ldb-03g.7.3",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-03g.7.6",
+          "depends_on_id": "ldb-03g.7",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-03g.7.6",
+          "depends_on_id": "ldb-1d3",
+          "type": "related"
+        }
+      ]
+    },
+    {
+      "id": "ldb-03g.7.5",
+      "title": "ldb-03g.7.5",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-03g.7.5",
+          "depends_on_id": "ldb-03g.7",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-03g.7.5",
+          "depends_on_id": "ldb-03g.7.2",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-03g.7.4",
+      "title": "ldb-03g.7.4",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-03g.7.4",
+          "depends_on_id": "ldb-03g.7",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-03g.7.4",
+          "depends_on_id": "ldb-03g.7.2",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-03g.7.3",
+      "title": "ldb-03g.7.3",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-03g.7.3",
+          "depends_on_id": "ldb-03g.7.1",
+          "type": "related"
+        },
+        {
+          "issue_id": "ldb-03g.7.3",
+          "depends_on_id": "ldb-03g.7.2",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-03g.7.3",
+          "depends_on_id": "ldb-03g.7",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-326.13",
+      "title": "ldb-326.13",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-326.13",
+          "depends_on_id": "ldb-326.12",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-326.13",
+          "depends_on_id": "ldb-326",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-326.12",
+      "title": "ldb-326.12",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-326.12",
+          "depends_on_id": "ldb-326",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-1d3",
+      "title": "ldb-1d3",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-1d3",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-541",
+      "title": "ldb-541",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-541",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-541",
+          "depends_on_id": "ldb-wai",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-541",
+          "depends_on_id": "ldb-cj2",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-541",
+          "depends_on_id": "ldb-j1u",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-9mz",
+      "title": "ldb-9mz",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-9mz",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-d8k",
+      "title": "ldb-d8k",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-d8k",
+          "depends_on_id": "ldb-j1u",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-d8k",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-iuz",
+      "title": "ldb-iuz",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-iuz",
+          "depends_on_id": "ldb-1d3",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-iuz",
+          "depends_on_id": "ldb-wai",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-iuz",
+          "depends_on_id": "ldb-cj2",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-iuz",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-j1u",
+      "title": "ldb-j1u",
+      "status": "open",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-j1u",
+          "depends_on_id": "ldb-9mz",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-j1u",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-326.1",
+      "title": "ldb-326.1",
+      "status": "in_progress",
+      "priority": 2,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-326.1",
+          "depends_on_id": "ldb-b6n.10",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-326.1",
+          "depends_on_id": "ldb-b6n.11",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-326.1",
+          "depends_on_id": "ldb-326",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-bev.13",
+      "title": "ldb-bev.13",
+      "status": "deferred",
+      "priority": 3,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-bev.13",
+          "depends_on_id": "ldb-bev",
+          "type": "parent-child"
+        },
+        {
+          "issue_id": "ldb-bev.13",
+          "depends_on_id": "ldb-bev.4",
+          "type": "blocks"
+        }
+      ]
+    },
+    {
+      "id": "ldb-bev.12",
+      "title": "ldb-bev.12",
+      "status": "deferred",
+      "priority": 3,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-bev.12",
+          "depends_on_id": "ldb-bev.6",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-bev.12",
+          "depends_on_id": "ldb-bev",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-kst.13",
+      "title": "ldb-kst.13",
+      "status": "deferred",
+      "priority": 3,
+      "issue_type": "feature",
+      "dependencies": [
+        {
+          "issue_id": "ldb-kst.13",
+          "depends_on_id": "ldb-kst.3",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-kst.13",
+          "depends_on_id": "ldb-kst",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-74u",
+      "title": "ldb-74u",
+      "status": "deferred",
+      "priority": 4,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-74u",
+          "depends_on_id": "ldb-03g.1",
+          "type": "blocks"
+        },
+        {
+          "issue_id": "ldb-74u",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        }
+      ]
+    },
+    {
+      "id": "ldb-03g.1",
+      "title": "ldb-03g.1",
+      "status": "deferred",
+      "priority": 4,
+      "issue_type": "task",
+      "dependencies": [
+        {
+          "issue_id": "ldb-03g.1",
+          "depends_on_id": "ldb-03g",
+          "type": "parent-child"
+        }
+      ]
+    }
+  ],
+  "blocked": [
+    {
+      "id": "ldb-vp0",
+      "status": "open",
+      "issue_type": "task",
+      "blocked_by": ["ldb-cj2"]
+    },
+    {
+      "id": "ldb-b6n.11",
+      "status": "open",
+      "issue_type": "feature",
+      "blocked_by": ["ldb-b6n.8"]
+    },
+    {
+      "id": "ldb-b6n.10",
+      "status": "open",
+      "issue_type": "feature",
+      "blocked_by": ["ldb-b6n.8"]
+    },
+    {
+      "id": "ldb-b6n.3",
+      "status": "in_progress",
+      "issue_type": "feature",
+      "blocked_by": ["ldb-b6n.1"]
+    },
+    {
+      "id": "ldb-kxl",
+      "status": "open",
+      "issue_type": "epic",
+      "blocked_by": ["ldb-4bt"]
+    },
+    {
+      "id": "ldb-4bt",
+      "status": "open",
+      "issue_type": "epic",
+      "blocked_by": ["ldb-f3h"]
+    },
+    {
+      "id": "ldb-f3h",
+      "status": "open",
+      "issue_type": "epic",
+      "blocked_by": ["ldb-7f8"]
+    },
+    {
+      "id": "ldb-7f8",
+      "status": "open",
+      "issue_type": "epic",
+      "blocked_by": ["ldb-hpp"]
+    },
+    {
+      "id": "ldb-03g.7.6",
+      "status": "open",
+      "issue_type": "task",
+      "blocked_by": ["ldb-03g.7.3"]
+    },
+    {
+      "id": "ldb-03g.7.5",
+      "status": "open",
+      "issue_type": "task",
+      "blocked_by": ["ldb-03g.7.2"]
+    },
+    {
+      "id": "ldb-03g.7.4",
+      "status": "open",
+      "issue_type": "task",
+      "blocked_by": ["ldb-03g.7.2"]
+    },
+    {
+      "id": "ldb-03g.7.3",
+      "status": "open",
+      "issue_type": "task",
+      "blocked_by": ["ldb-03g.7.2"]
+    },
+    {
+      "id": "ldb-326.13",
+      "status": "open",
+      "issue_type": "task",
+      "blocked_by": ["ldb-326.12"]
+    },
+    {
+      "id": "ldb-j1u",
+      "status": "open",
+      "issue_type": "task",
+      "blocked_by": ["ldb-9mz"]
+    },
+    {
+      "id": "ldb-d8k",
+      "status": "open",
+      "issue_type": "task",
+      "blocked_by": ["ldb-j1u"]
+    },
+    {
+      "id": "ldb-iuz",
+      "status": "open",
+      "issue_type": "task",
+      "blocked_by": ["ldb-1d3", "ldb-wai", "ldb-cj2"]
+    },
+    {
+      "id": "ldb-541",
+      "status": "open",
+      "issue_type": "task",
+      "blocked_by": ["ldb-wai", "ldb-cj2", "ldb-j1u"]
+    },
+    {
+      "id": "ldb-326.1",
+      "status": "in_progress",
+      "issue_type": "task",
+      "blocked_by": ["ldb-b6n.10", "ldb-b6n.11"]
+    },
+    {
+      "id": "ldb-74u",
+      "status": "deferred",
+      "issue_type": "task",
+      "blocked_by": ["ldb-03g.1"]
+    }
+  ],
+  "ready": [
+    {
+      "id": "ldb-hpp"
+    },
+    {
+      "id": "ldb-b6n.5"
+    },
+    {
+      "id": "ldb-b6n.8"
+    },
+    {
+      "id": "ldb-cj2"
+    },
+    {
+      "id": "ldb-wai"
+    },
+    {
+      "id": "ldb-03g.7.2"
+    },
+    {
+      "id": "ldb-2gf"
+    },
+    {
+      "id": "ldb-0x3"
+    },
+    {
+      "id": "ldb-1d3"
+    },
+    {
+      "id": "ldb-9mz"
+    },
+    {
+      "id": "ldb-326.12"
+    },
+    {
+      "id": "ldb-7rz.8"
+    }
+  ],
+  "readyTotal": 128,
+  "blockedTotal": 19,
+  "listTotal": 430
+}

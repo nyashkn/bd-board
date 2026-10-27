@@ -114,6 +114,12 @@ pub struct Bead {
     pub comment_count: Option<i64>,
     pub dependency_count: Option<i64>,
     pub dependent_count: Option<i64>,
+    /// Open blockers from `bd blocked --json`; None when bd could not say.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub waiting_on: Option<Vec<String>>,
+    /// Membership in `bd ready --json`; None when bd could not say.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ready: Option<bool>,
     pub children: Option<Vec<String>>,
     pub child_beads: Option<Vec<Bead>>,
 }
@@ -895,6 +901,8 @@ fn map_bead(value: &Value) -> Bead {
         comment_count: value_i64(value, "comment_count"),
         dependency_count: value_i64(value, "dependency_count"),
         dependent_count: value_i64(value, "dependent_count"),
+        waiting_on: None,
+        ready: None,
         children: None,
         child_beads: None,
     }
@@ -1080,6 +1088,61 @@ fn build_counts_from_groups(rows: &[Value]) -> ProjectCounts {
     counts
 }
 
+/// Mirrors the TS adapter: a bead waiting on an open dependency (as `bd blocked` lists it)
+/// moves out of its status bucket into Blocked; status `blocked` is already counted.
+fn apply_blocked_to_counts(counts: &mut ProjectCounts, blocked: &[Value]) {
+    for row in blocked {
+        let bucket = match row
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+        {
+            "blocked" | "closed" => continue,
+            "in_progress" | "hooked" => &mut counts.in_progress,
+            "deferred" => &mut counts.deferred,
+            _ => &mut counts.open,
+        };
+        if *bucket > 0 {
+            *bucket -= 1;
+        }
+        counts.blocked += 1;
+    }
+}
+
+/// Stamps `waiting_on` / `ready` from `bd blocked` / `bd ready` rows; `None` stamps nothing.
+fn apply_readiness(beads: &mut [Bead], blocked: Option<&[Value]>, ready: Option<&[Value]>) {
+    let waiting: HashMap<String, Vec<String>> = blocked
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|row| {
+            let by: Vec<String> = row
+                .get("blocked_by")?
+                .as_array()?
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect();
+            Some((row.get("id")?.as_str()?.to_string(), by)).filter(|(_, by)| !by.is_empty())
+        })
+        .collect();
+    let ready_ids: Option<std::collections::HashSet<&str>> = ready.map(|rows| {
+        rows.iter()
+            .filter_map(|r| r.get("id").and_then(Value::as_str))
+            .collect()
+    });
+    for bead in beads {
+        if blocked.is_some() {
+            bead.waiting_on = waiting.get(&bead.id).cloned();
+        }
+        if let Some(ids) = &ready_ids {
+            bead.ready = Some(ids.contains(bead.id.as_str()));
+        }
+    }
+}
+
+fn bd_json_array(dir: &Path, args: &[&str]) -> Option<Vec<Value>> {
+    bd_json(dir, args).ok()?.as_array().cloned()
+}
+
 fn project_counts(dir: &Path) -> ProjectCounts {
     let result = bd_json(dir, &["count", "--by-status", "--json"]).ok();
     let groups = result
@@ -1088,7 +1151,11 @@ fn project_counts(dir: &Path) -> ProjectCounts {
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-    build_counts_from_groups(&groups)
+    let mut counts = build_counts_from_groups(&groups);
+    if let Some(blocked) = bd_json_array(dir, &["blocked", "--json"]) {
+        apply_blocked_to_counts(&mut counts, &blocked);
+    }
+    counts
 }
 
 fn resolve_dir(project_id: &str) -> Result<PathBuf, String> {
@@ -1154,13 +1221,16 @@ fn derive_children(beads: Vec<Bead>) -> Vec<Bead> {
 fn list_beads_inner(project_id: &str) -> Result<Vec<Bead>, String> {
     let dir = resolve_dir(project_id)?;
     let raw = bd_json(&dir, &["list", "--all", "--json"])?;
-    let beads = raw
+    let mut beads: Vec<Bead> = raw
         .as_array()
         .cloned()
         .unwrap_or_default()
         .into_iter()
         .map(|value| map_bead(&value))
         .collect();
+    let blocked = bd_json_array(&dir, &["blocked", "--json"]);
+    let ready = bd_json_array(&dir, &["ready", "--json", "-n", "0"]);
+    apply_readiness(&mut beads, blocked.as_deref(), ready.as_deref());
     Ok(derive_children(beads))
 }
 
@@ -1807,6 +1877,50 @@ mod tests {
         assert_eq!(counts.closed, 0);
         assert_eq!(counts.deferred, 0);
         assert_eq!(counts.total, 25);
+    }
+
+    #[test]
+    fn blocked_rows_move_beads_into_blocked_without_double_counting() {
+        let mut counts = build_counts_from_groups(&[
+            json!({"group": "open", "count": 10}),
+            json!({"group": "in_progress", "count": 2}),
+            json!({"group": "deferred", "count": 1}),
+            json!({"group": "blocked", "count": 1}),
+        ]);
+        let rows = vec![
+            json!({"id": "a", "status": "open"}),
+            json!({"id": "b", "status": "open"}),
+            json!({"id": "c", "status": "in_progress"}),
+            json!({"id": "d", "status": "deferred"}),
+            json!({"id": "e", "status": "blocked"}),
+        ];
+        apply_blocked_to_counts(&mut counts, &rows);
+        assert_eq!(
+            (
+                counts.open,
+                counts.in_progress,
+                counts.deferred,
+                counts.blocked
+            ),
+            (8, 1, 0, 5)
+        );
+        assert_eq!(counts.total, 14);
+    }
+
+    #[test]
+    fn readiness_is_stamped_only_for_lists_bd_returned() {
+        let mut beads = vec![
+            map_bead(&json!({"id": "a", "status": "open"})),
+            map_bead(&json!({"id": "b", "status": "open"})),
+        ];
+        let blocked = vec![json!({"id": "b", "blocked_by": ["a"]})];
+        apply_readiness(&mut beads, Some(&blocked), None);
+        assert_eq!(beads[0].waiting_on, None);
+        assert_eq!(beads[1].waiting_on, Some(vec!["a".to_string()]));
+        assert_eq!(beads[1].ready, None);
+        let ready = vec![json!({"id": "a"})];
+        apply_readiness(&mut beads, None, Some(&ready));
+        assert_eq!((beads[0].ready, beads[1].ready), (Some(true), Some(false)));
     }
 
     #[test]

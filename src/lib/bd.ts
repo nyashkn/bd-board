@@ -297,7 +297,12 @@ async function counts(dir: string): Promise<ProjectCounts> {
     const result = await bdJson<{
       groups?: { group: string; count: number }[]
     }>(dir, ['count', '--by-status', '--json'])
-    return buildCountsFromGroups(result.groups ?? [])
+    const base = buildCountsFromGroups(result.groups ?? [])
+    const blocked = await bdJson<Record<string, unknown>[]>(dir, [
+      'blocked',
+      '--json',
+    ]).catch(() => undefined)
+    return blocked ? applyBlockedToCounts(base, blocked) : base
   } catch {
     return {
       open: 0,
@@ -504,7 +509,66 @@ function pushLink(
   target.set(id, list)
 }
 
-export function buildBeadGraph(rawBeads: Record<string, unknown>[]): Bead[] {
+type IdRow = Record<string, unknown>
+
+/**
+ * Stamps `waiting_on` ([] when bd answered and the bead waits on nothing; open blockers, from `bd blocked --json`) and `ready` (from
+ * `bd ready --json`) onto beads. A list bd could not give (undefined) stamps nothing, so
+ * consumers fall back to status-only rules instead of showing a false zero.
+ */
+export function applyReadiness(
+  beads: Bead[],
+  blocked?: IdRow[],
+  ready?: IdRow[],
+): Bead[] {
+  if (!blocked && !ready) return beads
+  const waiting = new Map<string, string[]>()
+  for (const row of blocked ?? []) {
+    const by = Array.isArray(row['blocked_by'])
+      ? (row['blocked_by'] as unknown[]).filter(
+          (x): x is string => typeof x === 'string',
+        )
+      : []
+    if (typeof row['id'] === 'string' && by.length > 0)
+      waiting.set(row['id'], by)
+  }
+  const readyIds = new Set(ready?.map((r) => r['id']))
+  return beads.map((b) => ({
+    ...b,
+    ...(blocked ? { waiting_on: waiting.get(b.id) ?? [] } : {}),
+    ...(ready ? { ready: readyIds.has(b.id) } : {}),
+  }))
+}
+
+/**
+ * Dashboard counts agree with `bd blocked`: a waiting bead moves out of the bucket of its
+ * status into Blocked (beads whose status is already blocked are not counted twice).
+ */
+export function applyBlockedToCounts(
+  base: ProjectCounts,
+  blocked: IdRow[],
+): ProjectCounts {
+  const next = { ...base }
+  for (const row of blocked) {
+    const status = String(row['status'])
+    if (status === 'blocked' || status === 'closed') continue
+    const key =
+      status === 'in_progress' || status === 'hooked'
+        ? 'in_progress'
+        : status === 'deferred'
+          ? 'deferred'
+          : 'open'
+    // Deferred beads are tallied under `deferred` only; open ones under `open`.
+    if (next[key] > 0) next[key] -= 1
+    next.blocked += 1
+  }
+  return next
+}
+
+export function buildBeadGraph(
+  rawBeads: Record<string, unknown>[],
+  readiness: { blocked?: IdRow[]; ready?: IdRow[] } = {},
+): Bead[] {
   const beads = rawBeads.map(mapRawBead)
   const knownIds = new Set(beads.map((b) => b.id))
   const edges = collectEdges(rawBeads, knownIds)
@@ -536,7 +600,9 @@ export function buildBeadGraph(rawBeads: Record<string, unknown>[]): Bead[] {
     }
   })
 
-  return deriveChildren(withLinks)
+  return deriveChildren(
+    applyReadiness(withLinks, readiness.blocked, readiness.ready),
+  )
 }
 
 function deriveChildren(beads: Bead[]): Bead[] {
@@ -648,12 +714,16 @@ function mapKnowledgeEntry(
 
 async function listBeads(projectId: string): Promise<Bead[]> {
   const dir = await resolveDir(projectId)
-  const raw = await bdJson<Record<string, unknown>[]>(dir, [
-    'list',
-    '--all',
-    '--json',
+  // blocked/ready are bd's own answer to "what waits" and "what can start"; a failure
+  // (old bd) leaves them undefined and the UI falls back to status only.
+  const optional = (args: string[]) =>
+    bdJson<Record<string, unknown>[]>(dir, args).catch(() => undefined)
+  const [raw, blocked, ready] = await Promise.all([
+    bdJson<Record<string, unknown>[]>(dir, ['list', '--all', '--json']),
+    optional(['blocked', '--json']),
+    optional(['ready', '--json', '-n', '0']),
   ])
-  return buildBeadGraph(raw)
+  return buildBeadGraph(raw, { blocked, ready })
 }
 
 async function getBeadDetail(

@@ -57,8 +57,12 @@ export function compareBeads(sort: SortKey): (a: Bead, b: Bead) => number {
   }
 }
 
-/** Ready = open and not waiting on an unresolved dependency. */
+/**
+ * Ready = what `bd ready` lists (open, not deferred, no open blocker). Falls back to the old
+ * approximation when bd did not say; that one counts a closed blocker as still blocking.
+ */
 export function isReady(bead: Bead): boolean {
+  if (bead.ready !== undefined) return bead.ready
   return (
     mapStatus(bead.status).column === 'open' &&
     groupBeadLinks(bead.links).blockedBy.length === 0
@@ -132,6 +136,12 @@ export function keepEpicLane(
   epicMatches: boolean,
   labelsActive: boolean,
   matchedChildren: number,
+  noChildren = false,
 ): boolean {
-  return matchedChildren > 0 || (labelsActive && epicMatches)
+  // An epic scoped but not yet broken down has no children to match: keep it while it matches.
+  return (
+    matchedChildren > 0 ||
+    (labelsActive && epicMatches) ||
+    (noChildren && epicMatches)
+  )
 }

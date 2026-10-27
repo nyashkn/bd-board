@@ -1,4 +1,4 @@
-import { mapStatus } from '@/lib/types'
+import { beadColumn } from '@/lib/types'
 
 import type { Bead, BeadColumn } from '@/lib/types'
 
@@ -16,7 +16,7 @@ const SEGMENT_ORDER: { key: BeadColumn; className: string }[] = [
 ]
 
 function columnOf(bead: Bead): BeadColumn {
-  return mapStatus(bead.status).column
+  return beadColumn(bead)
 }
 
 export function SubtaskProgress({

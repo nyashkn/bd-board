@@ -1,5 +1,5 @@
 import { formatDuration } from './age'
-import { isEpic, mapStatus } from './types'
+import { beadColumn, isEpic } from './types'
 
 import type { Bead, BeadColumn } from './types'
 
@@ -41,7 +41,7 @@ export function descendantStats(
       stack.push(...kids)
       continue
     }
-    const column: BeadColumn = mapStatus(bead.status).column
+    const column: BeadColumn = beadColumn(bead)
     stats[column] += 1
     stats.total += 1
     // Non-epic parents (nested subtasks) still contribute their own children.
@@ -52,7 +52,7 @@ export function descendantStats(
   return stats
 }
 
-const isClosed = (b: Bead) => mapStatus(b.status).column === 'closed'
+const isClosed = (b: Bead) => beadColumn(b) === 'closed'
 
 /**
  * Complete: has descendants and all are closed, or has none and is itself
