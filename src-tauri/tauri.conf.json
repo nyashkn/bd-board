@@ -16,6 +16,8 @@
         "title": "bd board",
         "width": 1440,
         "height": 960,
+        "minWidth": 960,
+        "minHeight": 600,
         "resizable": true
       }
     ],
