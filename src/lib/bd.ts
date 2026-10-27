@@ -467,6 +467,14 @@ function mapRawBead(raw: Record<string, unknown>): Bead {
     closed_at: raw['closed_at'] as string | undefined,
     labels: Array.isArray(raw['labels']) ? (raw['labels'] as string[]) : [],
     parent: raw['parent'] as string | undefined,
+    spec_id: (raw['spec_id'] as string | undefined) || undefined,
+    external_ref: (raw['external_ref'] as string | undefined) || undefined,
+    metadata:
+      raw['metadata'] &&
+      typeof raw['metadata'] === 'object' &&
+      !Array.isArray(raw['metadata'])
+        ? (raw['metadata'] as Record<string, unknown>)
+        : undefined,
     comment_count:
       raw['comment_count'] !== undefined
         ? Number(raw['comment_count'])

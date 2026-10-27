@@ -77,6 +77,9 @@ export interface Bead {
   children?: string[]
   childBeads?: Bead[]
   links?: BeadLink[]
+  spec_id?: string
+  external_ref?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface RelatedBead {

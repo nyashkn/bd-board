@@ -212,3 +212,16 @@ export function parseUpdateBeadInput(input: unknown): {
     update,
   }
 }
+
+export function parseArtifactInput(input: unknown): {
+  project: string
+  path: string
+} {
+  const data = record(input)
+  const path = optionalText(data, 'path', 1024)
+  if (!path) throw new Error('Path is required')
+  return {
+    project: requiredString(data, 'project', PROJECT_RE, 'Project'),
+    path,
+  }
+}

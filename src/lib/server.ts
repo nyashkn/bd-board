@@ -1,8 +1,10 @@
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
 import { createServerFn } from '@tanstack/react-start'
 
-import { bdAdapter } from './bd.ts'
+import { readArtifactFile } from './artifact-read.ts'
+import { bdAdapter, resolveDir } from './bd.ts'
 import {
+  parseArtifactInput,
   parseBeadInput,
   parseCommentInput,
   parseCreateBeadInput,
@@ -12,6 +14,7 @@ import {
 } from './server-validation.ts'
 import { toErrorMessage } from './utils.ts'
 
+import type { ArtifactFile } from './artifacts.ts'
 import type {
   AddProjectOutcome,
   Bead,
@@ -41,6 +44,12 @@ const webGetBeadDetail = createServerFn({ method: 'GET' })
 const webGetProjectKnowledge = createServerFn({ method: 'GET' })
   .validator(parseProjectInput)
   .handler(({ data }) => bdAdapter.getProjectKnowledge(data.project))
+
+const webReadArtifact = createServerFn({ method: 'GET' })
+  .validator(parseArtifactInput)
+  .handler(async ({ data }) =>
+    readArtifactFile(await resolveDir(data.project), data.path),
+  )
 
 const webUpdateBeadStatus = createServerFn({ method: 'POST' })
   .validator(parseStatusUpdateInput)
@@ -122,6 +131,19 @@ export async function getBeadDetailFn({
       id: data.id,
     })
   return webGetBeadDetail({ data })
+}
+
+export async function readArtifactFn({
+  data,
+}: {
+  data: { project: string; path: string }
+}): Promise<ArtifactFile> {
+  if (isDesktopApp())
+    return invoke<ArtifactFile>('read_artifact', {
+      projectId: data.project,
+      path: data.path,
+    })
+  return webReadArtifact({ data })
 }
 
 export async function getProjectKnowledgeFn({
