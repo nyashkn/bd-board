@@ -131,7 +131,13 @@ Two optional fields per project:
 - `"filterLabel": "wo"`: only honoured together with `readonly`. The board then shows only epics carrying that label and their direct children (`BD_FILTER_LABEL`, with `BD_FILTER_TYPE`, default `epic`, if you run `scripts/readonly/bd-filter.py` yourself). Without `readonly` it is ignored. It is a view filter, not access control: `bd show <id>` still answers for any id.
 
 ```json
-{ "id": "ledger", "path": "/Users/you/ledger", "label": "ledger", "readonly": true, "filterLabel": "wo" }
+{
+  "id": "ledger",
+  "path": "/Users/you/ledger",
+  "label": "ledger",
+  "readonly": true,
+  "filterLabel": "wo"
+}
 ```
 
 A wrongly typed value (for example `"readonly": "yes"`) is an error, never silently ignored. A read-only project cannot enable the events journal itself (the shim refuses `config set`), so run `bd config set events-journal true` once by hand in that project; otherwise the board polls every 8 s. Test the shim with `pnpm test:readonly` (needs bd and python3).
