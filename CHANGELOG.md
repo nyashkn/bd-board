@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Compact relative ages ("created 12d ago", "updated 3h ago") on bead cards and in the bead modal sidebar, with the full timestamp as tooltip (`src/lib/age.ts`).
+- Closed recency window (`closed=1d|7d|30d|90d|all`, default 7d, remembered in `localStorage`, URL wins) for the Closed column, swimlanes, Hierarchy and lists, with "N of M" counts and a "show all" link. Completed epics are hidden or shown by the same window and show "Done · took 5d" when visible.
+- Epic progress bar, `closed/total`, percent and open/in progress/blocked breakdown in swimlane headers and on every epic row in Hierarchy; nested sub-epics counted once per descendant.
+
+### Fixed
+
+- Bead modal description, acceptance criteria and artifact markdown were nearly invisible in light mode (`prose-invert` on a light background); markdown body now uses the foreground token in both themes. Also removed alpha-faded muted text on empty-state and detail copy.
+
 - Light and dark themes with a light/dark/system toggle in the header (persisted in `localStorage`, set before first paint); the light palette comes from the owner's patch. Fixed overlay colours now use theme tokens.
 - Optional registry fields `readonly` and `filterLabel` (validated in the TS and Rust loaders). A readonly project runs `scripts/readonly/bd-readonly` (REAL_BD, BD_FILTER_LABEL), shows a "Read-only" badge, hides write controls and refuses writes in the server functions and desktop commands. `filterLabel` is only honoured together with `readonly`. `pnpm test:readonly` exercises the shim.
 - Label filter chips on the board (multi-select, OR, `l` URL param) for every project; view filter only.
