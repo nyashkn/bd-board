@@ -4,7 +4,7 @@ Visual kanban board and multi-project dashboard for [`bd` (beads)](https://githu
 
 ![bd board: the multi-project dashboard, an epic swimlane board, a bead with comments, drag and drop between columns, a bead created from the terminal appearing live, and search](assets/demo.gif)
 
-`bd-board` is intentionally local-first: it discovers bead-enabled repositories on disk, reads data through the local `bd` CLI, and renders a fast dashboard for day-to-day planning. It now also has an early Tauri desktop shell spike so the same UI can run outside the browser.
+`bd-board` is intentionally local-first: it shows the bead projects you register (an explicit registry, see Configuration), reads data through the local `bd` CLI, and renders a fast dashboard for day-to-day planning. It now also has an early Tauri desktop shell spike so the same UI can run outside the browser.
 
 ## Features
 
@@ -20,7 +20,10 @@ Visual kanban board and multi-project dashboard for [`bd` (beads)](https://githu
 - Completed epics (all descendants closed, or a closed epic with none) follow the same window by their latest closed time; when shown they get a "Done · took 5d" badge (created to last close).
 - Compact ages on cards, the Hierarchy and the bead modal: "created 12d ago · updated 3h ago" (minutes < 1h, hours < 48h, days < 90d, then months, then years), full timestamp on hover.
 - Bead detail modal with markdown description, acceptance criteria, comments, parent and child navigation.
-- Artifacts in the bead detail modal: a bead's `spec_id` (shown as "Spec"), its `artifacts` metadata and, for epics, its children's artifacts open inline (markdown rendered, HTML in a sandboxed iframe, images, json/txt). The `external_ref` shows as a link (http/https) or plain "Ref" text. Attach one with `bd update ID --set-metadata artifacts='[{"path":"docs/plan.md","label":"Plan","stage":"design"}]'`; paths are relative to the project, limited to `.md .html .htm .png .jpg .jpeg .gif .svg .txt .json`, 2 MB max, and never read outside the project root. A `path` may also be an `http(s)://` URL: it is shown as a "remote" link row (new tab), never fetched or embedded; other schemes (`javascript:`, `data:`, `file:`) show as invalid.
+- Artifacts in the bead detail modal: a bead's `spec_id` (shown as "Spec"), its `artifacts` metadata and, for epics, its children's artifacts open inline (markdown rendered, HTML in a sandboxed iframe, images, json/txt). The `external_ref` shows as a link (http/https) or plain "Ref" text. How to attach one: see For agents.
+- "Since you last looked" band on the Board and Hierarchy: new, closed, commented and otherwise updated beads since you last had the project open (kept per project in `localStorage`, `bd-board:last-seen:<project>`), with a dot on each changed card or row. Comments do not bump a bead's `updated_at`, so the band, the card age line and the Hierarchy age also count the newest comment. The comment times come from the same `bd export` read the Knowledge tab uses (one extra call per 30 s, shared cache), so the cost is one full export per refresh on large projects; if it fails the band falls back to `updated_at` only.
+- Comments: the modal says plainly that an agent sees a comment only when it next reads the bead (`bd show` / `bd comments`), offers a copyable `agent-deck session send` nudge, shows the author `bd` will record, and on a closed bead offers "Comment and reopen" next to "Comment".
+- Keyboard: `j`/`k` or the arrow keys step through beads, Enter opens the focused bead, Esc closes the modal, `/` focuses search and `?` lists the shortcuts. Nothing fires while typing or with a dialog or menu open.
 - Drag-and-drop status updates with mouse and keyboard sensors.
 - Create beads, add comments, edit fields, and delete beads, enabled by default.
 
@@ -29,7 +32,7 @@ Visual kanban board and multi-project dashboard for [`bd` (beads)](https://githu
 - Node.js 24+.
 - pnpm 10+.
 - `bd` 1.3.0 or newer. Older versions are not supported (the board relies on the events journal for live updates).
-- Repositories with `.beads/metadata.json` under the configured roots.
+- At least one registered project: a repository with `.beads/metadata.json`, added with "Open project" in the app or in `~/.config/bd-board/projects.json` (see Configuration).
 
 **Live updates:** the board subscribes to `bd events tail --follow` and refetches only when the journal reports a change (plus a 60 s safety refetch). When a project's journal is off, the board enables it automatically by running `bd config set events-journal true` in that project (a one-time write to its beads config) and shows a toast. It falls back to 8 s polling only while connecting or after a transient feed error.
 
@@ -151,11 +154,24 @@ Use the **Open project** and **Init project** buttons in the app UI to manage pr
 
 ### Environment Variables
 
-- `BD_BIN`: path to the `bd` binary. Defaults to `bd`, with `/opt/homebrew/bin/bd` as a fallback.
+Set them in `.env.local` for the web app (copy `.env.example`) or in the environment for the desktop app.
 
-The desktop shell uses the same `BD_BIN` configuration. **`BD_ROOTS` is no longer used.**
+- `BD_BIN`: path to the `bd` binary. Defaults to `bd`, with `~/.local/bin/bd` and `/opt/homebrew/bin/bd` as fallbacks. If bd is missing or older than 1.3.0 the dashboard says so and names the install command (`brew install beads`) and this variable.
+- `BD_BOARD_AUTHOR`: the name comments written from the board are recorded under (passed to bd as `--actor`). Unset, the board lets `bd` decide, which resolves `BD_ACTOR`, then `BEADS_ACTOR`, then `bd config set actor <name>`, then `git config user.name`, then `$USER`; the comment box shows the name that will be used. Because agents on the same machine usually share your git name, set one of these to tell your comments from theirs.
+- `BD_READONLY_SHIM`: path to the read-only shim for `readonly` projects (see Project Registry).
+
+The project list comes only from the registry; the old `BD_ROOTS` variable is ignored.
 
 Reads and writes are both enabled by default: the app executes local `bd` mutations (create, edit, comment, status update, delete) with no separate opt-in.
+
+## For agents
+
+Three conventions the board understands. None needs the board running.
+
+- **Attach an artifact** to a bead (shown in its modal, and on the epic):
+  `bd update ID --set-metadata artifacts='[{"path":"docs/plan.md","label":"Plan","stage":"design"}]'`. Paths are relative to the project, limited to `.md .html .htm .png .jpg .jpeg .gif .svg .txt .json`, 2 MB max, and never read outside the project root. A `path` may also be an `http(s)://` URL, shown as a "remote" link row (new tab), never fetched or embedded; other schemes (`javascript:`, `data:`, `file:`) show as invalid. A bead's `spec_id` shows as "Spec".
+- **Record knowledge** with an ordinary comment that starts with one of `LEARNED:`, `DECISION:`, `FACT:`, `PATTERN:`, `INVESTIGATION:`, `MUST-CHECK:` or `DEVIATION:`, for example `bd comments add ID "DECISION: use the events journal, not polling"`. These collect in the Knowledge tab.
+- **Owner comments** are written from the board with `bd comment`, so they carry the author name `bd` records (see `BD_BOARD_AUTHOR`). Agents see them only when they next run `bd show ID` or `bd comments ID`; nothing is pushed to a running session. Filter for the owner's name when you want only those.
 
 ## Commands
 
@@ -205,8 +221,6 @@ The app does not store its own database. It shells out to `bd` with `node:child_
 
 `docs/bd-schema.json` documents that contract as a JSON Schema: the `Bd*` definitions describe what each `bd` command emits, and the remaining definitions describe the normalized shapes the UI consumes.
 
-## Safety Model
-
 ## Overflow check
 
 jsdom cannot lay out, so layout regressions are checked in real Chrome. `scripts/check-overflow.mjs` needs no dependency (it speaks the Chrome DevTools protocol with Node's `fetch`/`WebSocket`; set `CHROME=` if Chrome is not at a default path). Against a running dev server, ideally on a read-only registry:
@@ -232,7 +246,9 @@ IPC mocking only works in the browser suite: Tauri defines `window.__TAURI_INTER
 
 The native suite pins the embedded WebDriver port (`e2e/wdio.conf.ts`); the default 4445 is shared with any other Tauri app running its own suite, and a session will silently attach to the wrong app.
 
-`bd-board` is not designed as a hosted multi-tenant app. Run it locally and bind it only to trusted interfaces: writes are always enabled, so anyone who can reach the app can mutate local bead data.
+## Safety Model
+
+`bd-board` is not designed as a hosted multi-tenant app. Run it locally and bind it only to trusted interfaces: writes are always enabled (except for `readonly` projects), so anyone who can reach the app can mutate local bead data.
 
 ## License
 

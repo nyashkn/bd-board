@@ -19,12 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Epics with no tasks yet appear on the Board's Epics view as a header-only lane ("no tasks yet", "waits on", "scoped 18d ago") and on Hierarchy rows. Column headers on the Epics view add "+N epics" because epics are lanes, not cards.
 - `Bead.waiting_on` and `Bead.ready`, filled from `bd blocked --json` and `bd ready --json -n 0` in both the TS adapter and the Rust desktop commands (the read-only shim already allowed both).
 
+- "Since you last looked" band on Board and Hierarchy (new, closed, commented, updated since the last visit, per project in `localStorage`), a dot on changed cards and rows, and comment-aware ages: a comment does not bump `updated_at`, so cards, Hierarchy rows and the modal also show the newest comment time (`src/lib/activity.ts`). Comment times come from the Knowledge tab's `bd export` read (one extra call, at most every 30 s).
+- Comment box: says an agent sees a comment only when it next reads the bead, a copyable agent-deck nudge, the author `bd` will record (`BD_BOARD_AUTHOR`, then `BD_ACTOR`, `BEADS_ACTOR`, `bd config actor`, git user.name, `$USER`), and "Comment and reopen" on closed beads. New desktop command `comment_author`.
+- Keyboard model: `j`/`k` and arrows through beads, Enter opens, `/` focuses search, `?` opens a shortcut list (button in the top bar); inactive while typing or with a dialog open.
+- Dashboard diagnostic card and rail footer for bd: a missing or too-old bd (minimum 1.3.0) now names the install command (`brew install beads`) and `BD_BIN`, in the web and the desktop paths (`src/lib/bd-errors.ts`, `desktop.rs`).
+- Knowledge tab with nothing recorded teaches the convention (the seven prefixes with hints, an example `bd comments add`) in one compact card and gives the width to Comments, which now show the bead title.
+- README "For agents" section (artifacts, knowledge prefixes, owner comments) and `BD_BOARD_AUTHOR`.
+
 ### Changed
+
+- Board toolbar: "Group" label on the group-by toggle, "Filter: priority" / "Priority: P0-P1" and "Sort: Priority" instead of three buttons called Priority; only the 8 most used label chips show (selected ones stay pinned), the rest sit behind "+N more".
+- Epic modal: open and in-progress subtasks first, closed ones folded under "N closed"; ids no longer wrap.
+- Below 768px the sidebar is always the icon strip; the theme toggle has a visible "Theme" label; "N older hidden, show all" is now a "Show 240 closed before Oct 21" button.
+- Comments written from the board pass `--actor` only when `BD_BOARD_AUTHOR` is set; otherwise bd records its own actor as before.
 
 - Blocked and Ready now agree with `bd`. Blocked is every bead waiting on an open dependency (what `bd blocked` lists, any status except closed), no longer only `status=blocked`; the Blocked column, sidebar count, dashboard card and epic breakdown use it. Ready is `bd ready`: it no longer treats a closed blocker as still blocking and no longer counts deferred beads. On a-real-project the old Ready omitted 5 open beads whose blockers are all closed and counted 1 deferred bead (net 4 short of `bd ready`), and Blocked was 0 against 19. If bd cannot answer (old bd, failed call) the UI falls back to status only (the previous behaviour). The card's red blocked count now counts open blockers only.
 
 ### Fixed
 
+- README and `.env.example` drift: `BD_ROOTS` is gone from both, discovery is described as the explicit registry, the empty Safety Model heading has its paragraph.
 - Horizontal overflow: the project card is now a contained column (path ellipsised with a tooltip, donut and counts inside the card), the Projects header actions wrap, stat cards and project cards use responsive auto-fit grids, topbar tabs collapse to icons below 900px, and long words/URLs in markdown, bead titles and comments wrap while code blocks and tables scroll inside themselves.
 - Bead modal description, acceptance criteria and artifact markdown were nearly invisible in light mode (`prose-invert` on a light background); markdown body now uses the foreground token in both themes. Also removed alpha-faded muted text on empty-state and detail copy.
 
