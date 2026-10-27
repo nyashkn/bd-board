@@ -8,8 +8,10 @@ import {
   AlertTriangle,
   Ban,
   BookOpen,
+  ChevronDown,
   ChevronRight,
   CircleCheck,
+  Copy,
   CornerUpLeft,
   Layers,
   Link2,
@@ -50,6 +52,8 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatAge } from '@/lib/age'
+import { agentNudgeCommand } from '@/lib/comment-author'
+import { splitClosed } from '@/lib/hierarchy'
 import { PROSE_CLASS, cn, initials } from '@/lib/utils'
 import { COLUMNS, groupBeadLinks, isEpic, mapStatus } from '@/lib/types'
 import { PRIORITY_TEXT_CLASS, PRIORITY_WORD } from '@/lib/sort'
@@ -63,6 +67,7 @@ import {
   addCommentFn,
   deleteBeadFn,
   getBeadDetailFn,
+  getCommentAuthorFn,
   getProjectKnowledgeFn,
   previewDeleteBeadFn,
   updateBeadFn,
@@ -135,6 +140,69 @@ function labelsFromText(value: string): string[] {
     .filter(Boolean)
 }
 
+/** Under the comment box: how a comment reaches an agent, who it is posted as, and a nudge to copy. */
+function CommentHelp({
+  beadId,
+  closed,
+  author,
+}: {
+  beadId: string
+  closed: boolean
+  author: { name: string; source: string | null } | undefined
+}) {
+  const nudge = agentNudgeCommand(beadId)
+  return (
+    <div className="flex flex-col gap-1.5 text-[11.5px] text-muted-foreground">
+      <p>
+        Agents see a comment only when they next read the bead (
+        <code className="font-mono">bd show {beadId}</code> or{' '}
+        <code className="font-mono">bd comments {beadId}</code>). Nothing is
+        pushed to a running session.
+        {author?.name ? (
+          <>
+            {' '}
+            Posted as{' '}
+            <span className="font-medium text-foreground">{author.name}</span>
+            {author.source ? ` (from ${author.source})` : ''}; set{' '}
+            <code className="font-mono">BD_BOARD_AUTHOR</code> to change it.
+          </>
+        ) : null}
+      </p>
+      {closed ? (
+        <p className="text-warn">
+          This bead is closed, so agents are unlikely to read it again. Use
+          &ldquo;Comment and reopen&rdquo; if you want it picked up.
+        </p>
+      ) : null}
+      <details className="group">
+        <summary className="w-fit cursor-pointer select-none hover:text-foreground">
+          Tip: nudge a running agent
+        </summary>
+        <div className="mt-1.5 flex items-start gap-2 rounded-md bg-muted px-2.5 py-1.5">
+          <code className="min-w-0 flex-1 font-mono text-[11.5px] break-all text-foreground">
+            {nudge}
+          </code>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 shrink-0 gap-1 px-1.5 text-[11px]"
+            onClick={() => {
+              navigator.clipboard
+                .writeText(nudge)
+                .then(() => toast.success('Copied'))
+                .catch(() => toast.error('Could not copy'))
+            }}
+          >
+            <Copy className="size-3" aria-hidden="true" />
+            Copy
+          </Button>
+        </div>
+      </details>
+    </div>
+  )
+}
+
 function LinkedBeadList({
   items,
   resolveBead,
@@ -164,7 +232,7 @@ function LinkedBeadList({
                 )}
                 aria-hidden="true"
               />
-              <span className="font-mono text-[11px] text-muted-foreground">
+              <span className="font-mono text-[11px] whitespace-nowrap text-muted-foreground">
                 {id}
               </span>
               <span
@@ -731,12 +799,21 @@ export function BeadDetailModal({
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [subtaskOpen, setSubtaskOpen] = useState(false)
+  const [closedOpen, setClosedOpen] = useState(false)
 
   const detailQuery = useQuery({
     queryKey: ['bead', project, bead?.id],
     queryFn: () => getBeadDetailFn({ data: { project, id: bead!.id } }),
     enabled: open && !!bead,
     staleTime: 3000,
+  })
+
+  const authorQuery = useQuery({
+    queryKey: ['comment-author', project],
+    queryFn: () => getCommentAuthorFn({ data: { project } }),
+    enabled: open && !!bead && !readonly,
+    staleTime: 60_000,
+    retry: false,
   })
 
   const knowledgeQuery = useQuery({
@@ -756,6 +833,10 @@ export function BeadDetailModal({
   const detail = detailQuery.data
   const column: BeadColumn = bead ? mapStatus(bead.status).column : 'open'
   const childBeads = bead?.childBeads ?? []
+  const { active: activeChildren, closed: closedChildren } = useMemo(
+    () => splitClosed(childBeads),
+    [childBeads],
+  )
   const doneChildren = useMemo(
     () =>
       childBeads.filter((c) => mapStatus(c.status).column === 'closed').length,
@@ -777,12 +858,26 @@ export function BeadDetailModal({
   })
 
   const commentMutation = useMutation({
-    mutationFn: (text: string) =>
-      addCommentFn({ data: { project, id: bead!.id, text } }),
+    mutationFn: async ({
+      text,
+      reopen,
+    }: {
+      text: string
+      reopen?: boolean
+    }) => {
+      if (reopen)
+        await updateBeadStatusFn({
+          data: { project, id: bead!.id, status: 'open' },
+        })
+      return addCommentFn({ data: { project, id: bead!.id, text } })
+    },
     onSuccess: () => {
       setComment('')
       queryClient.invalidateQueries({ queryKey: ['bead', project, bead?.id] })
       queryClient.invalidateQueries({ queryKey: ['beads', project] })
+      queryClient.invalidateQueries({
+        queryKey: ['project-knowledge', project],
+      })
     },
   })
 
@@ -790,6 +885,14 @@ export function BeadDetailModal({
   const description = detail?.description ?? bead?.description ?? ''
   const acceptance = detail?.acceptance_criteria ?? bead?.acceptance_criteria
   const comments = detail?.comments ?? []
+  const isClosed = bead?.status === 'closed'
+  // A comment does not bump updated_at: show the newest comment as activity when it is later.
+  const lastCommentAt = comments.reduce(
+    (max, c) => Math.max(max, c.created_at ? Date.parse(c.created_at) : 0),
+    0,
+  )
+  const commentIsNewer =
+    lastCommentAt > (bead?.updated_at ? Date.parse(bead.updated_at) : 0)
 
   return (
     <>
@@ -916,13 +1019,48 @@ export function BeadDetailModal({
                             No subtasks.
                           </p>
                         ) : (
-                          <LinkedBeadList
-                            items={childBeads.map((child) => ({
-                              id: child.id,
-                            }))}
-                            resolveBead={resolveBead}
-                            onOpenBead={onOpenBead}
-                          />
+                          <div className="flex flex-col gap-1.5">
+                            <LinkedBeadList
+                              items={activeChildren.map((child) => ({
+                                id: child.id,
+                              }))}
+                              resolveBead={resolveBead}
+                              onOpenBead={onOpenBead}
+                            />
+                            {closedChildren.length > 0 ? (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-fit gap-1 px-1.5 text-xs text-muted-foreground"
+                                  aria-expanded={closedOpen}
+                                  onClick={() => setClosedOpen((v) => !v)}
+                                >
+                                  {closedOpen ? (
+                                    <ChevronDown
+                                      className="size-3.5"
+                                      aria-hidden="true"
+                                    />
+                                  ) : (
+                                    <ChevronRight
+                                      className="size-3.5"
+                                      aria-hidden="true"
+                                    />
+                                  )}
+                                  {closedChildren.length} closed
+                                </Button>
+                                {closedOpen ? (
+                                  <LinkedBeadList
+                                    items={closedChildren.map((child) => ({
+                                      id: child.id,
+                                    }))}
+                                    resolveBead={resolveBead}
+                                    onOpenBead={onOpenBead}
+                                  />
+                                ) : null}
+                              </>
+                            ) : null}
+                          </div>
                         )}
                       </section>
                     ) : null}
@@ -1105,24 +1243,49 @@ export function BeadDetailModal({
                             placeholder="Add a comment..."
                             className="min-h-20 resize-none"
                           />
-                          <Button
-                            size="sm"
-                            className="w-fit self-end"
-                            disabled={
-                              !comment.trim() || commentMutation.isPending
-                            }
-                            onClick={() =>
-                              commentMutation.mutate(comment.trim())
-                            }
-                          >
-                            {commentMutation.isPending ? (
-                              <Loader2
-                                className="size-3.5 animate-spin"
-                                aria-hidden="true"
-                              />
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {isClosed ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={
+                                  !comment.trim() || commentMutation.isPending
+                                }
+                                onClick={() =>
+                                  commentMutation.mutate({
+                                    text: comment.trim(),
+                                    reopen: true,
+                                  })
+                                }
+                              >
+                                Comment and reopen
+                              </Button>
                             ) : null}
-                            Comment
-                          </Button>
+                            <Button
+                              size="sm"
+                              disabled={
+                                !comment.trim() || commentMutation.isPending
+                              }
+                              onClick={() =>
+                                commentMutation.mutate({
+                                  text: comment.trim(),
+                                })
+                              }
+                            >
+                              {commentMutation.isPending ? (
+                                <Loader2
+                                  className="size-3.5 animate-spin"
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                              Comment
+                            </Button>
+                          </div>
+                          <CommentHelp
+                            beadId={bead.id}
+                            closed={isClosed}
+                            author={authorQuery.data}
+                          />
                         </div>
                       )}
                     </section>
@@ -1247,6 +1410,20 @@ export function BeadDetailModal({
                     {formatAge(bead.updated_at, Date.now())}
                   </span>
                 </MetaField>
+
+                {commentIsNewer ? (
+                  <MetaField label="Last comment">
+                    <span
+                      className="font-mono text-[12.5px] text-muted-foreground"
+                      title="Comments do not change Updated"
+                    >
+                      {formatAge(
+                        new Date(lastCommentAt).toISOString(),
+                        Date.now(),
+                      )}
+                    </span>
+                  </MetaField>
+                ) : null}
 
                 <MetaField label="Edges">
                   <span className="flex items-center gap-3 text-[12.5px] text-muted-foreground">
