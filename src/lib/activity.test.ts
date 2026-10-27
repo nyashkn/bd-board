@@ -12,17 +12,16 @@ import {
 
 import type { Bead } from './types'
 
-const bead = (id: string, o: Partial<Bead> = {}): Bead =>
-  ({
-    id,
-    title: id,
-    status: 'open',
-    priority: 2,
-    issue_type: 'task',
-    created_at: '2026-10-01T00:00:00Z',
-    updated_at: '2026-10-01T00:00:00Z',
-    ...o,
-  })
+const bead = (id: string, o: Partial<Bead> = {}): Bead => ({
+  id,
+  title: id,
+  status: 'open',
+  priority: 2,
+  issue_type: 'task',
+  created_at: '2026-10-01T00:00:00Z',
+  updated_at: '2026-10-01T00:00:00Z',
+  ...o,
+})
 
 const SINCE = Date.parse('2026-10-20T00:00:00Z')
 

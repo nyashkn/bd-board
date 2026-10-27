@@ -35,7 +35,6 @@ export function useSinceLastSeen(project: string): {
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onHide)
-      writeLastSeen(project, Date.now())
     }
   }, [project])
 
