@@ -9,6 +9,8 @@ interface StatusColumnHeaderProps {
   count: number
   /** When larger than count, shown as "count of total" (older closed beads hidden). */
   total?: number
+  /** Epics sitting in this column on the Epics board, where they are lane headers, not cards. */
+  epics?: number
   className?: string
 }
 
@@ -31,6 +33,7 @@ export function StatusColumnHeader({
   label,
   count,
   total,
+  epics = 0,
   className,
 }: StatusColumnHeaderProps) {
   return (
@@ -55,6 +58,14 @@ export function StatusColumnHeader({
       >
         {total !== undefined && total > count ? `${count} of ${total}` : count}
       </span>
+      {epics > 0 ? (
+        <span
+          className="font-mono text-[10.5px] text-muted-foreground tabular-nums"
+          title={`${epics} ${epics === 1 ? 'epic is' : 'epics are'} in this column too (shown as lanes)`}
+        >
+          +{epics} {epics === 1 ? 'epic' : 'epics'}
+        </span>
+      ) : null}
     </div>
   )
 }

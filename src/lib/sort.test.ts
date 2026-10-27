@@ -189,5 +189,10 @@ describe('label filter', () => {
     expect(keepEpicLane(true, true, 0)).toBe(true)
     expect(keepEpicLane(false, true, 0)).toBe(false)
     expect(keepEpicLane(true, false, 0)).toBe(false)
+    // Epic scoped but not broken down: kept while it matches the filters.
+    expect(keepEpicLane(true, false, 0, true)).toBe(true)
+    expect(keepEpicLane(false, false, 0, true)).toBe(false)
+    // Epic whose children are all filtered out is still dropped.
+    expect(keepEpicLane(true, false, 0, false)).toBe(false)
   })
 })

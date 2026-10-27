@@ -24,7 +24,9 @@ import {
 } from '@/components/status-column-header'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { isEpic, mapStatus } from '@/lib/types'
+import { formatSpan } from '@/lib/age'
+import { shortId } from '@/lib/hierarchy'
+import { beadColumn, isEpic } from '@/lib/types'
 import { descendantStats, epicTook, isCompleteEpic } from '@/lib/epics'
 import { buildChildrenMap } from '@/lib/tree'
 import { isHiddenByWindow } from '@/lib/closed-window'
@@ -86,7 +88,7 @@ function groupByColumn(
   compare: (a: Bead, b: Bead) => number,
 ): Record<BeadColumn, Bead[]> {
   const grouped = emptyByColumn()
-  for (const b of beads) grouped[mapStatus(b.status).column].push(b)
+  for (const b of beads) grouped[beadColumn(b)].push(b)
   for (const key of COLUMN_KEYS) grouped[key].sort(compare)
   return grouped
 }
@@ -134,6 +136,7 @@ function SwimLane({
   sort,
   nested,
   progress,
+  scopedOnly = false,
   onOpen,
   applyDrop,
   defaultOpen = true,
@@ -144,6 +147,8 @@ function SwimLane({
   sort: SortKey
   nested: boolean
   progress?: { stats: DescendantStats; complete: boolean; took: string }
+  /** Epic with no tasks yet: header only, nothing to lay out in columns. */
+  scopedOnly?: boolean
   onOpen: (bead: Bead) => void
   applyDrop: (activeId: string, toColumn: BeadColumn) => void
   defaultOpen?: boolean
@@ -171,7 +176,7 @@ function SwimLane({
   function columnOfId(id: string): BeadColumn | null {
     if ((COLUMN_KEYS as string[]).includes(id)) return id as BeadColumn
     const bead = beadsById.get(id)
-    return bead ? mapStatus(bead.status).column : null
+    return bead ? beadColumn(bead) : null
   }
 
   function onDragStart(event: DragStartEvent) {
@@ -233,7 +238,9 @@ function SwimLane({
         )}
 
         <span className="ml-auto flex shrink-0 items-center gap-3">
-          {progress ? (
+          {scopedOnly && epic ? (
+            <ScopedSummary epic={epic} />
+          ) : progress ? (
             <EpicProgress
               stats={progress.stats}
               complete={progress.complete}
@@ -247,7 +254,7 @@ function SwimLane({
         </span>
       </header>
 
-      {open ? (
+      {open && !scopedOnly ? (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -277,7 +284,35 @@ function SwimLane({
   )
 }
 
+/** Progress summary of an epic with no tasks: "no tasks yet · waits on x · scoped 18d ago". */
+function ScopedSummary({ epic }: { epic: Bead }) {
+  const waiting = epic.waiting_on ?? []
+  const born = epic.created_at
+    ? formatSpan(Date.now() - Date.parse(epic.created_at))
+    : ''
+  return (
+    <span className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
+      <span className="rounded-[4px] border border-dashed border-border-strong px-1.5 py-px text-[10px] font-semibold tracking-[0.04em] uppercase">
+        no tasks yet
+      </span>
+      {waiting.length > 0 ? (
+        <span
+          className="hidden font-mono text-warn sm:inline"
+          title={`Waits on ${waiting.join(', ')}`}
+        >
+          waits {shortId(waiting[0])}
+          {waiting.length > 1 ? ` +${waiting.length - 1}` : ''}
+        </span>
+      ) : null}
+      <span className="hidden font-mono tabular-nums sm:inline">
+        0/0{born ? ` · scoped ${born} ago` : ''}
+      </span>
+    </span>
+  )
+}
+
 interface Lane {
+  scopedOnly?: boolean
   key: string
   epic?: Bead
   title?: ReactNode
@@ -301,7 +336,7 @@ export function BoardSwimlanes({
   onOpen,
   applyDrop,
 }: BoardSwimlanesProps) {
-  const { lanes, totals, closedTotal, hasAny } = useMemo(() => {
+  const { lanes, totals, epicTotals, closedTotal, hasAny } = useMemo(() => {
     const matches = (b: Bead) =>
       beadMatches(b, search, priorities, ready, assignee, labels)
     const epicIds = new Set(beads.filter(isEpic).map((e) => e.id))
@@ -364,6 +399,7 @@ export function BoardSwimlanes({
           key: epic.id,
           epic,
           children: childrenByEpic.get(epic.id) ?? [],
+          scopedOnly: !childrenMap.has(epic.id),
           progress: {
             stats: descendantStats(epic.id, childrenMap),
             complete: isCompleteEpic(epic, childrenMap),
@@ -373,9 +409,10 @@ export function BoardSwimlanes({
         .filter((lane) => !hiddenIds.has(lane.epic.id))
         .filter((lane) =>
           keepEpicLane(
-            labels.length > 0 && matches(lane.epic),
+            matches(lane.epic),
             labels.length > 0,
             lane.children.length,
+            !childrenMap.has(lane.epic.id),
           ),
         )
 
@@ -390,15 +427,22 @@ export function BoardSwimlanes({
           : epicLanes
     }
 
+    // Epics are lane headers, not cards: say how many sit in each column so the column
+    // counts can be reconciled with `bd` totals.
+    const epicsByColumn = emptyByColumn()
+    if (groupBy === 'epic')
+      for (const e of beads)
+        if (isEpic(e) && matches(e) && !hiddenIds.has(e.id))
+          epicsByColumn[beadColumn(e)].push(e)
+
     const totalByColumn = emptyByColumn()
-    for (const b of shown) totalByColumn[mapStatus(b.status).column].push(b)
-    const closedAll = work.filter(
-      (b) => mapStatus(b.status).column === 'closed',
-    ).length
+    for (const b of shown) totalByColumn[beadColumn(b)].push(b)
+    const closedAll = work.filter((b) => beadColumn(b) === 'closed').length
 
     return {
       lanes: builtLanes,
       totals: totalByColumn,
+      epicTotals: epicsByColumn,
       closedTotal: closedAll,
       hasAny: builtLanes.length > 0,
     }
@@ -434,6 +478,7 @@ export function BoardSwimlanes({
               column={key}
               label={COLUMN_LABEL[key]}
               count={totals[key].length}
+              epics={epicTotals[key].length}
               total={key === 'closed' ? closedTotal : undefined}
             />
             {key === 'closed' ? (
@@ -456,6 +501,7 @@ export function BoardSwimlanes({
             sort={sort}
             nested={nested}
             progress={lane.progress}
+            scopedOnly={lane.scopedOnly}
             onOpen={onOpen}
             applyDrop={applyDrop}
           />
