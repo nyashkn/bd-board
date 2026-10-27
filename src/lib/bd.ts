@@ -449,6 +449,15 @@ function deriveChildren(beads: Bead[]): Bead[] {
   })
 }
 
+// bd metadata is a flat object; keep string values only (artifacts is JSON text).
+function stringMetadata(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return
+  const entries = Object.entries(value).filter(
+    (e): e is [string, string] => typeof e[1] === 'string',
+  )
+  return entries.length ? Object.fromEntries(entries) : undefined
+}
+
 function mapRawBead(raw: Record<string, unknown>): Bead {
   return {
     id: raw['id'] as string,
@@ -469,12 +478,7 @@ function mapRawBead(raw: Record<string, unknown>): Bead {
     parent: raw['parent'] as string | undefined,
     spec_id: (raw['spec_id'] as string | undefined) || undefined,
     external_ref: (raw['external_ref'] as string | undefined) || undefined,
-    metadata:
-      raw['metadata'] &&
-      typeof raw['metadata'] === 'object' &&
-      !Array.isArray(raw['metadata'])
-        ? (raw['metadata'] as Record<string, unknown>)
-        : undefined,
+    metadata: stringMetadata(raw['metadata']),
     comment_count:
       raw['comment_count'] !== undefined
         ? Number(raw['comment_count'])

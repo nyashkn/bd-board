@@ -5,7 +5,7 @@ import type { ArtifactFile, ArtifactKind } from './artifacts.ts'
 
 export const ARTIFACT_MAX_BYTES = 2 * 1024 * 1024
 
-const KINDS: Record<string, { kind: ArtifactKind; mime?: string }> = {
+const KINDS: Partial<Record<string, { kind: ArtifactKind; mime?: string }>> = {
   '.md': { kind: 'markdown' },
   '.html': { kind: 'html' },
   '.htm': { kind: 'html' },

@@ -79,7 +79,7 @@ export interface Bead {
   links?: BeadLink[]
   spec_id?: string
   external_ref?: string
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, string>
 }
 
 export interface RelatedBead {

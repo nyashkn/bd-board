@@ -16,6 +16,7 @@ import {
   ListTree,
   Loader2,
   MessageSquare,
+  Paperclip,
   Pencil,
   Plus,
   Trash2,
@@ -32,6 +33,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { BeadArtifacts } from '@/components/bead-artifacts'
 import { CreateBeadDialog } from '@/components/create-bead-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -917,6 +919,18 @@ export function BeadDetailModal({
                         )}
                       </section>
                     ) : null}
+
+                    <BeadArtifacts
+                      project={project}
+                      bead={bead}
+                      header={(count) => (
+                        <SectionHeader
+                          icon={Paperclip}
+                          label="Artifacts"
+                          trailing={count || undefined}
+                        />
+                      )}
+                    />
 
                     {linkCount > 0 ? (
                       <section>

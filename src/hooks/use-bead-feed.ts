@@ -56,6 +56,7 @@ export function useBeadFeed(project: string): UseBeadFeedResult {
       void queryClient.invalidateQueries({
         queryKey: ['project-knowledge', project],
       })
+      void queryClient.invalidateQueries({ queryKey: ['artifact', project] })
     }
 
     const handle = (msg: BeadFeedMessage) => {

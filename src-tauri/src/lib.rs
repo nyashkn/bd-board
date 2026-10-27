@@ -54,6 +54,7 @@ pub fn run() {
             desktop::init_project,
             desktop::list_beads,
             desktop::get_bead_detail,
+            desktop::read_artifact,
             desktop::get_project_knowledge,
             desktop::update_bead_status,
             desktop::update_bead,
