@@ -47,6 +47,7 @@ import {
   parseClosedWindow,
   readStoredClosedWindow,
   storeClosedWindow,
+  windowCutoff,
 } from '@/lib/closed-window'
 import { buildChildrenMap } from '@/lib/tree'
 import { toErrorMessage } from '@/lib/utils'
@@ -497,6 +498,7 @@ function BoardPage() {
                     nested={nested}
                     total={c.key === 'closed' ? closedTotal : undefined}
                     onShowAll={() => setClosedWindow('all')}
+                    closedBefore={windowCutoff(closedWindow, now)}
                   />
                 ))}
               </div>

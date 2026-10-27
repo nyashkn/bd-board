@@ -23,6 +23,8 @@ interface KanbanColumnProps {
   /** Closed column only: how many closed beads exist before the recency window. */
   total?: number
   onShowAll?: () => void
+  /** Start of the closed window (ms), for the "before Oct 21" label. */
+  closedBefore?: number
 }
 
 export function KanbanColumn({
@@ -34,6 +36,7 @@ export function KanbanColumn({
   nested = false,
   total,
   onShowAll,
+  closedBefore,
 }: KanbanColumnProps) {
   const [expanded, setExpanded] = useState(false)
   const { setNodeRef, isOver } = useDroppable({ id: column })
@@ -61,6 +64,7 @@ export function KanbanColumn({
           <ClosedHiddenNote
             hidden={total - beads.length}
             onShowAll={onShowAll}
+            before={closedBefore}
           />
         </div>
       ) : null}

@@ -29,7 +29,7 @@ import { shortId } from '@/lib/hierarchy'
 import { beadColumn, isEpic } from '@/lib/types'
 import { descendantStats, epicTook, isCompleteEpic } from '@/lib/epics'
 import { buildChildrenMap } from '@/lib/tree'
-import { isHiddenByWindow } from '@/lib/closed-window'
+import { isHiddenByWindow, windowCutoff } from '@/lib/closed-window'
 import {
   PRIORITIES,
   PRIORITY_TEXT_CLASS,
@@ -485,6 +485,7 @@ export function BoardSwimlanes({
               <ClosedHiddenNote
                 hidden={closedTotal - totals.closed.length}
                 onShowAll={onShowAllClosed}
+                before={windowCutoff(closedWindow, now)}
               />
             ) : null}
           </div>

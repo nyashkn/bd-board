@@ -70,23 +70,36 @@ export function StatusColumnHeader({
   )
 }
 
-/** "253 older hidden, show all"; nothing when no closed bead is hidden. */
+/** "Show 240 closed before Oct 21" as a real button; nothing when no closed bead is hidden. */
 export function ClosedHiddenNote({
   hidden,
   onShowAll,
+  before,
 }: {
   hidden: number
   onShowAll: () => void
+  /** Start of the closed window (ms), for the date in the label. */
+  before?: number
 }) {
   if (hidden <= 0) return null
+  const date =
+    before !== undefined && Number.isFinite(before)
+      ? new Date(before).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        })
+      : ''
   return (
     <Button
       type="button"
-      variant="link"
+      variant="outline"
+      size="xs"
       onClick={onShowAll}
-      className="h-auto justify-start px-2.5 py-0 text-[11px] text-muted-foreground hover:text-foreground"
+      className="h-6 w-fit max-w-full justify-start text-xs text-muted-foreground hover:text-foreground"
     >
-      {hidden} older hidden, show all
+      <span className="truncate">
+        Show {hidden} closed{date ? ` before ${date}` : ' earlier'}
+      </span>
     </Button>
   )
 }

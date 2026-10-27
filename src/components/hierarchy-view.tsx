@@ -25,7 +25,7 @@ import { isEpic } from '@/lib/types'
 import { PRIORITY_TEXT_CLASS } from '@/lib/sort'
 import { buildChildrenMap, getRootBeads } from '@/lib/tree'
 import { descendantStats, epicTook, isCompleteEpic } from '@/lib/epics'
-import { isHiddenByWindow } from '@/lib/closed-window'
+import { isHiddenByWindow, windowCutoff } from '@/lib/closed-window'
 import {
   ROW_STATE_LABEL,
   compareHierarchy,
@@ -357,7 +357,11 @@ export function HierarchyView({
             </Button>
           </>
         )}
-        <ClosedHiddenNote hidden={hiddenCount} onShowAll={onShowAllClosed} />
+        <ClosedHiddenNote
+          hidden={hiddenCount}
+          onShowAll={onShowAllClosed}
+          before={windowCutoff(closedWindow, now)}
+        />
       </div>
       {roots.length === 0 ? (
         <div className="flex items-center justify-center py-16">
