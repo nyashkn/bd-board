@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Light and dark themes with a light/dark/system toggle in the header (persisted in `localStorage`, set before first paint); the light palette comes from the owner's patch. Fixed overlay colours now use theme tokens.
+- Optional registry fields `readonly` and `filterLabel` (validated in the TS and Rust loaders). A readonly project runs `scripts/readonly/bd-readonly` (REAL_BD, BD_FILTER_LABEL), shows a "Read-only" badge, hides write controls and refuses writes in the server functions and desktop commands. `filterLabel` is only honoured together with `readonly`. `pnpm test:readonly` exercises the shim.
+- Label filter chips on the board (multi-select, OR, `l` URL param) for every project; view filter only.
 - Bead detail modal: an Artifacts section showing `spec_id`, the `artifacts` metadata (JSON array of `{path, label, stage}`) and, for epics, children's artifacts, with an inline viewer (markdown, sandboxed HTML, images, json/txt) that refreshes on live-feed changes. `external_ref` is shown as an http(s) link or plain "Ref" text.
 - Artifact `path` may be an `http(s)://` URL: rendered as a "remote" external link (new tab, `rel="noopener noreferrer"`), never fetched or iframed; other schemes are shown as invalid.
 - `readArtifact` server function and `read_artifact` desktop command: project-confined (no `..`, absolute paths or symlink escapes), allow-listed extensions, 2 MB cap.

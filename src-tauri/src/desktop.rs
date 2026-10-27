@@ -315,7 +315,12 @@ fn plan_launch(
 fn launch_for(dir: &Path) -> Result<BdLaunch, String> {
     let dir_str = dir.to_string_lossy();
     let registry = registry::load()?;
-    let entry = registry.projects.iter().find(|e| e.path == dir_str);
+    // Same folder registered twice: a readonly entry wins, never the other way round.
+    let entry = registry
+        .projects
+        .iter()
+        .filter(|e| e.path == dir_str)
+        .max_by_key(|e| e.readonly);
     plan_launch(entry, bd_candidates(), &shim_path, &|c| {
         resolve_real_bd(c, &is_executable_file)
     })

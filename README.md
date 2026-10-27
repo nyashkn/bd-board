@@ -10,7 +10,9 @@ Visual kanban board and multi-project dashboard for [`bd` (beads)](https://githu
 
 - Multi-project dashboard with live status counts.
 - Board view grouped by status or by epic swimlanes.
-- Priority filtering, text search, and sort controls with URL state.
+- Priority and label filtering, text search, and sort controls with URL state. The label chips (multi-select, OR) are built from the labels present in the project; in epic swimlanes a lane stays when the epic or any of its children matches. This is a view filter only, not access control.
+- Light, dark or system theme: toggle in the header, remembered in `localStorage`, applied before first paint (no flash). Defaults to `prefers-color-scheme`.
+- Read-only projects: a "Read-only" badge, and create, edit, comment, delete and drag are hidden and refused by the server (see Configuration).
 - Epic progress from child beads.
 - Bead detail modal with markdown description, acceptance criteria, comments, parent and child navigation.
 - Artifacts in the bead detail modal: a bead's `spec_id` (shown as "Spec"), its `artifacts` metadata and, for epics, its children's artifacts open inline (markdown rendered, HTML in a sandboxed iframe, images, json/txt). The `external_ref` shows as a link (http/https) or plain "Ref" text. Attach one with `bd update ID --set-metadata artifacts='[{"path":"docs/plan.md","label":"Plan","stage":"design"}]'`; paths are relative to the project, limited to `.md .html .htm .png .jpg .jpeg .gif .svg .txt .json`, 2 MB max, and never read outside the project root. A `path` may also be an `http(s)://` URL: it is shown as a "remote" link row (new tab), never fetched or embedded; other schemes (`javascript:`, `data:`, `file:`) show as invalid.
@@ -122,6 +124,17 @@ The app stores a list of registered beads projects at `~/.config/bd-board/projec
   ]
 }
 ```
+
+Two optional fields per project:
+
+- `"readonly": true`: bd runs through the deny-by-default shim `scripts/readonly/bd-readonly` (allowlist of read subcommands plus `bd --readonly`), the UI hides every write control and the server functions refuse writes. `REAL_BD` is set to the normally resolved bd binary. Set `BD_READONLY_SHIM` to use a shim at another path. Desktop bundles ship the shim as a resource.
+- `"filterLabel": "wo"`: only honoured together with `readonly`. The board then shows only epics carrying that label and their direct children (`BD_FILTER_LABEL`, with `BD_FILTER_TYPE`, default `epic`, if you run `scripts/readonly/bd-filter.py` yourself). Without `readonly` it is ignored. It is a view filter, not access control: `bd show <id>` still answers for any id.
+
+```json
+{ "id": "ledger", "path": "/Users/you/ledger", "label": "ledger", "readonly": true, "filterLabel": "wo" }
+```
+
+A wrongly typed value (for example `"readonly": "yes"`) is an error, never silently ignored. A read-only project cannot enable the events journal itself (the shim refuses `config set`), so run `bd config set events-journal true` once by hand in that project; otherwise the board polls every 8 s. Test the shim with `pnpm test:readonly` (needs bd and python3).
 
 Use the **Open project** and **Init project** buttons in the app UI to manage projects. The app resolves each project's beads location by calling `bd where --json`, so it automatically honors all beads configuration mechanisms (embedded, shared server, proxied, global, redirects).
 

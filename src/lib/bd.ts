@@ -126,8 +126,9 @@ export function planLaunch(
 }
 
 async function launchFor(dir: string): Promise<BdLaunch> {
-  const entry = (await loadRegistry()).find((e) => e.path === dir)
-  return planLaunch(entry)
+  // Same folder registered twice: a readonly entry wins, never the other way round.
+  const same = (await loadRegistry()).filter((e) => e.path === dir)
+  return planLaunch(same.find((e) => e.readonly) ?? same[0])
 }
 
 export function bdErrorMessage(
