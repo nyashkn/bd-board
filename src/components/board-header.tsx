@@ -60,6 +60,8 @@ interface BoardHeaderProps {
   /** Omitted for read-only projects: no "New bead". */
   onCreate?: () => void
   liveIndicator: React.ReactNode
+  /** Hierarchy tab: same filters, but no group-by, nesting or sort (the tree has its own order). */
+  hierarchy?: boolean
 }
 
 const VIEWS: { key: BoardView; label: string; icon: LucideIcon }[] = [
@@ -126,6 +128,7 @@ export function BoardHeader({
   setClosedWindow,
   onCreate,
   liveIndicator,
+  hierarchy = false,
 }: BoardHeaderProps) {
   function togglePriority(p: number, checked: boolean) {
     setPriorities(
@@ -146,32 +149,40 @@ export function BoardHeader({
   return (
     <header className="flex flex-col gap-3 pb-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <ToggleGroup
-          type="single"
-          value={view}
-          onValueChange={(value) => value && setView(value as BoardView)}
-          aria-label="Group by"
-        >
-          {VIEWS.map((v) => {
-            const Icon = v.icon
-            return (
-              <ToggleGroupItem key={v.key} value={v.key} aria-label={v.label}>
-                <Icon className="size-3.5" aria-hidden="true" />
-                {v.label}
-              </ToggleGroupItem>
-            )
-          })}
-        </ToggleGroup>
+        {hierarchy ? null : (
+          <>
+            <ToggleGroup
+              type="single"
+              value={view}
+              onValueChange={(value) => value && setView(value as BoardView)}
+              aria-label="Group by"
+            >
+              {VIEWS.map((v) => {
+                const Icon = v.icon
+                return (
+                  <ToggleGroupItem
+                    key={v.key}
+                    value={v.key}
+                    aria-label={v.label}
+                  >
+                    <Icon className="size-3.5" aria-hidden="true" />
+                    {v.label}
+                  </ToggleGroupItem>
+                )
+              })}
+            </ToggleGroup>
 
-        <Toggle
-          pressed={nested}
-          onPressedChange={setNested}
-          aria-label="Nest subtasks inside their parent card"
-          className="gap-1.5"
-        >
-          <ListTree className="size-3.5" aria-hidden="true" />
-          Nested
-        </Toggle>
+            <Toggle
+              pressed={nested}
+              onPressedChange={setNested}
+              aria-label="Nest subtasks inside their parent card"
+              className="gap-1.5"
+            >
+              <ListTree className="size-3.5" aria-hidden="true" />
+              Nested
+            </Toggle>
+          </>
+        )}
 
         <ClosedWindowSelect value={closedWindow} onChange={setClosedWindow} />
 
@@ -236,28 +247,30 @@ export function BoardHeader({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5">
-                <ArrowUpDown className="size-3.5" aria-hidden="true" />
-                {SORT_OPTIONS.find((o) => o.key === sort)?.label}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuRadioGroup
-                value={sort}
-                onValueChange={(v) => setSort(v as SortKey)}
-              >
-                {SORT_OPTIONS.map((o) => (
-                  <DropdownMenuRadioItem key={o.key} value={o.key}>
-                    {o.label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {hierarchy ? null : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                  <ArrowUpDown className="size-3.5" aria-hidden="true" />
+                  {SORT_OPTIONS.find((o) => o.key === sort)?.label}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuRadioGroup
+                  value={sort}
+                  onValueChange={(v) => setSort(v as SortKey)}
+                >
+                  {SORT_OPTIONS.map((o) => (
+                    <DropdownMenuRadioItem key={o.key} value={o.key}>
+                      {o.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           <div className="relative">
             <Search

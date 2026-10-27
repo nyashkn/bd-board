@@ -1,33 +1,66 @@
-import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, Layers } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Ban,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Circle,
+  CircleCheck,
+  CircleDot,
+  CirclePause,
+  Hourglass,
+  Layers,
+  MessageSquare,
+} from 'lucide-react'
 
 import { EpicProgress } from '@/components/epic-progress'
 import { Button } from '@/components/ui/button'
 import { ClosedHiddenNote } from '@/components/status-column-header'
 import { InteractiveRow } from '@/components/ui/interactive-row'
 import { cn } from '@/lib/utils'
-import { isEpic, mapStatus } from '@/lib/types'
-import { PRIORITY_TEXT_CLASS, compareBeads } from '@/lib/sort'
+import { formatSpan } from '@/lib/age'
+import { isEpic } from '@/lib/types'
+import { PRIORITY_TEXT_CLASS } from '@/lib/sort'
 import { buildChildrenMap, getRootBeads } from '@/lib/tree'
 import { descendantStats, epicTook, isCompleteEpic } from '@/lib/epics'
 import { isHiddenByWindow } from '@/lib/closed-window'
+import {
+  ROW_STATE_LABEL,
+  compareHierarchy,
+  expandableIds,
+  filterWithAncestors,
+  initials,
+  readExpanded,
+  rowState,
+  shortId,
+  writeExpanded,
+} from '@/lib/hierarchy'
 
+import type { LucideIcon } from 'lucide-react'
 import type { ClosedWindow } from '@/lib/closed-window'
-import type { Bead, BeadColumn } from '@/lib/types'
+import type { RowState } from '@/lib/hierarchy'
+import type { Bead } from '@/lib/types'
 
 interface HierarchyViewProps {
+  project: string
   beads: Bead[]
   closedWindow: ClosedWindow
   now: number
+  /** The Board's filters as one predicate; null when none is active. */
+  matches: ((bead: Bead) => boolean) | null
   onShowAllClosed: () => void
   onOpen: (bead: Bead) => void
 }
 
-const STATUS_DOT_CLASS: Record<BeadColumn, string> = {
-  open: 'bg-status-open',
-  in_progress: 'bg-status-progress',
-  blocked: 'bg-status-blocked',
-  closed: 'bg-status-closed',
+// Shape and colour together, so the state survives grayscale.
+const STATE_GLYPH: Record<RowState, { icon: LucideIcon; className: string }> = {
+  open: { icon: Circle, className: 'text-status-open' },
+  in_progress: { icon: CircleDot, className: 'text-status-progress' },
+  waiting: { icon: Hourglass, className: 'text-warn' },
+  blocked: { icon: Ban, className: 'text-status-blocked' },
+  deferred: { icon: CirclePause, className: 'text-faint' },
+  closed: { icon: CircleCheck, className: 'text-status-closed' },
 }
 
 function TreeNode({
@@ -35,6 +68,11 @@ function TreeNode({
   depth,
   childrenMap,
   fullMap,
+  expanded,
+  forceOpen,
+  matched,
+  now,
+  onToggle,
   onOpen,
 }: {
   bead: Bead
@@ -42,18 +80,42 @@ function TreeNode({
   childrenMap: Map<string, Bead[]>
   /** Unfiltered tree, so progress counts hidden closed beads too. */
   fullMap: Map<string, Bead[]>
+  expanded: Set<string>
+  /** A filter is active: every shown node is a match or on a match's path. */
+  forceOpen: boolean
+  /** Ids matching the filter; undefined without a filter. Others are path-only. */
+  matched?: Set<string>
+  now: number
+  onToggle: (id: string) => void
   onOpen: (bead: Bead) => void
 }) {
-  const children = childrenMap.get(bead.id) ?? []
+  const children = useMemo(
+    () => [...(childrenMap.get(bead.id) ?? [])].sort(compareHierarchy),
+    [childrenMap, bead.id],
+  )
   const hasChildren = children.length > 0
-  const [open, setOpen] = useState(true)
+  const open = forceOpen || expanded.has(bead.id)
   const priority = Math.max(0, Math.min(4, bead.priority))
   const epic = isEpic(bead)
+  const state = rowState(bead)
+  const Glyph = STATE_GLYPH[state]
+  const muted = state === 'closed' || state === 'deferred'
+  const pathOnly = matched !== undefined && !matched.has(bead.id)
+  const touched = bead.updated_at ?? bead.created_at
+  const age = touched ? formatSpan(now - Date.parse(touched)) : ''
+  const waiting = bead.waiting_on ?? []
+  const who = initials(bead.assignee)
+  const noTasks = epic && (fullMap.get(bead.id)?.length ?? 0) === 0
 
   return (
     <div>
       <div
-        className="flex items-center gap-2 rounded-[7px] py-1.5 pr-2 transition-colors hover:bg-card-hover"
+        className={cn(
+          'flex items-center gap-2 rounded-[7px] py-1.5 pr-2 transition-colors hover:bg-card-hover',
+          bead.status === 'in_progress' &&
+            'shadow-[inset_2px_0_0_var(--status-progress)]',
+          (muted || pathOnly) && 'opacity-60',
+        )}
         style={{ paddingLeft: 6 + depth * 18 }}
       >
         {hasChildren ? (
@@ -61,7 +123,7 @@ function TreeNode({
             type="button"
             variant="ghost"
             size="icon-xs"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => onToggle(bead.id)}
             aria-expanded={open}
             aria-label={open ? 'Collapse' : 'Expand'}
             className="shrink-0 text-muted-foreground"
@@ -82,12 +144,9 @@ function TreeNode({
           onClick={() => onOpen(bead)}
           className="flex min-w-0 flex-1 items-center gap-2"
         >
-          <span
-            className={cn(
-              'size-1.5 shrink-0 rounded-full',
-              STATUS_DOT_CLASS[mapStatus(bead.status).column],
-            )}
-            aria-hidden="true"
+          <Glyph.icon
+            className={cn('size-3.5 shrink-0', Glyph.className)}
+            aria-label={ROW_STATE_LABEL[state]}
           />
           <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
             {bead.id}
@@ -106,21 +165,84 @@ function TreeNode({
               Epic
             </span>
           ) : null}
-          <span className="truncate text-[12.75px] text-foreground">
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate text-[12.75px]',
+              state === 'closed'
+                ? 'text-faint line-through decoration-foreground/25'
+                : muted
+                  ? 'text-muted-foreground'
+                  : 'text-foreground',
+            )}
+          >
             {bead.title}
           </span>
-          {epic ? (
+          {noTasks ? (
+            <span className="shrink-0 rounded-[4px] border border-dashed border-border-strong px-1.5 py-px text-[10px] font-semibold tracking-[0.04em] text-muted-foreground uppercase">
+              no tasks yet
+            </span>
+          ) : null}
+          {epic && !noTasks ? (
             <EpicProgress
-              className="ml-auto"
               stats={descendantStats(bead.id, fullMap)}
               complete={isCompleteEpic(bead, fullMap)}
               took={epicTook(bead, fullMap)}
             />
           ) : hasChildren ? (
-            <span className="ml-auto shrink-0 font-mono text-[10.5px] tabular-nums text-faint">
+            <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-faint">
               {children.length}
             </span>
           ) : null}
+
+          {/* Fixed-width columns, so the eye can run down one of them. */}
+          <span className="flex shrink-0 items-center gap-2 font-mono text-[10.5px] text-muted-foreground tabular-nums">
+            <span
+              className={cn(
+                'hidden w-20 truncate text-right md:inline',
+                state === 'waiting' && 'text-warn',
+              )}
+              title={
+                state === 'waiting'
+                  ? `Waits on ${waiting.join(', ')}`
+                  : undefined
+              }
+            >
+              {state === 'waiting'
+                ? `waits ${shortId(waiting[0])}${waiting.length > 1 ? ` +${waiting.length - 1}` : ''}`
+                : ROW_STATE_LABEL[state]}
+            </span>
+            <span
+              className="hidden w-7 items-center justify-end gap-0.5 lg:inline-flex"
+              title={
+                bead.comment_count
+                  ? `${bead.comment_count} comments`
+                  : undefined
+              }
+            >
+              {bead.comment_count ? (
+                <>
+                  <MessageSquare className="size-2.5" aria-hidden="true" />
+                  {bead.comment_count}
+                </>
+              ) : null}
+            </span>
+            <span
+              className="hidden w-5 justify-center lg:inline-flex"
+              title={bead.assignee}
+            >
+              {who ? (
+                <span className="grid size-[18px] place-items-center rounded-full bg-muted text-[8.5px] font-semibold text-foreground ring-1 ring-inset ring-border-strong">
+                  {who}
+                </span>
+              ) : null}
+            </span>
+            <span
+              className="w-8 text-right"
+              title={touched ? `Updated ${touched}` : undefined}
+            >
+              {age}
+            </span>
+          </span>
         </InteractiveRow>
       </div>
 
@@ -133,6 +255,11 @@ function TreeNode({
               depth={depth + 1}
               childrenMap={childrenMap}
               fullMap={fullMap}
+              expanded={expanded}
+              forceOpen={forceOpen}
+              matched={matched}
+              now={now}
+              onToggle={onToggle}
               onOpen={onOpen}
             />
           ))}
@@ -143,39 +270,89 @@ function TreeNode({
 }
 
 export function HierarchyView({
+  project,
   beads,
   closedWindow,
   now,
+  matches,
   onShowAllClosed,
   onOpen,
 }: HierarchyViewProps) {
   const fullMap = useMemo(() => buildChildrenMap(beads), [beads])
-  const { visible, hiddenCount } = useMemo(() => {
+  const { windowed, hiddenCount } = useMemo(() => {
     const hidden = new Set(
       beads
         .filter((b) => isHiddenByWindow(b, fullMap, closedWindow, now))
         .map((b) => b.id),
     )
     return {
-      visible: beads.filter((b) => !hidden.has(b.id)),
+      windowed: beads.filter((b) => !hidden.has(b.id)),
       hiddenCount: hidden.size,
     }
   }, [beads, fullMap, closedWindow, now])
+  const filtered = useMemo(
+    () => (matches ? filterWithAncestors(windowed, matches) : null),
+    [windowed, matches],
+  )
+  const visible = filtered ? filtered.visible : windowed
   const childrenMap = useMemo(() => buildChildrenMap(visible), [visible])
   const roots = useMemo(
-    () => [...getRootBeads(visible)].sort(compareBeads('priority')),
+    () => [...getRootBeads(visible)].sort(compareHierarchy),
     [visible],
   )
 
+  // Starts collapsed; the choice survives refresh, per project.
+  const [expanded, setExpanded] = useState(() => readExpanded(project))
+  useEffect(() => writeExpanded(project, expanded), [project, expanded])
+  function toggle(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pt-2 pb-4">
-      {hiddenCount > 0 ? (
+    <div className="min-h-0 flex-1 overflow-y-auto pt-1 pb-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pb-1.5">
+        {filtered ? (
+          <span className="text-xs text-muted-foreground" role="status">
+            {filtered.matched.size}{' '}
+            {filtered.matched.size === 1 ? 'match' : 'matches'}
+            {filtered.epics > 0
+              ? ` in ${filtered.epics} ${filtered.epics === 1 ? 'epic' : 'epics'}`
+              : ''}
+          </span>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => setExpanded(expandableIds(childrenMap))}
+            >
+              <ChevronsUpDown aria-hidden="true" />
+              Expand all
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => setExpanded(new Set())}
+            >
+              <ChevronsDownUp aria-hidden="true" />
+              Collapse all
+            </Button>
+          </>
+        )}
         <ClosedHiddenNote hidden={hiddenCount} onShowAll={onShowAllClosed} />
-      ) : null}
+      </div>
       {roots.length === 0 ? (
         <div className="flex items-center justify-center py-16">
           <span className="text-sm text-muted-foreground">
-            No beads in this project
+            {matches
+              ? 'No beads match the filters'
+              : 'No beads in this project'}
           </span>
         </div>
       ) : (
@@ -187,6 +364,11 @@ export function HierarchyView({
               depth={0}
               childrenMap={childrenMap}
               fullMap={fullMap}
+              expanded={expanded}
+              forceOpen={filtered !== null}
+              matched={filtered?.matched}
+              now={now}
+              onToggle={toggle}
               onOpen={onOpen}
             />
           ))}

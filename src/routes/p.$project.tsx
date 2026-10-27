@@ -13,7 +13,7 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { toast } from 'sonner'
 
-import { BoardHeader, ClosedWindowSelect } from '@/components/board-header'
+import { BoardHeader } from '@/components/board-header'
 import { BoardSwimlanes } from '@/components/board-swimlanes'
 import { KanbanColumn } from '@/components/kanban-column'
 import { BeadCard } from '@/components/bead-card'
@@ -26,7 +26,7 @@ import { LiveUpdatesIndicator } from '@/components/live-updates-indicator'
 import { ReadonlyContext } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { getBeads, getProjects, updateBeadStatusFn } from '@/lib/server'
-import { COLUMNS, isEpic, mapStatus } from '@/lib/types'
+import { COLUMNS, beadColumn, isEpic } from '@/lib/types'
 import {
   beadMatches,
   compareBeads,
@@ -233,6 +233,16 @@ function BoardPage() {
     [beads, search, priorities, ready, assignee, labels, nested],
   )
 
+  // The Board's filters, as one predicate for the Hierarchy tab (null when none is set).
+  const hierarchyMatches = useMemo(
+    () =>
+      search.trim() || priorities.length || ready || assignee || labels.length
+        ? (b: Bead) =>
+            beadMatches(b, search, priorities, ready, assignee, labels)
+        : null,
+    [search, priorities, ready, assignee, labels],
+  )
+
   const now = useMemo(() => Date.now(), [beads])
   const childrenMap = useMemo(() => buildChildrenMap(beads), [beads])
 
@@ -245,14 +255,13 @@ function BoardPage() {
     }
     for (const bead of filtered)
       if (!isHiddenByWindow(bead, childrenMap, closedWindow, now))
-        grouped[mapStatus(bead.status).column].push(bead)
+        grouped[beadColumn(bead)].push(bead)
     const compare = compareBeads(sort)
     for (const key of COLUMN_KEYS) grouped[key].sort(compare)
     return grouped
   }, [filtered, sort, childrenMap, closedWindow, now])
   const closedTotal = useMemo(
-    () =>
-      filtered.filter((b) => mapStatus(b.status).column === 'closed').length,
+    () => filtered.filter((b) => beadColumn(b) === 'closed').length,
     [filtered],
   )
 
@@ -295,7 +304,7 @@ function BoardPage() {
     if (readonly) return
     const previous = queryClient.getQueryData<Bead[]>(['beads', project])
     const bead = (previous ?? beads).find((b) => b.id === activeId)
-    if (!bead || mapStatus(bead.status).column === toColumn) return
+    if (!bead || beadColumn(bead) === toColumn) return
 
     queryClient.setQueryData<Bead[]>(['beads', project], (old) =>
       (old ?? []).map((b) =>
@@ -319,7 +328,7 @@ function BoardPage() {
   function columnOfId(id: string): BeadColumn | null {
     if ((COLUMN_KEYS as string[]).includes(id)) return id as BeadColumn
     const bead = beadsById.get(id)
-    return bead ? mapStatus(bead.status).column : null
+    return bead ? beadColumn(bead) : null
   }
 
   function onDragStart(event: DragStartEvent) {
@@ -338,8 +347,9 @@ function BoardPage() {
   return (
     <ReadonlyContext.Provider value={readonly}>
       <div className="flex h-[calc(100dvh-6rem)] min-h-0 flex-col">
-        {tab === 'board' ? (
+        {tab === 'board' || tab === 'hierarchy' ? (
           <BoardHeader
+            hierarchy={tab === 'hierarchy'}
             search={search}
             setSearch={(value) =>
               patchBoardSearch({ q: value.trim() ? value : undefined })
@@ -397,21 +407,16 @@ function BoardPage() {
             refetchInterval={feed.status === 'live' ? 60_000 : 12_000}
           />
         ) : tab === 'hierarchy' ? (
-          <>
-            <div className="flex items-center justify-end pb-2">
-              <ClosedWindowSelect
-                value={closedWindow}
-                onChange={setClosedWindow}
-              />
-            </div>
-            <HierarchyView
-              beads={beads}
-              closedWindow={closedWindow}
-              now={now}
-              onShowAllClosed={() => setClosedWindow('all')}
-              onOpen={openBead}
-            />
-          </>
+          <HierarchyView
+            key={project}
+            project={project}
+            beads={beads}
+            closedWindow={closedWindow}
+            now={now}
+            matches={hierarchyMatches}
+            onShowAllClosed={() => setClosedWindow('all')}
+            onOpen={openBead}
+          />
         ) : view === 'epic' || view === 'priority' ? (
           <BoardSwimlanes
             beads={beads}
