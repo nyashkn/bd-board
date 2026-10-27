@@ -10,6 +10,76 @@
 
 :root {
   --radius: 0.625rem;
+
+  /* Light palette, added for Pivot's deployment 2026-10-20. Upstream ships dark-only
+     (className="dark" on <html>); Alecia's standing rule is light mode only. Same hues
+     as the .dark block below, lightness inverted, status and knowledge colours darkened
+     so they keep contrast on white. Removing className="dark" in __root.tsx selects it. */
+  --background: oklch(0.985 0.002 270);
+  --canvas: oklch(0.97 0.003 270);
+  --card: oklch(1 0 0);
+  --card-hover: oklch(0.965 0.004 272);
+  --popover: oklch(1 0 0);
+  --sidebar: oklch(0.975 0.003 270);
+
+  --foreground: oklch(0.2 0.01 270);
+  --card-foreground: oklch(0.2 0.01 270);
+  --popover-foreground: oklch(0.2 0.01 270);
+  --muted-foreground: oklch(0.47 0.012 270);
+  --faint: oklch(0.55 0.011 270);
+
+  --primary: oklch(0.47 0.19 268);
+  --primary-hover: oklch(0.41 0.175 268);
+  --primary-text: oklch(0.45 0.17 268);
+  --primary-foreground: oklch(0.99 0.003 275);
+
+  --secondary: oklch(0.955 0.004 270);
+  --secondary-foreground: oklch(0.2 0.01 270);
+  --muted: oklch(0.965 0.003 270);
+  --accent: oklch(0.95 0.006 272);
+  --accent-foreground: oklch(0.2 0.01 270);
+
+  --danger: oklch(0.52 0.2 22);
+  --danger-hover: oklch(0.46 0.19 22);
+  --danger-foreground: oklch(0.99 0.003 22);
+  --danger-disabled: oklch(0.9 0.04 22);
+  --danger-disabled-foreground: oklch(0.55 0.04 22);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--danger-foreground);
+
+  --border: oklch(0 0 0 / 10%);
+  --border-strong: oklch(0 0 0 / 18%);
+  --input: oklch(0 0 0 / 15%);
+  --ring: oklch(0.55 0.18 268);
+
+  --chart-1: oklch(0.5 0.17 268);
+  --chart-2: oklch(0.52 0.14 248);
+  --chart-3: oklch(0.5 0.15 152);
+  --chart-4: oklch(0.6 0.15 85);
+  --chart-5: oklch(0.52 0.19 22);
+
+  --sidebar-foreground: oklch(0.2 0.01 270);
+  --sidebar-primary: oklch(0.47 0.19 268);
+  --sidebar-primary-foreground: oklch(0.99 0.003 275);
+  --sidebar-accent: oklch(0.95 0.006 272);
+  --sidebar-accent-foreground: oklch(0.2 0.01 270);
+  --sidebar-border: oklch(0 0 0 / 10%);
+  --sidebar-ring: oklch(0.55 0.18 268);
+
+  --status-open: oklch(0.48 0.014 270);
+  --status-progress: oklch(0.5 0.14 248);
+  --status-blocked: oklch(0.52 0.19 22);
+  --status-closed: oklch(0.48 0.15 152);
+  --status-in_progress: var(--status-progress);
+  --warn: oklch(0.58 0.15 75);
+
+  --k-decision: oklch(0.48 0.16 268);
+  --k-learned: oklch(0.48 0.13 200);
+  --k-fact: oklch(0.47 0.15 152);
+  --k-pattern: oklch(0.48 0.16 300);
+  --k-investigation: oklch(0.55 0.15 80);
+  --k-must-check: oklch(0.5 0.18 22);
+  --k-deviation: oklch(0.52 0.15 40);
 }
 
 /*
