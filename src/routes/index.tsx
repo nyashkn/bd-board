@@ -156,8 +156,8 @@ function PageHeader({ projects }: { projects: Project[] | undefined }) {
   const { handleOpenProject, handleInitProject } = useProjectActions()
 
   return (
-    <header className="flex items-start justify-between gap-4">
-      <div className="flex flex-col gap-1">
+    <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+      <div className="flex min-w-0 flex-col gap-1">
         <h1 className="text-[22px] font-semibold tracking-[-0.02em]">
           Projects
         </h1>
@@ -171,7 +171,7 @@ function PageHeader({ projects }: { projects: Project[] | undefined }) {
           <Skeleton className="h-4 w-40" />
         )}
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={handleInitProject}>
           <Plus className="size-4" />
           Init project
@@ -198,11 +198,11 @@ function SummaryStats({ projects }: { projects: Project[] }) {
   const total = agg.open + agg.in_progress + agg.blocked + agg.closed
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(10rem,100%),1fr))] gap-3">
       {SUMMARY_META.map((m) => (
         <div
           key={m.key}
-          className="rounded-[12px] bg-card px-4 py-3.5 ring-1 ring-inset ring-border"
+          className="min-w-0 rounded-[12px] bg-card px-4 py-3.5 ring-1 ring-inset ring-border"
         >
           <span className="inline-flex items-center gap-[7px] text-xs text-muted-foreground">
             <span
@@ -231,7 +231,7 @@ function ProjectGrid({ projects }: { projects: Project[] }) {
   const sorted = [...projects].sort((a, b) => b.counts.total - a.counts.total)
 
   return (
-    <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(20rem,100%),1fr))] gap-3.5">
       {sorted.map((project) => (
         <ProjectCard key={project.id} project={project} />
       ))}
@@ -242,7 +242,7 @@ function ProjectGrid({ projects }: { projects: Project[] }) {
 function LoadingState() {
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(10rem,100%),1fr))] gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
@@ -253,7 +253,7 @@ function LoadingState() {
           </div>
         ))}
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(20rem,100%),1fr))] gap-4">
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
