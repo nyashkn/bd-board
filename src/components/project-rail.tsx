@@ -19,6 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { useBdStatus } from '@/hooks/use-bd-status'
 import { cn } from '@/lib/utils'
 import { getBeads, getProjects } from '@/lib/server'
 
@@ -31,6 +32,19 @@ import { isReady } from '@/lib/sort'
 import { beadColumn } from '@/lib/types'
 
 import type { LucideIcon } from 'lucide-react'
+
+/** True below the md breakpoint (768px). */
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const update = () => setNarrow(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return narrow
+}
 
 function RailGroup({
   label,
@@ -216,7 +230,11 @@ export function ProjectRail() {
     setIdentity(getStoredIdentity())
   }, [])
 
-  const [collapsed, setCollapsed] = useState(false)
+  const [storedCollapsed, setCollapsed] = useState(false)
+  // Below md the rail is always the icon strip, so titles and tabs keep their room.
+  const narrow = useNarrow()
+  const collapsed = storedCollapsed || narrow
+  const bdStatus = useBdStatus()
   useEffect(() => {
     setCollapsed(getStoredSidebarCollapsed())
   }, [])
@@ -274,24 +292,26 @@ export function ProjectRail() {
               </span>
             ) : null}
           </Link>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={toggleCollapsed}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            aria-expanded={!collapsed}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={cn(
-              'shrink-0 text-faint hover:text-foreground',
-              !collapsed && 'ml-auto',
-            )}
-          >
-            {collapsed ? (
-              <ChevronsRight className="size-3.5" aria-hidden="true" />
-            ) : (
-              <ChevronsLeft className="size-3.5" aria-hidden="true" />
-            )}
-          </Button>
+          {narrow ? null : (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-expanded={!collapsed}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className={cn(
+                'shrink-0 text-faint hover:text-foreground',
+                !collapsed && 'ml-auto',
+              )}
+            >
+              {collapsed ? (
+                <ChevronsRight className="size-3.5" aria-hidden="true" />
+              ) : (
+                <ChevronsLeft className="size-3.5" aria-hidden="true" />
+              )}
+            </Button>
+          )}
         </div>
 
         <nav aria-label="Home" className="flex flex-col gap-1 px-3 pt-2">
@@ -408,6 +428,14 @@ export function ProjectRail() {
             </RailGroup>
           ) : null}
         </div>
+        {!collapsed && bdStatus.data && bdStatus.data.state !== 'missing' ? (
+          <p
+            className="shrink-0 truncate border-t border-border px-3 py-2 font-mono text-[11px] text-faint"
+            title="Version of the bd binary the board runs"
+          >
+            bd {bdStatus.data.version}
+          </p>
+        ) : null}
       </aside>
       {editingProject && (
         <EditProjectModal

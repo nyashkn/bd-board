@@ -5,6 +5,7 @@ import { AlertCircle, FolderOpen, Plus } from 'lucide-react'
 
 import { EditProjectModal } from '@/components/edit-project-modal'
 import { ProjectCard } from '@/components/project-card'
+import { BdStatusCard } from '@/components/bd-status-card'
 import { DesktopProbeCard } from '@/components/desktop-probe-card'
 import { useValidateProjectsOnMount } from '@/lib/useValidateProjectsOnMount'
 import { Button } from '@/components/ui/button'
@@ -128,6 +129,7 @@ function Home() {
       {repairModalContent}
       <div className="mx-auto flex max-w-[1240px] flex-col gap-6">
         <PageHeader projects={data} />
+        <BdStatusCard />
         <DesktopProbeCard />
 
         {isPending ? (
