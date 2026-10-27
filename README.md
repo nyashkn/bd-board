@@ -13,7 +13,7 @@ Visual kanban board and multi-project dashboard for [`bd` (beads)](https://githu
 - Priority filtering, text search, and sort controls with URL state.
 - Epic progress from child beads.
 - Bead detail modal with markdown description, acceptance criteria, comments, parent and child navigation.
-- Artifacts in the bead detail modal: a bead's `spec_id` (shown as "Spec"), its `artifacts` metadata and, for epics, its children's artifacts open inline (markdown rendered, HTML in a sandboxed iframe, images, json/txt). The `external_ref` shows as a link (http/https) or plain "Ref" text. Attach one with `bd update ID --set-metadata artifacts='[{"path":"docs/plan.md","label":"Plan","stage":"design"}]'`; paths are relative to the project, limited to `.md .html .htm .png .jpg .jpeg .gif .svg .txt .json`, 2 MB max, and never read outside the project root.
+- Artifacts in the bead detail modal: a bead's `spec_id` (shown as "Spec"), its `artifacts` metadata and, for epics, its children's artifacts open inline (markdown rendered, HTML in a sandboxed iframe, images, json/txt). The `external_ref` shows as a link (http/https) or plain "Ref" text. Attach one with `bd update ID --set-metadata artifacts='[{"path":"docs/plan.md","label":"Plan","stage":"design"}]'`; paths are relative to the project, limited to `.md .html .htm .png .jpg .jpeg .gif .svg .txt .json`, 2 MB max, and never read outside the project root. A `path` may also be an `http(s)://` URL: it is shown as a "remote" link row (new tab), never fetched or embedded; other schemes (`javascript:`, `data:`, `file:`) show as invalid.
 - Drag-and-drop status updates with mouse and keyboard sensors.
 - Create beads, add comments, edit fields, and delete beads, enabled by default.
 

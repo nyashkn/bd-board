@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { ARTIFACT_MAX_BYTES, readArtifactFile } from './artifact-read.ts'
 import {
   artifactGroups,
+  classifyArtifactPath,
   beadArtifacts,
   parseArtifacts,
   parseExternalRef,
@@ -134,5 +135,43 @@ describe('parseArtifactInput', () => {
     expect(() =>
       parseArtifactInput({ project: '../x', path: 'a.md' }),
     ).toThrow()
+  })
+})
+
+describe('classifyArtifactPath', () => {
+  it('treats http(s) URLs as remote', () => {
+    expect(classifyArtifactPath('https://app.clickup.com/t/1')).toEqual({
+      kind: 'remote',
+      href: 'https://app.clickup.com/t/1',
+    })
+    expect(classifyArtifactPath('http://localhost:8080/x')).toMatchObject({
+      kind: 'remote',
+    })
+  })
+  it.each([
+    'javascript:alert(1)',
+    'file:///etc/passwd',
+    'data:text/html,x',
+    'ftp://h/x',
+    'HTTPX://h',
+  ])('marks %s invalid', (p) =>
+    expect(classifyArtifactPath(p)).toEqual({ kind: 'invalid' }),
+  )
+  it('keeps local paths local, even with http in the name or a drive letter', () => {
+    expect(classifyArtifactPath('docs/http-notes.md')).toEqual({
+      kind: 'local',
+    })
+    expect(classifyArtifactPath('http_spec.md')).toEqual({ kind: 'local' })
+    expect(classifyArtifactPath('C:\\x\\a.md')).toEqual({ kind: 'local' })
+  })
+  it('classifies a mixed list', () => {
+    const list = parseArtifacts({
+      artifacts:
+        '[{"path":"https://x.test/t","label":"Task","stage":"intake"},{"path":"goals/x/plan.md","label":"Plan"}]',
+    })
+    expect(list.map((a) => classifyArtifactPath(a.path).kind)).toEqual([
+      'remote',
+      'local',
+    ])
   })
 })

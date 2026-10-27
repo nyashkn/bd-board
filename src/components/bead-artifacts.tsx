@@ -5,7 +5,11 @@ import Markdown from 'react-markdown'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { InteractiveRow } from '@/components/ui/interactive-row'
-import { artifactGroups, parseExternalRef } from '@/lib/artifacts'
+import {
+  artifactGroups,
+  classifyArtifactPath,
+  parseExternalRef,
+} from '@/lib/artifacts'
 import { readArtifactFn } from '@/lib/server'
 import { cn, toErrorMessage } from '@/lib/utils'
 
@@ -133,14 +137,21 @@ export function BeadArtifacts({
             ) : null}
             {group.artifacts.map((artifact, i) => {
               const key = `${group.child?.id ?? 'self'}:${i}:${artifact.path}`
+              const target = classifyArtifactPath(artifact.path)
               const open = openKey === key
-              return (
-                <div key={key}>
-                  <InteractiveRow
-                    size="compact"
-                    aria-expanded={open}
-                    onClick={() => setOpenKey(open ? null : key)}
-                  >
+              const chip = (text: string) => (
+                <span className="rounded-[4px] bg-muted px-1.5 py-0.5 font-mono text-[10px] tracking-[0.08em] uppercase text-muted-foreground">
+                  {text}
+                </span>
+              )
+              const inner = (
+                <>
+                  {target.kind === 'remote' ? (
+                    <ExternalLink
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  ) : (
                     <FileText
                       className={cn(
                         'size-3.5 shrink-0',
@@ -148,17 +159,49 @@ export function BeadArtifacts({
                       )}
                       aria-hidden="true"
                     />
-                    {artifact.stage ? (
-                      <span className="rounded-[4px] bg-muted px-1.5 py-0.5 font-mono text-[10px] tracking-[0.08em] uppercase text-muted-foreground">
-                        {artifact.stage}
-                      </span>
-                    ) : null}
-                    <span className="min-w-0 truncate text-[12.75px]">
-                      {artifact.label}
-                    </span>
-                    <span className="ml-auto truncate font-mono text-[10.5px] text-faint">
-                      {artifact.path}
-                    </span>
+                  )}
+                  {artifact.stage ? chip(artifact.stage) : null}
+                  {target.kind === 'remote' ? chip('remote') : null}
+                  {target.kind === 'invalid' ? chip('invalid') : null}
+                  <span className="min-w-0 truncate text-[12.75px]">
+                    {artifact.label}
+                  </span>
+                  <span className="ml-auto truncate font-mono text-[10.5px] text-faint">
+                    {artifact.path}
+                  </span>
+                </>
+              )
+              if (target.kind === 'remote') {
+                return (
+                  <a
+                    key={key}
+                    href={target.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 rounded-[8px] bg-card px-[10px] py-2 ring-1 ring-inset ring-border hover:bg-card-hover"
+                  >
+                    {inner}
+                  </a>
+                )
+              }
+              if (target.kind === 'invalid') {
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center gap-2.5 rounded-[8px] bg-card px-[10px] py-2 opacity-70 ring-1 ring-inset ring-border"
+                  >
+                    {inner}
+                  </div>
+                )
+              }
+              return (
+                <div key={key}>
+                  <InteractiveRow
+                    size="compact"
+                    aria-expanded={open}
+                    onClick={() => setOpenKey(open ? null : key)}
+                  >
+                    {inner}
                   </InteractiveRow>
                   {open ? (
                     <ArtifactPane project={project} artifact={artifact} />

@@ -63,4 +63,23 @@ describe('BeadArtifacts', () => {
     expect(text).toContain('gh-9')
     expect(text).not.toContain('<a ')
   })
+
+  it('links remote artifacts, never iframes them, and refuses other schemes', () => {
+    const out = render({
+      metadata: {
+        artifacts: JSON.stringify([
+          { path: 'https://x.test/t', label: 'Task', stage: 'intake' },
+          { path: 'javascript:alert(1)', label: 'Bad' },
+          { path: 'docs/http-notes.md', label: 'Notes' },
+        ]),
+      },
+    })
+    expect(out).toContain('href="https://x.test/t"')
+    expect(out).toContain('rel="noopener noreferrer"')
+    expect(out).toContain('remote')
+    expect(out).toContain('invalid')
+    expect(out).not.toContain('href="javascript')
+    expect(out).not.toContain('<iframe')
+    expect(out).toContain('Notes')
+  })
 })

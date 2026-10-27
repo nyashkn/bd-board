@@ -62,6 +62,29 @@ export function beadArtifacts(
   return spec ? [{ path: spec, label: 'Spec' }, ...list] : list
 }
 
+export type ArtifactTarget =
+  | { kind: 'local' }
+  | { kind: 'remote'; href: string }
+  | { kind: 'invalid' }
+
+/**
+ * Local paths are read from the project; only http(s) URLs are remote (never
+ * fetched, only linked); any other scheme (javascript:, data:, file:) is invalid.
+ */
+export function classifyArtifactPath(path: string): ArtifactTarget {
+  const text = path.trim()
+  if (/^https?:\/\/\S+$/i.test(text)) {
+    try {
+      return { kind: 'remote', href: new URL(text).href }
+    } catch {
+      return { kind: 'invalid' }
+    }
+  }
+  // 2+ chars so a Windows drive ("C:\x") stays a (refused) local path.
+  if (/^[a-z][a-z0-9+.-]+:/i.test(text)) return { kind: 'invalid' }
+  return { kind: 'local' }
+}
+
 export type ExternalRef =
   | { kind: 'link'; href: string }
   | { kind: 'text'; text: string }
