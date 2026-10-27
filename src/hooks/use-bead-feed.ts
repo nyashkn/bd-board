@@ -34,7 +34,10 @@ export interface UseBeadFeedResult {
   message?: string
 }
 
-export function useBeadFeed(project: string): UseBeadFeedResult {
+export function useBeadFeed(
+  project: string,
+  readonly = false,
+): UseBeadFeedResult {
   const queryClient = useQueryClient()
   const [status, setStatus] = useState<BeadFeedStatus>('connecting')
   const [message, setMessage] = useState<string | undefined>(undefined)
@@ -88,6 +91,14 @@ export function useBeadFeed(project: string): UseBeadFeedResult {
             setMessage('The bd events journal is still disabled')
             break
           }
+          if (readonly) {
+            // The shim refuses `config set`; the owner enables it by hand once.
+            setStatus('unsupported')
+            setMessage(
+              'Read-only project: run `bd config set events-journal true` in it once for live updates',
+            )
+            break
+          }
           enableTried.current.add(project)
           enableEventsJournalFn({ data: { project } })
             .then(() => {
@@ -125,7 +136,7 @@ export function useBeadFeed(project: string): UseBeadFeedResult {
       clearTimeout(retryTimer)
       pending.clear()
     }
-  }, [project, attempt, queryClient])
+  }, [project, attempt, queryClient, readonly])
 
   return { status, message }
 }

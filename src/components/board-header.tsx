@@ -47,7 +47,8 @@ interface BoardHeaderProps {
   setSort: (value: SortKey) => void
   nested: boolean
   setNested: (value: boolean) => void
-  onCreate: () => void
+  /** Omitted for read-only projects: no "New bead". */
+  onCreate?: () => void
   liveIndicator: React.ReactNode
 }
 
@@ -216,10 +217,12 @@ export function BoardHeader({
             />
           </div>
 
-          <Button size="sm" onClick={onCreate}>
-            <Plus aria-hidden="true" />
-            New bead
-          </Button>
+          {onCreate ? (
+            <Button size="sm" onClick={onCreate}>
+              <Plus aria-hidden="true" />
+              New bead
+            </Button>
+          ) : null}
         </div>
       </div>
     </header>

@@ -20,6 +20,7 @@ import { SubtaskProgress } from '@/components/subtask-progress'
 import { cn, initials } from '@/lib/utils'
 import { groupBeadLinks, isEpic, mapStatus } from '@/lib/types'
 import { PRIORITY_TEXT_CLASS } from '@/lib/sort'
+import { useReadonly } from '@/components/readonly-badge'
 
 import type { LucideIcon } from 'lucide-react'
 import type { Bead, BeadColumn } from '@/lib/types'
@@ -151,6 +152,7 @@ export function BeadCard({
     isDragging,
   } = useSortable({ id: bead.id, data: { bead } })
 
+  const readonly = useReadonly()
   const epic = isEpic(bead)
   const badge = mapStatus(bead.status).badge
   const labels = bead.labels ?? []
@@ -174,7 +176,7 @@ export function BeadCard({
         overlay && 'shadow-lg ring-primary/40',
       )}
     >
-      {!overlay ? (
+      {!overlay && !readonly ? (
         <Button
           variant="ghost"
           size="icon-xs"

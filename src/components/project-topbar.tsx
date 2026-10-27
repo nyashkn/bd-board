@@ -5,6 +5,7 @@ import { BookOpen, Columns3, ListTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getProjects } from '@/lib/server'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { ReadonlyBadge } from '@/components/readonly-badge'
 
 import type { LucideIcon } from 'lucide-react'
 import type { ProjectTab } from '@/components/board-header'
@@ -27,8 +28,8 @@ export function ProjectTopbar() {
     staleTime: 5000,
     enabled: Boolean(project),
   })
-  const projectName =
-    projectsQuery.data?.find((p) => p.id === project)?.name ?? project
+  const current = projectsQuery.data?.find((p) => p.id === project)
+  const projectName = current?.name ?? project
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-4">
@@ -37,6 +38,9 @@ export function ProjectTopbar() {
           <span className="min-w-0 truncate text-sm font-semibold text-foreground capitalize">
             {projectName}
           </span>
+          {current?.readonly ? (
+            <ReadonlyBadge filterLabel={current.filterLabel} />
+          ) : null}
 
           <div className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
 

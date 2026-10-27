@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { getBeads } from '@/lib/server'
 
 import { ProgressRing } from '@/components/progress-ring'
+import { ReadonlyBadge } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { EditProjectModal } from '@/components/edit-project-modal'
 import { ConfirmDeleteModal } from '@/components/confirm-delete-modal'
@@ -119,6 +120,9 @@ export function ProjectCard({ project }: { project: Project }) {
                 <h3 className="truncate text-[15px] font-medium tracking-[-0.01em]">
                   {project.name}
                 </h3>
+                {project.readonly ? (
+                  <ReadonlyBadge filterLabel={project.filterLabel} />
+                ) : null}
                 <ArrowUpRight
                   className="size-3.5 shrink-0 text-transparent transition-colors duration-[140ms] group-hover:text-primary-text"
                   aria-hidden="true"

@@ -35,6 +35,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { BeadArtifacts } from '@/components/bead-artifacts'
 import { CreateBeadDialog } from '@/components/create-bead-dialog'
+import { useReadonly } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { InteractiveRow } from '@/components/ui/interactive-row'
@@ -723,6 +724,7 @@ export function BeadDetailModal({
   resolveBead,
   onOpenKnowledge,
 }: BeadDetailModalProps) {
+  const readonly = useReadonly()
   const queryClient = useQueryClient()
   const [comment, setComment] = useState('')
   const [editOpen, setEditOpen] = useState(false)
@@ -840,24 +842,26 @@ export function BeadDetailModal({
                       </span>
                     ) : null}
 
-                    <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditOpen(true)}
-                      >
-                        <Pencil className="size-3.5" aria-hidden="true" />
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setDeleteOpen(true)}
-                      >
-                        <Trash2 className="size-3.5" aria-hidden="true" />
-                        Delete
-                      </Button>
-                    </div>
+                    {readonly ? null : (
+                      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditOpen(true)}
+                        >
+                          <Pencil className="size-3.5" aria-hidden="true" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteOpen(true)}
+                        >
+                          <Trash2 className="size-3.5" aria-hidden="true" />
+                          Delete
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   <DialogTitle className="mt-2.5 text-[20px] leading-[1.28] font-semibold tracking-[-0.015em] text-balance">
@@ -893,15 +897,17 @@ export function BeadDetailModal({
                           label="Subtasks"
                           trailing={`${doneChildren}/${childBeads.length} completed`}
                           actions={
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 gap-1 px-1.5 text-[11px]"
-                              onClick={() => setSubtaskOpen(true)}
-                            >
-                              <Plus className="size-3" aria-hidden="true" />
-                              Subtask
-                            </Button>
+                            readonly ? undefined : (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 gap-1 px-1.5 text-[11px]"
+                                onClick={() => setSubtaskOpen(true)}
+                              >
+                                <Plus className="size-3" aria-hidden="true" />
+                                Subtask
+                              </Button>
+                            )
                           }
                         />
                         {childBeads.length === 0 ? (
@@ -1089,31 +1095,35 @@ export function BeadDetailModal({
                         </ul>
                       )}
 
-                      <div className="mt-3 flex flex-col gap-2">
-                        <Textarea
-                          name="comment"
-                          value={comment}
-                          onChange={(e) => setComment(e.target.value)}
-                          placeholder="Add a comment..."
-                          className="min-h-20 resize-none"
-                        />
-                        <Button
-                          size="sm"
-                          className="w-fit self-end"
-                          disabled={
-                            !comment.trim() || commentMutation.isPending
-                          }
-                          onClick={() => commentMutation.mutate(comment.trim())}
-                        >
-                          {commentMutation.isPending ? (
-                            <Loader2
-                              className="size-3.5 animate-spin"
-                              aria-hidden="true"
-                            />
-                          ) : null}
-                          Comment
-                        </Button>
-                      </div>
+                      {readonly ? null : (
+                        <div className="mt-3 flex flex-col gap-2">
+                          <Textarea
+                            name="comment"
+                            value={comment}
+                            onChange={(e) => setComment(e.target.value)}
+                            placeholder="Add a comment..."
+                            className="min-h-20 resize-none"
+                          />
+                          <Button
+                            size="sm"
+                            className="w-fit self-end"
+                            disabled={
+                              !comment.trim() || commentMutation.isPending
+                            }
+                            onClick={() =>
+                              commentMutation.mutate(comment.trim())
+                            }
+                          >
+                            {commentMutation.isPending ? (
+                              <Loader2
+                                className="size-3.5 animate-spin"
+                                aria-hidden="true"
+                              />
+                            ) : null}
+                            Comment
+                          </Button>
+                        </div>
+                      )}
                     </section>
                   </div>
                 </div>
@@ -1123,6 +1133,7 @@ export function BeadDetailModal({
                 <MetaField label="Status">
                   <Select
                     value={column}
+                    disabled={readonly}
                     onValueChange={(v) =>
                       statusMutation.mutate(v as BeadColumn)
                     }
