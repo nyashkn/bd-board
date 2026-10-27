@@ -260,7 +260,25 @@ fn resolve_real_bd(
             }
         }
     }
-    Err(format!("bd not found (tried: {})", candidates.join(", ")))
+    Err(bd_not_found_message(candidates))
+}
+
+/// Minimum bd the board supports; mirrors MIN_BD_VERSION_LIVE_UPDATES in src/lib/bd-version.ts.
+const MIN_BD_VERSION: &str = "1.3.0";
+
+/// Mirrors bdNotFoundMessage in src/lib/bd-errors.ts: say what is missing, how to install it
+/// and how to point the board at it.
+fn bd_not_found_message(tried: &[String]) -> String {
+    let now = env::var("BD_BIN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .unwrap_or_else(|| "unset".to_string());
+    format!(
+        "bd not found (tried: {}). Install bd {} or newer (brew install beads), or set BD_BIN to the full path of the binary (.env.local for the web app, the environment for the desktop app; now: {}).",
+        tried.join(", "),
+        MIN_BD_VERSION,
+        now
+    )
 }
 
 fn shim_path() -> Result<String, String> {
@@ -413,8 +431,7 @@ fn exec_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
     }
 
     // Exhausted all candidates
-    let candidate_list = candidates.join(", ");
-    Err(format!("bd not found (tried: {})", candidate_list))
+    Err(bd_not_found_message(&candidates))
 }
 
 fn run_bd(dir: &Path, args: &[&str]) -> Result<String, String> {
@@ -1465,8 +1482,82 @@ fn create_bead_inner(
 
 fn add_comment_inner(project_id: &str, id: &str, text: &str) -> Result<(), String> {
     let dir = resolve_writable_dir(project_id)?;
-    run_bd(&dir, &["comment", id, text])?;
+    let mut args: Vec<String> = Vec::new();
+    // BD_BOARD_AUTHOR is the board's own override; otherwise bd records its own actor.
+    if let Some(a) = board_author_override() {
+        args.push("--actor".to_string());
+        args.push(a);
+    }
+    args.extend(["comment".to_string(), id.to_string(), text.to_string()]);
+    run_bd_mut(&dir, &args)?;
     Ok(())
+}
+
+fn board_author_override() -> Option<String> {
+    env::var("BD_BOARD_AUTHOR")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct CommentAuthor {
+    pub name: String,
+    pub source: Option<String>,
+}
+
+/// Mirrors resolveCommentAuthor in src/lib/comment-author.ts (bd's actor order).
+fn resolve_comment_author(
+    env_value: &dyn Fn(&str) -> Option<String>,
+    config_actor: &str,
+    git_name: &str,
+) -> CommentAuthor {
+    let clean = |v: Option<String>| v.unwrap_or_default().trim().to_string();
+    let chain: [(&str, String); 6] = [
+        ("BD_BOARD_AUTHOR", clean(env_value("BD_BOARD_AUTHOR"))),
+        ("BD_ACTOR", clean(env_value("BD_ACTOR"))),
+        ("BEADS_ACTOR", clean(env_value("BEADS_ACTOR"))),
+        ("bd config actor", config_actor.trim().to_string()),
+        ("git user.name", git_name.trim().to_string()),
+        ("USER", clean(env_value("USER"))),
+    ];
+    match chain.into_iter().find(|(_, v)| !v.is_empty()) {
+        Some((source, name)) => CommentAuthor {
+            name,
+            source: Some(source.to_string()),
+        },
+        None => CommentAuthor {
+            name: String::new(),
+            source: None,
+        },
+    }
+}
+
+fn comment_author_inner(project_id: &str) -> Result<CommentAuthor, String> {
+    let dir = resolve_dir(project_id)?;
+    let config_actor = run_bd(&dir, &["config", "get", "actor"])
+        .map(|o| o.trim().to_string())
+        .ok()
+        .filter(|o| !o.starts_with("actor (not set"))
+        .and_then(|o| o.lines().next().map(str::to_string))
+        .unwrap_or_default();
+    let git_name = Command::new("git")
+        .current_dir(&dir)
+        .args(["config", "user.name"])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    Ok(resolve_comment_author(
+        &|k| env::var(k).ok(),
+        &config_actor,
+        &git_name,
+    ))
+}
+
+#[tauri::command]
+pub fn comment_author(project_id: String) -> Result<CommentAuthor, String> {
+    comment_author_inner(&project_id)
 }
 
 #[tauri::command]
@@ -2295,6 +2386,38 @@ mod tests {
             wrapper_idx < fallback_idx,
             "Wrapper should come before fallback"
         );
+    }
+
+    #[test]
+    fn bd_not_found_message_names_minimum_install_and_bd_bin() {
+        let m = bd_not_found_message(&["bd".to_string(), "/opt/homebrew/bin/bd".to_string()]);
+        assert!(m.starts_with("bd not found (tried: bd, /opt/homebrew/bin/bd)"));
+        assert!(m.contains("1.3.0"));
+        assert!(m.contains("brew install beads"));
+        assert!(m.contains("BD_BIN"));
+    }
+
+    #[test]
+    fn comment_author_follows_bd_order() {
+        let env_of = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                pairs
+                    .iter()
+                    .find(|(name, _)| *name == k)
+                    .map(|(_, v)| v.to_string())
+            }
+        };
+        let a = resolve_comment_author(
+            &env_of(&[("BD_BOARD_AUTHOR", "owner"), ("USER", "u")]),
+            "c",
+            "g",
+        );
+        assert_eq!(a.name, "owner");
+        assert_eq!(a.source.as_deref(), Some("BD_BOARD_AUTHOR"));
+        let b = resolve_comment_author(&env_of(&[("USER", "u")]), "", "KN");
+        assert_eq!(b.source.as_deref(), Some("git user.name"));
+        let c = resolve_comment_author(&env_of(&[]), "", "");
+        assert_eq!(c.source, None);
     }
 
     #[test]

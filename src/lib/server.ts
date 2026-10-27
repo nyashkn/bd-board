@@ -12,9 +12,12 @@ import {
   parseStatusUpdateInput,
   parseUpdateBeadInput,
 } from './server-validation.ts'
+import { classifyBdVersion } from './bd-errors.ts'
 import { toErrorMessage } from './utils.ts'
 
 import type { ArtifactFile } from './artifacts.ts'
+import type { BdStatus } from './bd-errors.ts'
+import type { CommentAuthor } from './comment-author.ts'
 import type {
   AddProjectOutcome,
   Bead,
@@ -97,6 +100,14 @@ const webAddComment = createServerFn({ method: 'POST' })
     await bdAdapter.addComment(data.project, data.id, data.text)
     return { ok: true as const }
   })
+
+const webGetCommentAuthor = createServerFn({ method: 'GET' })
+  .validator(parseProjectInput)
+  .handler(({ data }) => bdAdapter.getCommentAuthor(data.project))
+
+const webGetBdStatus = createServerFn({ method: 'GET' }).handler(() =>
+  bdAdapter.getBdStatus(),
+)
 
 export const webEnableEventsJournal = createServerFn({ method: 'POST' })
   .validator(parseProjectInput)
@@ -255,6 +266,26 @@ export async function addCommentFn({
     return { ok: true }
   }
   return webAddComment({ data })
+}
+
+export async function getCommentAuthorFn({
+  data,
+}: {
+  data: { project: string }
+}): Promise<CommentAuthor> {
+  if (isDesktopApp())
+    return invoke<CommentAuthor>('comment_author', { projectId: data.project })
+  return webGetCommentAuthor({ data })
+}
+
+/** bd runnable and new enough? Desktop reads the probe (a missing bd fails the probe itself). */
+export async function getBdStatusFn(): Promise<BdStatus> {
+  if (isDesktopApp()) {
+    const { loadDesktopProbe } = await import('./desktop.ts')
+    const probe = await loadDesktopProbe()
+    return classifyBdVersion(probe?.bdVersion ?? '', probe?.bdBinary)
+  }
+  return webGetBdStatus()
 }
 
 export async function enableEventsJournalFn({

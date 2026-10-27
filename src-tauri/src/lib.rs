@@ -62,6 +62,7 @@ pub fn run() {
             desktop::delete_bead,
             desktop::create_bead,
             desktop::add_comment,
+            desktop::comment_author,
             desktop::rename_project,
             desktop::check_project_path,
             desktop::relocate_project,

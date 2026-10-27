@@ -20,6 +20,14 @@ import type {
 } from './types.ts'
 import { parseKnowledgeCommentText } from './knowledge.ts'
 import { loadRegistry } from './registry.ts'
+import { bdNotFoundMessage, classifyBdVersion } from './bd-errors.ts'
+import type { BdStatus } from './bd-errors.ts'
+import {
+  actorArgs,
+  parseConfigActor,
+  resolveCommentAuthor,
+} from './comment-author.ts'
+import type { CommentAuthor } from './comment-author.ts'
 
 import type { RegistryEntry } from './registry.ts'
 
@@ -77,7 +85,7 @@ export function resolveRealBd(
       if (dir && executable(path.join(dir, c))) return path.join(dir, c)
     }
   }
-  throw new Error(`bd not found (tried: ${candidates.join(', ')})`)
+  throw new Error(bdNotFoundMessage(candidates, process.env['BD_BIN']))
 }
 
 function shimPath(): string {
@@ -222,8 +230,7 @@ export async function bdExec(
   }
 
   // Exhausted all candidates
-  const candidateList = candidates.join(', ')
-  throw new Error(`bd not found (tried: ${candidateList})`)
+  throw new Error(bdNotFoundMessage(candidates, process.env['BD_BIN']))
 }
 
 async function bdRaw(dir: string, args: string[]): Promise<string> {
@@ -898,7 +905,47 @@ async function addComment(
   text: string,
 ): Promise<void> {
   const dir = await resolveWritableDir(projectId)
-  await bdRaw(dir, ['comment', id, text])
+  await bdRaw(dir, [...actorArgs(process.env), 'comment', id, text])
+}
+
+/** The author `bd comment` will record for this project (bd's own resolution order, see comment-author.ts). */
+async function getCommentAuthor(projectId: string): Promise<CommentAuthor> {
+  const dir = await resolveDir(projectId)
+  const quiet = async (bin: string, args: string[]) => {
+    try {
+      return (await execFileAsync(bin, args, { cwd: dir })).stdout
+    } catch {
+      return ''
+    }
+  }
+  const configActor = process.env['BD_BOARD_AUTHOR']
+    ? ''
+    : parseConfigActor(
+        await bdRaw(dir, ['config', 'get', 'actor']).catch(() => ''),
+      )
+  const gitName = (await quiet('git', ['config', 'user.name'])).trim()
+  return resolveCommentAuthor({ env: process.env, configActor, gitName })
+}
+
+/** Is bd runnable, and new enough? Cheap (`bd --version`); not tied to a project. */
+async function getBdStatus(): Promise<BdStatus> {
+  const candidates = bdCandidates()
+  for (const c of candidates) {
+    try {
+      const { stdout } = await execFileAsync(c, ['--version'])
+      return classifyBdVersion(stdout, process.env['BD_BIN'])
+    } catch (err) {
+      if ((err as { code?: string }).code === 'ENOENT') continue
+      return {
+        state: 'missing',
+        message: `bd failed to run (${c}): ${(err as Error).message}`,
+      }
+    }
+  }
+  return {
+    state: 'missing',
+    message: bdNotFoundMessage(candidates, process.env['BD_BIN']),
+  }
 }
 
 async function enableEventsJournal(projectId: string): Promise<void> {
@@ -918,6 +965,8 @@ export const bdAdapter: BdAdapter = {
   createBead,
   addComment,
   enableEventsJournal,
+  getCommentAuthor,
+  getBdStatus,
 }
 
 export {
@@ -935,6 +984,8 @@ export {
   createBead,
   addComment,
   enableEventsJournal,
+  getCommentAuthor,
+  getBdStatus,
   resolveDir,
   counts,
 }

@@ -1,3 +1,5 @@
+import type { BdStatus } from './bd-errors.ts'
+import type { CommentAuthor } from './comment-author.ts'
 import type {
   Bead,
   BeadDetail,
@@ -30,4 +32,6 @@ export interface BdAdapter {
   ) => Promise<string>
   addComment: (projectId: string, id: string, text: string) => Promise<void>
   enableEventsJournal: (projectId: string) => Promise<void>
+  getCommentAuthor: (projectId: string) => Promise<CommentAuthor>
+  getBdStatus: () => Promise<BdStatus>
 }
