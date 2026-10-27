@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 
 import { EpicProgress } from '@/components/epic-progress'
+import { ChangedDot, useSince } from '@/components/since-band'
 import { Button } from '@/components/ui/button'
 import { ClosedHiddenNote } from '@/components/status-column-header'
 import { InteractiveRow } from '@/components/ui/interactive-row'
@@ -101,8 +102,13 @@ function TreeNode({
   const Glyph = STATE_GLYPH[state]
   const muted = state === 'closed' || state === 'deferred'
   const pathOnly = matched !== undefined && !matched.has(bead.id)
-  const touched = bead.updated_at ?? bead.created_at
-  const age = touched ? formatSpan(now - Date.parse(touched)) : ''
+  const { latestComment } = useSince()
+  // Comments do not bump updated_at, so the row's age follows the newest of the two.
+  const touchedAt = Math.max(
+    Date.parse(bead.updated_at ?? bead.created_at ?? '') || 0,
+    latestComment.get(bead.id) ?? 0,
+  )
+  const age = touchedAt ? formatSpan(now - touchedAt) : ''
   const waiting = bead.waiting_on ?? []
   const who = initials(bead.assignee)
   const noTasks = epic && (fullMap.get(bead.id)?.length ?? 0) === 0
@@ -151,6 +157,7 @@ function TreeNode({
           <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
             {bead.id}
           </span>
+          <ChangedDot id={bead.id} />
           <span
             className={cn(
               'shrink-0 rounded-[4px] px-1 py-px font-mono text-[10px] font-semibold tabular-nums ring-1 ring-inset ring-current',
@@ -238,7 +245,11 @@ function TreeNode({
             </span>
             <span
               className="w-8 text-right"
-              title={touched ? `Updated ${touched}` : undefined}
+              title={
+                touchedAt
+                  ? `Latest activity ${new Date(touchedAt).toISOString()}`
+                  : undefined
+              }
             >
               {age}
             </span>

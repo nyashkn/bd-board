@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { InteractiveRow } from '@/components/ui/interactive-row'
 import { AgeLine } from '@/components/age-line'
+import { ChangedDot } from '@/components/since-band'
 import { SubtaskProgress } from '@/components/subtask-progress'
 import { cn, initials } from '@/lib/utils'
 import { beadColumn, groupBeadLinks, isEpic, mapStatus } from '@/lib/types'
@@ -202,6 +203,7 @@ export function BeadCard({
           <span className="font-mono text-[11px] tracking-[0.01em] text-muted-foreground">
             {bead.id}
           </span>
+          <ChangedDot id={bead.id} />
           <span
             className={cn(
               'rounded-[4px] px-1 py-px font-mono text-[10px] leading-[1.5] font-semibold tabular-nums ring-1 ring-inset ring-current',

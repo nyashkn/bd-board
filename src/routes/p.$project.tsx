@@ -25,7 +25,14 @@ import { ProjectKnowledgePanel } from '@/components/project-knowledge-panel'
 import { LiveUpdatesIndicator } from '@/components/live-updates-indicator'
 import { ReadonlyContext } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
-import { getBeads, getProjects, updateBeadStatusFn } from '@/lib/server'
+import { SinceBand, SinceContext } from '@/components/since-band'
+import {
+  getBeads,
+  getProjectKnowledgeFn,
+  getProjects,
+  updateBeadStatusFn,
+} from '@/lib/server'
+import { diffSince, latestCommentByBead } from '@/lib/activity'
 import { COLUMNS, beadColumn, isEpic } from '@/lib/types'
 import {
   beadMatches,
@@ -44,6 +51,7 @@ import {
 import { buildChildrenMap } from '@/lib/tree'
 import { toErrorMessage } from '@/lib/utils'
 import { useBeadFeed } from '@/hooks/use-bead-feed'
+import { useSinceLastSeen } from '@/hooks/use-since-last-seen'
 
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import type { BoardView, ProjectTab } from '@/components/board-header'
@@ -214,6 +222,29 @@ function BoardPage() {
 
   const beads = beadsQuery.data ?? []
 
+  // Comments are not in `bd list` and do not bump updated_at, so activity needs the same
+  // `bd export` read the Knowledge tab uses (one extra call, shared cache key, refreshed at most every 30 s).
+  const { since, dismiss: dismissSince } = useSinceLastSeen(project)
+  const commentsQuery = useQuery({
+    queryKey: ['project-knowledge', project],
+    queryFn: () => getProjectKnowledgeFn({ data: { project } }),
+    enabled: since !== null,
+    staleTime: 30_000,
+    retry: false,
+  })
+  const latestComment = useMemo(
+    () => latestCommentByBead(commentsQuery.data?.comments ?? []),
+    [commentsQuery.data],
+  )
+  const change = useMemo(
+    () => (since === null ? null : diffSince(beads, since, latestComment)),
+    [beads, since, latestComment],
+  )
+  const sinceValue = useMemo(
+    () => ({ changes: change?.byBead ?? new Map(), latestComment }),
+    [change, latestComment],
+  )
+
   const beadsById = useMemo(() => {
     const map = new Map<string, Bead>()
     for (const bead of beads) map.set(bead.id, bead)
@@ -346,151 +377,165 @@ function BoardPage() {
 
   return (
     <ReadonlyContext.Provider value={readonly}>
-      <div className="flex h-[calc(100dvh-6rem)] min-h-0 flex-col">
-        {tab === 'board' || tab === 'hierarchy' ? (
-          <BoardHeader
-            hierarchy={tab === 'hierarchy'}
-            search={search}
-            setSearch={(value) =>
-              patchBoardSearch({ q: value.trim() ? value : undefined })
-            }
-            view={view}
-            setView={(value) => patchBoardSearch({ view: value })}
-            priorities={priorities}
-            setPriorities={(values) =>
-              patchBoardSearch({ p: serializePriorities(values) })
-            }
-            ready={ready}
-            setReady={(value) =>
-              patchBoardSearch({ ready: value ? '1' : undefined })
-            }
-            assignee={assignee}
-            setAssignee={(value) =>
-              patchBoardSearch({ assignee: value || undefined })
-            }
-            availableLabels={availableLabels}
-            labels={labels}
-            setLabels={(values) =>
-              patchBoardSearch({ l: serializeLabels(values) })
-            }
-            sort={sort}
-            setSort={(value) => patchBoardSearch({ sort: value })}
-            nested={nested}
-            setNested={(value) =>
-              patchBoardSearch({ nested: value ? '1' : undefined })
-            }
-            closedWindow={closedWindow}
-            setClosedWindow={setClosedWindow}
-            onCreate={readonly ? undefined : () => setCreateOpen(true)}
-            liveIndicator={
-              <LiveUpdatesIndicator
-                status={feed.status}
-                message={feed.message}
-              />
-            }
-          />
-        ) : null}
+      <SinceContext.Provider value={sinceValue}>
+        <div className="flex h-[calc(100dvh-6rem)] min-h-0 flex-col">
+          {tab === 'board' || tab === 'hierarchy' ? (
+            <BoardHeader
+              hierarchy={tab === 'hierarchy'}
+              search={search}
+              setSearch={(value) =>
+                patchBoardSearch({ q: value.trim() ? value : undefined })
+              }
+              view={view}
+              setView={(value) => patchBoardSearch({ view: value })}
+              priorities={priorities}
+              setPriorities={(values) =>
+                patchBoardSearch({ p: serializePriorities(values) })
+              }
+              ready={ready}
+              setReady={(value) =>
+                patchBoardSearch({ ready: value ? '1' : undefined })
+              }
+              assignee={assignee}
+              setAssignee={(value) =>
+                patchBoardSearch({ assignee: value || undefined })
+              }
+              availableLabels={availableLabels}
+              labels={labels}
+              setLabels={(values) =>
+                patchBoardSearch({ l: serializeLabels(values) })
+              }
+              sort={sort}
+              setSort={(value) => patchBoardSearch({ sort: value })}
+              nested={nested}
+              setNested={(value) =>
+                patchBoardSearch({ nested: value ? '1' : undefined })
+              }
+              closedWindow={closedWindow}
+              setClosedWindow={setClosedWindow}
+              onCreate={readonly ? undefined : () => setCreateOpen(true)}
+              liveIndicator={
+                <LiveUpdatesIndicator
+                  status={feed.status}
+                  message={feed.message}
+                />
+              }
+            />
+          ) : null}
 
-        {beadsQuery.isLoading ? (
-          <BoardSkeleton />
-        ) : beadsQuery.isError ? (
-          <BoardError
-            message={toErrorMessage(beadsQuery.error, 'Failed to load beads')}
-            onRetry={() => beadsQuery.refetch()}
-          />
-        ) : tab === 'knowledge' ? (
-          <ProjectKnowledgePanel
+          {(tab === 'board' || tab === 'hierarchy') &&
+          since !== null &&
+          change ? (
+            <SinceBand
+              since={since}
+              change={change}
+              beadsById={beadsById}
+              onOpen={openBead}
+              onDismiss={dismissSince}
+            />
+          ) : null}
+
+          {beadsQuery.isLoading ? (
+            <BoardSkeleton />
+          ) : beadsQuery.isError ? (
+            <BoardError
+              message={toErrorMessage(beadsQuery.error, 'Failed to load beads')}
+              onRetry={() => beadsQuery.refetch()}
+            />
+          ) : tab === 'knowledge' ? (
+            <ProjectKnowledgePanel
+              project={project}
+              beadsById={beadsById}
+              onOpenBead={openBead}
+              onOpenKnowledge={openKnowledge}
+              refetchInterval={feed.status === 'live' ? 60_000 : 12_000}
+            />
+          ) : tab === 'hierarchy' ? (
+            <HierarchyView
+              key={project}
+              project={project}
+              beads={beads}
+              closedWindow={closedWindow}
+              now={now}
+              matches={hierarchyMatches}
+              onShowAllClosed={() => setClosedWindow('all')}
+              onOpen={openBead}
+            />
+          ) : view === 'epic' || view === 'priority' ? (
+            <BoardSwimlanes
+              beads={beads}
+              search={search}
+              priorities={priorities}
+              ready={ready}
+              assignee={assignee}
+              labels={labels}
+              sort={sort}
+              groupBy={view}
+              nested={nested}
+              closedWindow={closedWindow}
+              now={now}
+              onShowAllClosed={() => setClosedWindow('all')}
+              onOpen={openBead}
+              applyDrop={applyDrop}
+            />
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              onDragCancel={() => setActiveBead(null)}
+            >
+              <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 pt-2 pb-1 md:grid-cols-2 xl:grid-cols-4">
+                {COLUMNS.map((c) => (
+                  <KanbanColumn
+                    key={c.key}
+                    column={c.key}
+                    label={COLUMN_LABEL[c.key]}
+                    beads={columns[c.key]}
+                    onOpen={openBead}
+                    nested={nested}
+                    total={c.key === 'closed' ? closedTotal : undefined}
+                    onShowAll={() => setClosedWindow('all')}
+                  />
+                ))}
+              </div>
+              <DragOverlay>
+                {activeBead ? (
+                  <BeadCard bead={activeBead} onOpen={() => {}} overlay />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+          )}
+
+          <BeadDetailModal
             project={project}
+            bead={selected}
+            open={modalOpen}
+            onOpenChange={setModalOpen}
+            onOpenBead={openBead}
+            resolveBead={(id) => beadsById.get(id)}
+            onOpenKnowledge={openKnowledge}
+          />
+          <KnowledgeDetailModal
+            project={project}
+            knowledgeId={knowledgeParam ?? null}
+            open={knowledgeParam !== undefined}
+            onOpenChange={setKnowledgeOpen}
             beadsById={beadsById}
             onOpenBead={openBead}
             onOpenKnowledge={openKnowledge}
-            refetchInterval={feed.status === 'live' ? 60_000 : 12_000}
           />
-        ) : tab === 'hierarchy' ? (
-          <HierarchyView
-            key={project}
-            project={project}
-            beads={beads}
-            closedWindow={closedWindow}
-            now={now}
-            matches={hierarchyMatches}
-            onShowAllClosed={() => setClosedWindow('all')}
-            onOpen={openBead}
-          />
-        ) : view === 'epic' || view === 'priority' ? (
-          <BoardSwimlanes
-            beads={beads}
-            search={search}
-            priorities={priorities}
-            ready={ready}
-            assignee={assignee}
-            labels={labels}
-            sort={sort}
-            groupBy={view}
-            nested={nested}
-            closedWindow={closedWindow}
-            now={now}
-            onShowAllClosed={() => setClosedWindow('all')}
-            onOpen={openBead}
-            applyDrop={applyDrop}
-          />
-        ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            onDragCancel={() => setActiveBead(null)}
-          >
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 pt-2 pb-1 md:grid-cols-2 xl:grid-cols-4">
-              {COLUMNS.map((c) => (
-                <KanbanColumn
-                  key={c.key}
-                  column={c.key}
-                  label={COLUMN_LABEL[c.key]}
-                  beads={columns[c.key]}
-                  onOpen={openBead}
-                  nested={nested}
-                  total={c.key === 'closed' ? closedTotal : undefined}
-                  onShowAll={() => setClosedWindow('all')}
-                />
-              ))}
-            </div>
-            <DragOverlay>
-              {activeBead ? (
-                <BeadCard bead={activeBead} onOpen={() => {}} overlay />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        )}
-
-        <BeadDetailModal
-          project={project}
-          bead={selected}
-          open={modalOpen}
-          onOpenChange={setModalOpen}
-          onOpenBead={openBead}
-          resolveBead={(id) => beadsById.get(id)}
-          onOpenKnowledge={openKnowledge}
-        />
-        <KnowledgeDetailModal
-          project={project}
-          knowledgeId={knowledgeParam ?? null}
-          open={knowledgeParam !== undefined}
-          onOpenChange={setKnowledgeOpen}
-          beadsById={beadsById}
-          onOpenBead={openBead}
-          onOpenKnowledge={openKnowledge}
-        />
-        {readonly ? null : (
-          <CreateBeadDialog
-            project={project}
-            epics={epics}
-            open={createOpen}
-            onOpenChange={setCreateOpen}
-          />
-        )}
-      </div>
+          {readonly ? null : (
+            <CreateBeadDialog
+              project={project}
+              epics={epics}
+              open={createOpen}
+              onOpenChange={setCreateOpen}
+            />
+          )}
+        </div>
+      </SinceContext.Provider>
     </ReadonlyContext.Provider>
   )
 }
