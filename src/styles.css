@@ -11,10 +11,9 @@
 :root {
   --radius: 0.625rem;
 
-  /* Light palette, added for Pivot's deployment 2026-10-20. Upstream ships dark-only
-     (className="dark" on <html>); Alecia's standing rule is light mode only. Same hues
-     as the .dark block below, lightness inverted, status and knowledge colours darkened
-     so they keep contrast on white. Removing className="dark" in __root.tsx selects it. */
+  /* Light palette (default). The .dark block below overrides it; the class is set on
+     <html> from prefers-color-scheme or the header toggle (src/lib/theme.ts). */
+  color-scheme: light;
   --background: oklch(0.985 0.002 270);
   --canvas: oklch(0.97 0.003 270);
   --card: oklch(1 0 0);
@@ -83,14 +82,14 @@
 }
 
 /*
- * bd board — dark system tokens. The app is dark-only — see
- * `className="dark"` in src/routes/__root.tsx — so this is the only
- * palette. shadcn tokens without a direct equivalent in the design
+ * bd board — dark system tokens. Applied when <html> has the `dark` class.
+ * shadcn tokens without a direct equivalent in the design
  * system are mapped to the closest surface/role: --secondary/--muted -> a
  * neutral raised surface, --accent -> the hover wash, --destructive
  * -> the scoped danger color.
  */
 .dark {
+  color-scheme: dark;
   --background: oklch(0.155 0.006 270);
   --canvas: oklch(0.178 0.006 270);
   --card: oklch(0.208 0.006 270);
@@ -248,7 +247,6 @@
 
   html {
     box-sizing: border-box;
-    color-scheme: dark;
   }
 
   html,

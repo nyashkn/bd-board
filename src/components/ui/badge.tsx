@@ -72,7 +72,7 @@ function Badge({
           type="button"
           onClick={onRemove}
           aria-label="Remove"
-          className="-mr-0.5 ml-0.5 rounded-full p-0.5 hover:bg-black/15"
+          className="-mr-0.5 ml-0.5 rounded-full p-0.5 hover:bg-foreground/15"
         >
           <X className="size-3" aria-hidden="true" />
         </button>

@@ -8,6 +8,7 @@ import { ProjectRail } from '@/components/project-rail'
 import { ProjectTopbar } from '@/components/project-topbar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
+import { THEME_INIT_SCRIPT } from '@/lib/theme'
 
 import appCss from '../styles.css?url'
 
@@ -37,13 +38,14 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         href: appCss,
       },
     ],
+    scripts: [{ children: THEME_INIT_SCRIPT }],
   }),
   shellComponent: RootDocument,
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

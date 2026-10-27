@@ -33,7 +33,7 @@ interface BeadCardProps {
 
 const BADGE_TONES: Record<'warning' | 'muted' | 'info', string> = {
   warning: 'bg-warn/16 text-warn',
-  muted: 'bg-white/7 text-muted-foreground',
+  muted: 'bg-foreground/7 text-muted-foreground',
   info: 'bg-status-progress/18 text-status-progress',
 }
 
@@ -280,7 +280,7 @@ export function BeadCard({
             {bead.assignee ? (
               <Avatar
                 size="sm"
-                className="size-[19px] bg-white/9 ring-1 ring-inset ring-border-strong"
+                className="size-[19px] bg-foreground/9 ring-1 ring-inset ring-border-strong"
               >
                 <AvatarFallback className="bg-transparent text-[9px] font-semibold tracking-[0.03em] text-foreground">
                   {initials(bead.assignee)}

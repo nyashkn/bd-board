@@ -241,12 +241,12 @@ export function EditProjectModal({
               </p>
             )}
             {pathValidation === 'valid' && (
-              <p className="mt-1 text-sm text-green-600">
+              <p className="mt-1 text-sm text-status-closed">
                 ✓ Beads workspace found
               </p>
             )}
             {pathValidation === 'needsInit' && (
-              <p className="mt-1 text-sm text-amber-600">
+              <p className="mt-1 text-sm text-warn">
                 ⚠ No beads workspace — will initialize if saved
               </p>
             )}
@@ -268,7 +268,7 @@ export function EditProjectModal({
               <span className="font-mono text-xs">{project.beadsPath}</span>
             </div>
             {project.external && (
-              <div className="flex gap-2 text-amber-600">
+              <div className="flex gap-2 text-warn">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 <span>External workspace (outside project folder)</span>
               </div>

@@ -136,7 +136,7 @@ export function ProjectCard({ project }: { project: Project }) {
           </div>
 
           {counts.total > 0 ? (
-            <span className="mt-3.5 flex h-[5px] w-full overflow-hidden rounded-full bg-white/7">
+            <span className="mt-3.5 flex h-[5px] w-full overflow-hidden rounded-full bg-foreground/7">
               {SEGMENT_ORDER.filter((s) => barCounts[s.key] > 0).map((s) => (
                 <span
                   key={s.key}

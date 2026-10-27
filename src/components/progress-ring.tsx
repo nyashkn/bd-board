@@ -36,7 +36,7 @@ export function ProgressRing({
           r={radius}
           fill="none"
           strokeWidth={stroke}
-          className="stroke-white/8"
+          className="stroke-foreground/8"
         />
         {value !== null ? (
           <circle

@@ -96,7 +96,7 @@ function LaneCell({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex min-h-19 min-w-0 flex-col gap-2 rounded-[10px] bg-canvas p-2 ring-1 ring-inset ring-white/5 transition-colors',
+        'flex min-h-19 min-w-0 flex-col gap-2 rounded-[10px] bg-canvas p-2 ring-1 ring-inset ring-foreground/5 transition-colors',
         isOver && 'bg-primary/5 ring-primary/30',
       )}
     >
@@ -106,7 +106,7 @@ function LaneCell({
         ))}
       </SortableContext>
       {beads.length === 0 ? (
-        <span className="flex flex-1 items-center justify-center py-3 font-mono text-[11px] text-white/22">
+        <span className="flex flex-1 items-center justify-center py-3 font-mono text-[11px] text-foreground/22">
           —
         </span>
       ) : null}

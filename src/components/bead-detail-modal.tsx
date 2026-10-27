@@ -90,7 +90,7 @@ const COLUMN_LABEL: Record<BeadColumn, string> = {
 
 const BADGE_TONE: Record<'warning' | 'muted' | 'info', string> = {
   warning: 'bg-warn/16 text-warn',
-  muted: 'bg-white/7 text-muted-foreground',
+  muted: 'bg-foreground/7 text-muted-foreground',
   info: 'bg-status-progress/18 text-status-progress',
 }
 
@@ -815,7 +815,7 @@ export function BeadDetailModal({
                         Epic
                       </span>
                     ) : (
-                      <span className="rounded-[4px] bg-white/7 px-1.5 py-px text-[10px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+                      <span className="rounded-[4px] bg-foreground/7 px-1.5 py-px text-[10px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
                         {bead.issue_type}
                       </span>
                     )}
@@ -1160,7 +1160,7 @@ export function BeadDetailModal({
                 <MetaField label="Assignee">
                   {bead.assignee ? (
                     <>
-                      <Avatar size="sm" className="size-[19px] bg-white/9">
+                      <Avatar size="sm" className="size-[19px] bg-foreground/9">
                         <AvatarFallback className="bg-transparent text-[9px] font-semibold text-foreground">
                           {initials(bead.assignee)}
                         </AvatarFallback>
@@ -1255,7 +1255,7 @@ export function BeadDetailModal({
                 <span className="mb-[7px] block font-mono text-[10px] font-medium tracking-[0.09em] text-faint uppercase">
                   bd command
                 </span>
-                <p className="rounded-[7px] bg-black/35 px-[11px] py-[9px] font-mono text-[11.5px] leading-[1.55] text-muted-foreground ring-1 ring-inset ring-border">
+                <p className="rounded-[7px] bg-canvas px-[11px] py-[9px] font-mono text-[11.5px] leading-[1.55] text-muted-foreground ring-1 ring-inset ring-border">
                   bd show {bead.id} --json
                 </p>
               </div>

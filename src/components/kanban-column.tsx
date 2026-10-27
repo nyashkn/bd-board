@@ -49,13 +49,13 @@ export function KanbanColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          'flex min-h-0 flex-1 flex-col rounded-[10px] bg-canvas ring-1 ring-inset ring-white/5 transition-colors',
+          'flex min-h-0 flex-1 flex-col rounded-[10px] bg-canvas ring-1 ring-inset ring-foreground/5 transition-colors',
           isOver && 'bg-primary/5 ring-primary/30',
         )}
       >
         {beads.length === 0 ? (
           <div className="flex flex-1 items-center justify-center p-4">
-            <span className="font-mono text-[11px] text-white/22">—</span>
+            <span className="font-mono text-[11px] text-foreground/22">—</span>
           </div>
         ) : (
           <ScrollArea className="min-h-0 flex-1">

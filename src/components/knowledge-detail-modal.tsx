@@ -367,7 +367,7 @@ export function KnowledgeDetailModal({
                   Recorded by
                 </span>
                 <div className="flex items-center gap-1.5 text-[13px]">
-                  <Avatar size="sm" className="size-[19px] bg-white/9">
+                  <Avatar size="sm" className="size-[19px] bg-foreground/9">
                     <AvatarFallback className="bg-transparent text-[9px] font-semibold text-foreground">
                       {initials(entry.author ?? '?')}
                     </AvatarFallback>
@@ -488,14 +488,14 @@ export function KnowledgeDetailModal({
               <span className="mb-[7px] block font-mono text-[10px] font-medium tracking-[0.09em] text-faint uppercase">
                 Written with
               </span>
-              <p className="rounded-[7px] bg-black/35 px-[11px] py-[9px] font-mono text-[11.5px] leading-[1.55] text-muted-foreground ring-1 ring-inset ring-border">
+              <p className="rounded-[7px] bg-canvas px-[11px] py-[9px] font-mono text-[11.5px] leading-[1.55] text-muted-foreground ring-1 ring-inset ring-border">
                 bd comment {entry.bead_id} &quot;
                 {KNOWLEDGE_TYPE_PREFIX[entry.type]}: …&quot;
               </p>
               <span className="mt-3.5 mb-[7px] block font-mono text-[10px] font-medium tracking-[0.09em] text-faint uppercase">
                 Read back with
               </span>
-              <p className="rounded-[7px] bg-black/35 px-[11px] py-[9px] font-mono text-[11.5px] leading-[1.55] text-muted-foreground ring-1 ring-inset ring-border">
+              <p className="rounded-[7px] bg-canvas px-[11px] py-[9px] font-mono text-[11.5px] leading-[1.55] text-muted-foreground ring-1 ring-inset ring-border">
                 bd show {entry.bead_id} --json
               </p>
             </div>
