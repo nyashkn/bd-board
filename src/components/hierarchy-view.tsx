@@ -147,6 +147,7 @@ function TreeNode({
         <InteractiveRow
           variant="plain"
           size="flush"
+          data-bead-id={bead.id}
           onClick={() => onOpen(bead)}
           className="flex min-w-0 flex-1 items-center gap-2"
         >

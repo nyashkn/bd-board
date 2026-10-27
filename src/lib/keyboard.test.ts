@@ -6,7 +6,7 @@ describe('keyAction', () => {
   it('maps the documented keys', () => {
     expect(keyAction({ key: 'j' })).toEqual({ type: 'move', delta: 1 })
     expect(keyAction({ key: 'ArrowUp' })).toEqual({ type: 'move', delta: -1 })
-    expect(keyAction({ key: 'Enter' })).toEqual({ type: 'open' })
+    expect(keyAction({ key: 'Enter' })).toBeNull() // native button click
     expect(keyAction({ key: '/' })).toEqual({ type: 'focus-search' })
     expect(keyAction({ key: '?' })).toEqual({ type: 'help' })
     expect(keyAction({ key: 'x' })).toBeNull()

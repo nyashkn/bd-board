@@ -19,26 +19,30 @@ export function isTyping(target: KeyLike['target']): boolean {
 
 export type KeyAction =
   | { type: 'move'; delta: 1 | -1 }
-  | { type: 'open' }
   | { type: 'focus-search' }
   | { type: 'help' }
 
 /**
- * Esc is left to the dialogs themselves. Everything else is ignored while typing, with a
+ * Enter needs no handler: the focused bead is a button, so it opens the modal natively. Esc is left to the dialogs themselves. Everything else is ignored while typing, with a
  * modifier held, or while a dialog is open (`blocked`).
  */
-export function keyAction(e: KeyLike, blocked = false): KeyAction | null {
+export function keyAction(
+  e: KeyLike,
+  blocked = false,
+  /** Arrow keys belong to other widgets (menus, drag handles) unless focus is on a bead or nowhere. */
+  arrowsOk = true,
+): KeyAction | null {
   if (blocked || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target))
     return null
   switch (e.key) {
     case 'j':
-    case 'ArrowDown':
       return { type: 'move', delta: 1 }
     case 'k':
-    case 'ArrowUp':
       return { type: 'move', delta: -1 }
-    case 'Enter':
-      return { type: 'open' }
+    case 'ArrowDown':
+      return arrowsOk ? { type: 'move', delta: 1 } : null
+    case 'ArrowUp':
+      return arrowsOk ? { type: 'move', delta: -1 } : null
     case '/':
       return { type: 'focus-search' }
     case '?':
@@ -62,7 +66,7 @@ export function stepIndex(
 export const SHORTCUTS: { keys: string; does: string }[] = [
   { keys: 'j  /  ↓', does: 'Next bead' },
   { keys: 'k  /  ↑', does: 'Previous bead' },
-  { keys: 'Enter', does: 'Open the selected bead' },
+  { keys: 'Enter', does: 'Open the focused bead' },
   { keys: 'Esc', does: 'Close the bead or this list' },
   { keys: '/', does: 'Search' },
   { keys: '?', does: 'Show this list' },

@@ -196,6 +196,7 @@ export function BeadCard({
       <InteractiveRow
         variant="plain"
         size="flush"
+        data-bead-id={bead.id}
         onClick={() => onOpen(bead)}
         className="flex cursor-pointer flex-col gap-[7px] rounded-[8px] px-[10px] py-[9px]"
       >

@@ -4,6 +4,7 @@ import { BookOpen, Columns3, ListTree } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { getProjects } from '@/lib/server'
+import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ReadonlyBadge } from '@/components/readonly-badge'
 
@@ -81,7 +82,11 @@ export function ProjectTopbar() {
           </div>
         </>
       ) : null}
-      <div className="ml-auto shrink-0">
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        <KeyboardShortcuts />
+        <span className="hidden text-xs text-muted-foreground sm:inline">
+          Theme
+        </span>
         <ThemeToggle />
       </div>
     </header>
