@@ -803,7 +803,7 @@ export function BeadDetailModal({
           onOpenChange(next)
         }}
       >
-        <DialogContent className="grid max-h-[86vh] w-[94vw] max-w-3xl grid-cols-1 grid-rows-[minmax(0,1fr)] gap-0 overflow-hidden rounded-[14px] bg-background p-0 shadow-pop sm:max-w-3xl lg:max-w-[1080px] lg:grid-cols-[minmax(0,1fr)_268px]">
+        <DialogContent className="grid max-h-[86vh] w-[94vw] max-w-3xl grid-cols-1 gap-0 overflow-y-auto rounded-[14px] bg-background p-0 shadow-pop sm:max-w-3xl lg:max-w-[1080px] lg:grid-cols-[minmax(0,1fr)_268px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
           {bead ? (
             <>
               <div className="flex min-h-0 min-w-0 flex-col">
@@ -865,7 +865,7 @@ export function BeadDetailModal({
                     )}
                   </div>
 
-                  <DialogTitle className="mt-2.5 text-[20px] leading-[1.28] font-semibold tracking-[-0.015em] text-balance">
+                  <DialogTitle className="mt-2.5 text-[20px] leading-[1.28] font-semibold tracking-[-0.015em] text-balance [overflow-wrap:anywhere]">
                     {bead.title}
                   </DialogTitle>
                   <DialogDescription className="sr-only">
@@ -889,7 +889,7 @@ export function BeadDetailModal({
                   ) : null}
                 </DialogHeader>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-[22px] py-[22px]">
+                <div className="px-[22px] py-[22px] lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                   <div className="flex flex-col gap-[26px]">
                     {isEpic(bead) || childBeads.length > 0 ? (
                       <section>
@@ -1078,7 +1078,7 @@ export function BeadDetailModal({
                           {comments.map((c) => (
                             <li
                               key={c.id}
-                              className="rounded-[9px] bg-canvas px-3 py-2.5 ring-1 ring-inset ring-border"
+                              className="min-w-0 rounded-[9px] bg-canvas px-3 py-2.5 ring-1 ring-inset ring-border"
                             >
                               <div className="flex items-center gap-2 text-[11.5px] text-faint">
                                 <span className="font-medium text-foreground">
@@ -1088,7 +1088,7 @@ export function BeadDetailModal({
                                   <span>· {relativeDate(c.created_at)}</span>
                                 ) : null}
                               </div>
-                              <p className="mt-1.5 text-[13px] whitespace-pre-wrap">
+                              <p className="mt-1.5 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere]">
                                 {c.text}
                               </p>
                             </li>
