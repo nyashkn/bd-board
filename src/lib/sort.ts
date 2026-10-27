@@ -71,8 +71,12 @@ export function beadMatches(
   priorities: number[],
   ready = false,
   assignee = '',
+  labels: string[] = [],
 ): boolean {
   if (ready && !isReady(bead)) return false
+  // Multi-select labels are OR: any one of them is enough.
+  if (labels.length > 0 && !(bead.labels ?? []).some((l) => labels.includes(l)))
+    return false
   if (assignee && bead.assignee !== assignee) return false
   if (
     priorities.length > 0 &&
@@ -88,4 +92,46 @@ export function beadMatches(
     return false
   }
   return true
+}
+
+/** Labels present in the beads with how many beads carry each, most used first. */
+export function labelCounts(beads: Bead[]): { label: string; count: number }[] {
+  const counts = new Map<string, number>()
+  for (const b of beads) {
+    for (const label of new Set(b.labels ?? [])) {
+      counts.set(label, (counts.get(label) ?? 0) + 1)
+    }
+  }
+  return [...counts]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+}
+
+/** `l` URL param: comma separated, trimmed, deduplicated. */
+export function parseLabelsParam(value?: string): string[] {
+  if (!value) return []
+  return Array.from(
+    new Set(
+      value
+        .split(',')
+        .map((part) => part.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+export function serializeLabels(labels: string[]): string | undefined {
+  return labels.length > 0 ? labels.join(',') : undefined
+}
+
+/**
+ * Epic swimlane: a lane stays when any of its children matches, or, while a label
+ * filter is active, when the epic itself matches (children may carry no label).
+ */
+export function keepEpicLane(
+  epicMatches: boolean,
+  labelsActive: boolean,
+  matchedChildren: number,
+): boolean {
+  return matchedChildren > 0 || (labelsActive && epicMatches)
 }

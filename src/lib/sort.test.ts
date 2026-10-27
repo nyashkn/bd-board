@@ -5,6 +5,10 @@ import {
   clampPriority,
   compareBeads,
   isReady,
+  keepEpicLane,
+  labelCounts,
+  parseLabelsParam,
+  serializeLabels,
   priorityLabel,
 } from './sort'
 
@@ -144,5 +148,46 @@ describe('isReady', () => {
     ).toBe(false)
     expect(isReady(bead({ status: 'blocked' }))).toBe(false)
     expect(isReady(bead({ status: 'closed' }))).toBe(false)
+  })
+})
+
+describe('label filter', () => {
+  const a = bead({ id: 'a', labels: ['wo', 'ui'] })
+  const b = bead({ id: 'b', labels: ['infra'] })
+  const c = bead({ id: 'c', labels: undefined })
+
+  it('matches any selected label (OR) and everything when none selected', () => {
+    expect(beadMatches(a, '', [], false, '', ['wo'])).toBe(true)
+    expect(beadMatches(a, '', [], false, '', ['infra', 'ui'])).toBe(true)
+    expect(beadMatches(b, '', [], false, '', ['wo', 'ui'])).toBe(false)
+    expect(beadMatches(c, '', [], false, '', ['wo'])).toBe(false)
+    expect(beadMatches(c, '', [], false, '', [])).toBe(true)
+  })
+
+  it('combines with the other filters (AND)', () => {
+    expect(beadMatches(a, 'zzz', [], false, '', ['wo'])).toBe(false)
+  })
+
+  it('counts labels, most used first, once per bead', () => {
+    const d = bead({ id: 'd', labels: ['ui', 'ui'] })
+    expect(labelCounts([a, b, c, d])).toEqual([
+      { label: 'ui', count: 2 },
+      { label: 'infra', count: 1 },
+      { label: 'wo', count: 1 },
+    ])
+  })
+
+  it('round-trips the url param', () => {
+    expect(parseLabelsParam(' wo, ui ,wo,,')).toEqual(['wo', 'ui'])
+    expect(parseLabelsParam(undefined)).toEqual([])
+    expect(serializeLabels(['wo', 'ui'])).toBe('wo,ui')
+    expect(serializeLabels([])).toBeUndefined()
+  })
+
+  it('keeps an epic lane when the epic or any child matches', () => {
+    expect(keepEpicLane(false, true, 2)).toBe(true)
+    expect(keepEpicLane(true, true, 0)).toBe(true)
+    expect(keepEpicLane(false, true, 0)).toBe(false)
+    expect(keepEpicLane(true, false, 0)).toBe(false)
   })
 })

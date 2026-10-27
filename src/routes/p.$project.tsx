@@ -27,7 +27,13 @@ import { ReadonlyContext } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { getBeads, getProjects, updateBeadStatusFn } from '@/lib/server'
 import { COLUMNS, isEpic, mapStatus } from '@/lib/types'
-import { beadMatches, compareBeads } from '@/lib/sort'
+import {
+  beadMatches,
+  compareBeads,
+  labelCounts,
+  parseLabelsParam,
+  serializeLabels,
+} from '@/lib/sort'
 import { toErrorMessage } from '@/lib/utils'
 import { useBeadFeed } from '@/hooks/use-bead-feed'
 
@@ -43,6 +49,7 @@ interface BoardSearch {
   p?: string
   ready?: string
   assignee?: string
+  l?: string
   tab?: ProjectTab
   view?: BoardView
   sort?: SortKey
@@ -92,6 +99,10 @@ export const Route = createFileRoute('/p/$project')({
       typeof search.assignee === 'string' && search.assignee.length > 0
         ? search.assignee
         : undefined,
+    l:
+      typeof search.l === 'string'
+        ? serializeLabels(parseLabelsParam(search.l))
+        : undefined,
     tab:
       typeof search.tab === 'string' && PROJECT_TABS.has(search.tab)
         ? (search.tab as ProjectTab)
@@ -138,6 +149,8 @@ function BoardPage() {
   )
   const ready = boardSearch.ready === '1'
   const assignee = boardSearch.assignee ?? ''
+  const labels = useMemo(() => parseLabelsParam(boardSearch.l), [boardSearch.l])
+
   const sort = boardSearch.sort ?? 'priority'
   const nested = boardSearch.nested === '1'
 
@@ -178,15 +191,16 @@ function BoardPage() {
   }, [beads])
 
   const epics = useMemo(() => beads.filter(isEpic), [beads])
+  const availableLabels = useMemo(() => labelCounts(beads), [beads])
 
   const filtered = useMemo(
     () =>
       beads.filter(
         (bead) =>
-          beadMatches(bead, search, priorities, ready, assignee) &&
+          beadMatches(bead, search, priorities, ready, assignee, labels) &&
           (!nested || !bead.parent),
       ),
-    [beads, search, priorities, ready, assignee, nested],
+    [beads, search, priorities, ready, assignee, labels, nested],
   )
 
   const columns = useMemo(() => {
@@ -305,6 +319,11 @@ function BoardPage() {
             setAssignee={(value) =>
               patchBoardSearch({ assignee: value || undefined })
             }
+            availableLabels={availableLabels}
+            labels={labels}
+            setLabels={(values) =>
+              patchBoardSearch({ l: serializeLabels(values) })
+            }
             sort={sort}
             setSort={(value) => patchBoardSearch({ sort: value })}
             nested={nested}
@@ -345,6 +364,7 @@ function BoardPage() {
             priorities={priorities}
             ready={ready}
             assignee={assignee}
+            labels={labels}
             sort={sort}
             groupBy={view}
             nested={nested}

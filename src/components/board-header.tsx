@@ -6,6 +6,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Tag,
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
 import { PRIORITIES, SORT_OPTIONS } from '@/lib/sort'
 
 import type { LucideIcon } from 'lucide-react'
@@ -43,8 +45,12 @@ interface BoardHeaderProps {
   setReady: (value: boolean) => void
   assignee: string
   setAssignee: (value: string) => void
+  availableLabels: { label: string; count: number }[]
+  labels: string[]
+  setLabels: (value: string[]) => void
   sort: SortKey
   setSort: (value: SortKey) => void
+
   nested: boolean
   setNested: (value: boolean) => void
   /** Omitted for read-only projects: no "New bead". */
@@ -74,6 +80,9 @@ export function BoardHeader({
   setReady,
   assignee,
   setAssignee,
+  availableLabels,
+  labels,
+  setLabels,
   sort,
   setSort,
   nested,
@@ -86,6 +95,14 @@ export function BoardHeader({
       checked
         ? [...priorities, p].sort((a, b) => a - b)
         : priorities.filter((x) => x !== p),
+    )
+  }
+
+  function toggleLabel(label: string) {
+    setLabels(
+      labels.includes(label)
+        ? labels.filter((x) => x !== label)
+        : [...labels, label],
     )
   }
 
@@ -225,6 +242,48 @@ export function BoardHeader({
           ) : null}
         </div>
       </div>
+
+      {availableLabels.length > 0 ? (
+        <div
+          className="flex max-h-20 flex-wrap items-center gap-1.5 overflow-y-auto"
+          role="group"
+          aria-label="Filter by label (view filter only)"
+        >
+          <Tag
+            className="size-3.5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          {availableLabels.map(({ label, count }) => {
+            const on = labels.includes(label)
+            return (
+              <Toggle
+                key={label}
+                pressed={on}
+                onPressedChange={() => toggleLabel(label)}
+                className={cn(
+                  'h-6 gap-1 rounded-full px-2 text-xs ring-1 ring-inset',
+                  on
+                    ? 'bg-primary/26 text-primary-text ring-ring/55'
+                    : 'text-muted-foreground ring-border',
+                )}
+              >
+                {label}
+                <span className="tabular-nums opacity-60">{count}</span>
+              </Toggle>
+            )
+          })}
+          {labels.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => setLabels([])}
+            >
+              Clear
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </header>
   )
 }

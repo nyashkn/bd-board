@@ -27,6 +27,7 @@ import {
   PRIORITY_TEXT_CLASS,
   PRIORITY_WORD,
   beadMatches,
+  keepEpicLane,
   compareBeads,
 } from '@/lib/sort'
 
@@ -43,6 +44,7 @@ interface BoardSwimlanesProps {
   priorities: number[]
   ready: boolean
   assignee: string
+  labels: string[]
   sort: SortKey
   groupBy: SwimlaneGroup
   nested?: boolean
@@ -267,6 +269,7 @@ export function BoardSwimlanes({
   priorities,
   ready,
   assignee,
+  labels,
   sort,
   groupBy,
   nested = false,
@@ -275,7 +278,7 @@ export function BoardSwimlanes({
 }: BoardSwimlanesProps) {
   const { lanes, totals, hasAny } = useMemo(() => {
     const matches = (b: Bead) =>
-      beadMatches(b, search, priorities, ready, assignee)
+      beadMatches(b, search, priorities, ready, assignee, labels)
     const epicIds = new Set(beads.filter(isEpic).map((e) => e.id))
     // In nested mode, children of a non-epic parent are pulled out of the
     // lane grid and shown inline inside their parent's card instead — but an
@@ -330,7 +333,13 @@ export function BoardSwimlanes({
           epic,
           children: childrenByEpic.get(epic.id) ?? [],
         }))
-        .filter((lane) => lane.children.length > 0)
+        .filter((lane) =>
+          keepEpicLane(
+            labels.length > 0 && matches(lane.epic),
+            labels.length > 0,
+            lane.children.length,
+          ),
+        )
 
       const orphans = work.filter((b) => !b.parent || !epicIds.has(b.parent))
 
@@ -351,7 +360,7 @@ export function BoardSwimlanes({
       totals: totalByColumn,
       hasAny: builtLanes.length > 0,
     }
-  }, [beads, search, priorities, ready, assignee, groupBy, nested])
+  }, [beads, search, priorities, ready, assignee, labels, groupBy, nested])
 
   if (!hasAny) {
     return (
