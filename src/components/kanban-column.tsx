@@ -3,7 +3,10 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 
 import { BeadCard } from '@/components/bead-card'
-import { StatusColumnHeader } from '@/components/status-column-header'
+import {
+  ClosedHiddenNote,
+  StatusColumnHeader,
+} from '@/components/status-column-header'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -17,6 +20,9 @@ interface KanbanColumnProps {
   onOpen: (bead: Bead) => void
   initialLimit?: number
   nested?: boolean
+  /** Closed column only: how many closed beads exist before the recency window. */
+  total?: number
+  onShowAll?: () => void
 }
 
 export function KanbanColumn({
@@ -26,6 +32,8 @@ export function KanbanColumn({
   onOpen,
   initialLimit = 40,
   nested = false,
+  total,
+  onShowAll,
 }: KanbanColumnProps) {
   const [expanded, setExpanded] = useState(false)
   const { setNodeRef, isOver } = useDroppable({ id: column })
@@ -43,8 +51,19 @@ export function KanbanColumn({
         column={column}
         label={label}
         count={beads.length}
-        className="mb-3"
+        total={total}
+        className={
+          total !== undefined && total > beads.length ? 'mb-1' : 'mb-3'
+        }
       />
+      {total !== undefined && total > beads.length && onShowAll ? (
+        <div className="mb-2">
+          <ClosedHiddenNote
+            hidden={total - beads.length}
+            onShowAll={onShowAll}
+          />
+        </div>
+      ) : null}
 
       <div
         ref={setNodeRef}

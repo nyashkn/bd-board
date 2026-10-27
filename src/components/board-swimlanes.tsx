@@ -17,11 +17,17 @@ import {
 import { ChevronDown, ChevronRight, Layers } from 'lucide-react'
 
 import { BeadCard } from '@/components/bead-card'
-import { SubtaskProgress } from '@/components/subtask-progress'
-import { StatusColumnHeader } from '@/components/status-column-header'
+import { EpicProgress } from '@/components/epic-progress'
+import {
+  ClosedHiddenNote,
+  StatusColumnHeader,
+} from '@/components/status-column-header'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { isEpic, mapStatus } from '@/lib/types'
+import { descendantStats, epicTook, isCompleteEpic } from '@/lib/epics'
+import { buildChildrenMap } from '@/lib/tree'
+import { isHiddenByWindow } from '@/lib/closed-window'
 import {
   PRIORITIES,
   PRIORITY_TEXT_CLASS,
@@ -33,6 +39,8 @@ import {
 
 import type { ReactNode } from 'react'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
+import type { ClosedWindow } from '@/lib/closed-window'
+import type { DescendantStats } from '@/lib/epics'
 import type { SortKey } from '@/lib/sort'
 import type { Bead, BeadColumn } from '@/lib/types'
 
@@ -48,6 +56,9 @@ interface BoardSwimlanesProps {
   sort: SortKey
   groupBy: SwimlaneGroup
   nested?: boolean
+  closedWindow: ClosedWindow
+  now: number
+  onShowAllClosed: () => void
   onOpen: (bead: Bead) => void
   applyDrop: (activeId: string, toColumn: BeadColumn) => void
 }
@@ -122,6 +133,7 @@ function SwimLane({
   childBeads,
   sort,
   nested,
+  progress,
   onOpen,
   applyDrop,
   defaultOpen = true,
@@ -131,6 +143,7 @@ function SwimLane({
   childBeads: Bead[]
   sort: SortKey
   nested: boolean
+  progress?: { stats: DescendantStats; complete: boolean; took: string }
   onOpen: (bead: Bead) => void
   applyDrop: (activeId: string, toColumn: BeadColumn) => void
   defaultOpen?: boolean
@@ -176,7 +189,12 @@ function SwimLane({
 
   return (
     <section className="flex flex-col gap-2">
-      <header className="flex items-center gap-2 rounded-[8px] bg-canvas py-1.5 pr-2.5 pl-1.5 ring-1 ring-inset ring-border">
+      <header
+        className={cn(
+          'flex items-center gap-2 rounded-[8px] bg-canvas py-1.5 pr-2.5 pl-1.5 ring-1 ring-inset ring-border',
+          progress?.complete && 'ring-status-closed/45',
+        )}
+      >
         <Button
           variant="ghost"
           size="icon-xs"
@@ -215,14 +233,17 @@ function SwimLane({
         )}
 
         <span className="ml-auto flex shrink-0 items-center gap-3">
-          {epic ? (
-            <span className="hidden w-30 sm:block">
-              <SubtaskProgress childBeads={childBeads} showDots={false} />
+          {progress ? (
+            <EpicProgress
+              stats={progress.stats}
+              complete={progress.complete}
+              took={progress.took}
+            />
+          ) : (
+            <span className="font-mono text-[11.5px] tabular-nums text-muted-foreground">
+              {done}/{childBeads.length}
             </span>
-          ) : null}
-          <span className="font-mono text-[11.5px] tabular-nums text-muted-foreground">
-            {done}/{childBeads.length}
-          </span>
+          )}
         </span>
       </header>
 
@@ -261,6 +282,7 @@ interface Lane {
   epic?: Bead
   title?: ReactNode
   children: Bead[]
+  progress?: { stats: DescendantStats; complete: boolean; took: string }
 }
 
 export function BoardSwimlanes({
@@ -273,10 +295,13 @@ export function BoardSwimlanes({
   sort,
   groupBy,
   nested = false,
+  closedWindow,
+  now,
+  onShowAllClosed,
   onOpen,
   applyDrop,
 }: BoardSwimlanesProps) {
-  const { lanes, totals, hasAny } = useMemo(() => {
+  const { lanes, totals, closedTotal, hasAny } = useMemo(() => {
     const matches = (b: Bead) =>
       beadMatches(b, search, priorities, ready, assignee, labels)
     const epicIds = new Set(beads.filter(isEpic).map((e) => e.id))
@@ -290,6 +315,13 @@ export function BoardSwimlanes({
       (b) => !isEpic(b) && matches(b) && !isNestedAway(b),
     )
 
+    const childrenMap = buildChildrenMap(beads)
+    const hiddenIds = new Set(
+      beads
+        .filter((b) => isHiddenByWindow(b, childrenMap, closedWindow, now))
+        .map((b) => b.id),
+    )
+    const shown = work.filter((b) => !hiddenIds.has(b.id))
     let builtLanes: Lane[]
     if (groupBy === 'priority') {
       builtLanes = PRIORITIES.map((p) => ({
@@ -312,13 +344,13 @@ export function BoardSwimlanes({
             ) : null}
           </>
         ),
-        children: work.filter((b) => b.priority === p),
+        children: shown.filter((b) => b.priority === p),
       })).filter((lane) => lane.children.length > 0)
     } else {
       const epics = beads.filter(isEpic)
 
       const childrenByEpic = new Map<string, Bead[]>()
-      for (const b of work) {
+      for (const b of shown) {
         if (b.parent && epicIds.has(b.parent)) {
           const list = childrenByEpic.get(b.parent) ?? []
           list.push(b)
@@ -332,7 +364,13 @@ export function BoardSwimlanes({
           key: epic.id,
           epic,
           children: childrenByEpic.get(epic.id) ?? [],
+          progress: {
+            stats: descendantStats(epic.id, childrenMap),
+            complete: isCompleteEpic(epic, childrenMap),
+            took: epicTook(epic, childrenMap),
+          },
         }))
+        .filter((lane) => !hiddenIds.has(lane.epic.id))
         .filter((lane) =>
           keepEpicLane(
             labels.length > 0 && matches(lane.epic),
@@ -341,7 +379,7 @@ export function BoardSwimlanes({
           ),
         )
 
-      const orphans = work.filter((b) => !b.parent || !epicIds.has(b.parent))
+      const orphans = shown.filter((b) => !b.parent || !epicIds.has(b.parent))
 
       builtLanes =
         orphans.length > 0
@@ -353,14 +391,29 @@ export function BoardSwimlanes({
     }
 
     const totalByColumn = emptyByColumn()
-    for (const b of work) totalByColumn[mapStatus(b.status).column].push(b)
+    for (const b of shown) totalByColumn[mapStatus(b.status).column].push(b)
+    const closedAll = work.filter(
+      (b) => mapStatus(b.status).column === 'closed',
+    ).length
 
     return {
       lanes: builtLanes,
       totals: totalByColumn,
+      closedTotal: closedAll,
       hasAny: builtLanes.length > 0,
     }
-  }, [beads, search, priorities, ready, assignee, labels, groupBy, nested])
+  }, [
+    beads,
+    search,
+    priorities,
+    ready,
+    assignee,
+    labels,
+    groupBy,
+    nested,
+    closedWindow,
+    now,
+  ])
 
   if (!hasAny) {
     return (
@@ -376,12 +429,20 @@ export function BoardSwimlanes({
     <div className="min-h-0 flex-1 overflow-y-auto pb-2">
       <div className="sticky top-0 z-10 grid grid-cols-1 gap-3 bg-background/92 pt-3 pb-2.5 backdrop-blur-[8px] md:grid-cols-2 xl:grid-cols-4">
         {COLUMN_KEYS.map((key) => (
-          <StatusColumnHeader
-            key={key}
-            column={key}
-            label={COLUMN_LABEL[key]}
-            count={totals[key].length}
-          />
+          <div key={key} className="flex min-w-0 flex-col gap-1">
+            <StatusColumnHeader
+              column={key}
+              label={COLUMN_LABEL[key]}
+              count={totals[key].length}
+              total={key === 'closed' ? closedTotal : undefined}
+            />
+            {key === 'closed' ? (
+              <ClosedHiddenNote
+                hidden={closedTotal - totals.closed.length}
+                onShowAll={onShowAllClosed}
+              />
+            ) : null}
+          </div>
         ))}
       </div>
 
@@ -394,6 +455,7 @@ export function BoardSwimlanes({
             childBeads={lane.children}
             sort={sort}
             nested={nested}
+            progress={lane.progress}
             onOpen={onOpen}
             applyDrop={applyDrop}
           />

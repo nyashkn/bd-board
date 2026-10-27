@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import type { BeadColumn } from '@/lib/types'
@@ -6,6 +7,8 @@ interface StatusColumnHeaderProps {
   column: BeadColumn
   label: string
   count: number
+  /** When larger than count, shown as "count of total" (older closed beads hidden). */
+  total?: number
   className?: string
 }
 
@@ -27,6 +30,7 @@ export function StatusColumnHeader({
   column,
   label,
   count,
+  total,
   className,
 }: StatusColumnHeaderProps) {
   return (
@@ -49,8 +53,29 @@ export function StatusColumnHeader({
           COUNT_CLASS[column],
         )}
       >
-        {count}
+        {total !== undefined && total > count ? `${count} of ${total}` : count}
       </span>
     </div>
+  )
+}
+
+/** "253 older hidden, show all"; nothing when no closed bead is hidden. */
+export function ClosedHiddenNote({
+  hidden,
+  onShowAll,
+}: {
+  hidden: number
+  onShowAll: () => void
+}) {
+  if (hidden <= 0) return null
+  return (
+    <Button
+      type="button"
+      variant="link"
+      onClick={onShowAll}
+      className="h-auto justify-start px-2.5 py-0 text-[11px] text-muted-foreground hover:text-foreground"
+    >
+      {hidden} older hidden, show all
+    </Button>
   )
 }

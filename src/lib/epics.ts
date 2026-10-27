@@ -76,8 +76,8 @@ export function isCompleteEpic(
 }
 
 /**
- * Epoch ms of the epic's completion: the latest closed_at among itself and all
- * descendants. undefined when nothing carries a valid closed_at.
+ * Epoch ms of completion: the latest closed_at (updated_at for a closed bead
+ * without one) among itself and all descendants. undefined when none is valid.
  */
 export function completedAt(
   bead: Bead,
@@ -90,7 +90,8 @@ export function completedAt(
     const b = stack.pop() as Bead
     if (seen.has(b.id)) continue
     seen.add(b.id)
-    const t = b.closed_at ? Date.parse(b.closed_at) : Number.NaN
+    const stamp = b.closed_at ?? (isClosed(b) ? b.updated_at : undefined)
+    const t = stamp ? Date.parse(stamp) : Number.NaN
     if (!Number.isNaN(t) && (latest === undefined || t > latest)) latest = t
     stack.push(...(childrenMap.get(b.id) ?? []))
   }
@@ -98,9 +99,6 @@ export function completedAt(
 }
 
 /** "5d" for a completed epic: created_at to its completion; "" when unknown. */
-export function epicTook(
-  bead: Bead,
-  childrenMap: Map<string, Bead[]>,
-): string {
+export function epicTook(bead: Bead, childrenMap: Map<string, Bead[]>): string {
   return formatDuration(bead.created_at, completedAt(bead, childrenMap))
 }

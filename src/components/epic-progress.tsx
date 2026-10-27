@@ -30,9 +30,7 @@ export function EpicProgress({
   return (
     <span
       className={cn('flex shrink-0 items-center gap-2', className)}
-      title={
-        complete ? `Done${took ? ` · took ${took}` : ''}` : breakdown
-      }
+      title={complete ? `Done${took ? ` · took ${took}` : ''}` : breakdown}
     >
       {total > 0 ? (
         <span

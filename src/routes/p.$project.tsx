@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -13,7 +13,7 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { toast } from 'sonner'
 
-import { BoardHeader } from '@/components/board-header'
+import { BoardHeader, ClosedWindowSelect } from '@/components/board-header'
 import { BoardSwimlanes } from '@/components/board-swimlanes'
 import { KanbanColumn } from '@/components/kanban-column'
 import { BeadCard } from '@/components/bead-card'
@@ -34,12 +34,21 @@ import {
   parseLabelsParam,
   serializeLabels,
 } from '@/lib/sort'
+import {
+  DEFAULT_CLOSED_WINDOW,
+  isHiddenByWindow,
+  parseClosedWindow,
+  readStoredClosedWindow,
+  storeClosedWindow,
+} from '@/lib/closed-window'
+import { buildChildrenMap } from '@/lib/tree'
 import { toErrorMessage } from '@/lib/utils'
 import { useBeadFeed } from '@/hooks/use-bead-feed'
 
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import type { BoardView, ProjectTab } from '@/components/board-header'
 import type { SortKey } from '@/lib/sort'
+import type { ClosedWindow } from '@/lib/closed-window'
 import type { Bead, BeadColumn } from '@/lib/types'
 
 interface BoardSearch {
@@ -54,6 +63,7 @@ interface BoardSearch {
   view?: BoardView
   sort?: SortKey
   nested?: string
+  closed?: ClosedWindow
 }
 
 const BOARD_VIEWS = new Set(['status', 'epic', 'priority'])
@@ -116,6 +126,7 @@ export const Route = createFileRoute('/p/$project')({
         ? (search.sort as SortKey)
         : undefined,
     nested: search.nested === '1' ? '1' : undefined,
+    closed: parseClosedWindow(search.closed),
   }),
   component: BoardPage,
 })
@@ -153,6 +164,25 @@ function BoardPage() {
 
   const sort = boardSearch.sort ?? 'priority'
   const nested = boardSearch.nested === '1'
+  const closedWindow = boardSearch.closed ?? DEFAULT_CLOSED_WINDOW
+  const urlClosed = boardSearch.closed
+
+  // URL wins; with no `closed` param, restore the last stored choice into the URL.
+  useEffect(() => {
+    if (urlClosed) return
+    const stored = readStoredClosedWindow()
+    if (stored && stored !== DEFAULT_CLOSED_WINDOW)
+      navigate({
+        to: '.',
+        replace: true,
+        search: (prev) => ({ ...prev, closed: stored }),
+      })
+  }, [urlClosed, navigate])
+
+  function setClosedWindow(value: ClosedWindow) {
+    storeClosedWindow(value)
+    patchBoardSearch({ closed: value })
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -203,6 +233,9 @@ function BoardPage() {
     [beads, search, priorities, ready, assignee, labels, nested],
   )
 
+  const now = useMemo(() => Date.now(), [beads])
+  const childrenMap = useMemo(() => buildChildrenMap(beads), [beads])
+
   const columns = useMemo(() => {
     const grouped: Record<BeadColumn, Bead[]> = {
       open: [],
@@ -211,11 +244,17 @@ function BoardPage() {
       closed: [],
     }
     for (const bead of filtered)
-      grouped[mapStatus(bead.status).column].push(bead)
+      if (!isHiddenByWindow(bead, childrenMap, closedWindow, now))
+        grouped[mapStatus(bead.status).column].push(bead)
     const compare = compareBeads(sort)
     for (const key of COLUMN_KEYS) grouped[key].sort(compare)
     return grouped
-  }, [filtered, sort])
+  }, [filtered, sort, childrenMap, closedWindow, now])
+  const closedTotal = useMemo(
+    () =>
+      filtered.filter((b) => mapStatus(b.status).column === 'closed').length,
+    [filtered],
+  )
 
   const selected = beadParam ? (beadsById.get(beadParam) ?? null) : null
   const modalOpen = beadParam !== undefined
@@ -330,6 +369,8 @@ function BoardPage() {
             setNested={(value) =>
               patchBoardSearch({ nested: value ? '1' : undefined })
             }
+            closedWindow={closedWindow}
+            setClosedWindow={setClosedWindow}
             onCreate={readonly ? undefined : () => setCreateOpen(true)}
             liveIndicator={
               <LiveUpdatesIndicator
@@ -356,7 +397,21 @@ function BoardPage() {
             refetchInterval={feed.status === 'live' ? 60_000 : 12_000}
           />
         ) : tab === 'hierarchy' ? (
-          <HierarchyView beads={beads} onOpen={openBead} />
+          <>
+            <div className="flex items-center justify-end pb-2">
+              <ClosedWindowSelect
+                value={closedWindow}
+                onChange={setClosedWindow}
+              />
+            </div>
+            <HierarchyView
+              beads={beads}
+              closedWindow={closedWindow}
+              now={now}
+              onShowAllClosed={() => setClosedWindow('all')}
+              onOpen={openBead}
+            />
+          </>
         ) : view === 'epic' || view === 'priority' ? (
           <BoardSwimlanes
             beads={beads}
@@ -368,6 +423,9 @@ function BoardPage() {
             sort={sort}
             groupBy={view}
             nested={nested}
+            closedWindow={closedWindow}
+            now={now}
+            onShowAllClosed={() => setClosedWindow('all')}
             onOpen={openBead}
             applyDrop={applyDrop}
           />
@@ -388,6 +446,8 @@ function BoardPage() {
                   beads={columns[c.key]}
                   onOpen={openBead}
                   nested={nested}
+                  total={c.key === 'closed' ? closedTotal : undefined}
+                  onShowAll={() => setClosedWindow('all')}
                 />
               ))}
             </div>

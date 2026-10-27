@@ -27,9 +27,11 @@ import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import { PRIORITIES, SORT_OPTIONS } from '@/lib/sort'
+import { CLOSED_WINDOWS } from '@/lib/closed-window'
 
 import type { LucideIcon } from 'lucide-react'
 import type { SortKey } from '@/lib/sort'
+import type { ClosedWindow } from '@/lib/closed-window'
 
 export type BoardView = 'status' | 'epic' | 'priority'
 export type ProjectTab = 'board' | 'knowledge' | 'hierarchy'
@@ -53,6 +55,8 @@ interface BoardHeaderProps {
 
   nested: boolean
   setNested: (value: boolean) => void
+  closedWindow: ClosedWindow
+  setClosedWindow: (value: ClosedWindow) => void
   /** Omitted for read-only projects: no "New bead". */
   onCreate?: () => void
   liveIndicator: React.ReactNode
@@ -67,6 +71,37 @@ const VIEWS: { key: BoardView; label: string; icon: LucideIcon }[] = [
 const PRIORITY_HINT: Record<number, string> = {
   0: 'highest',
   4: 'lowest',
+}
+
+/** Recency window for closed beads and completed epics (URL param `closed`). */
+export function ClosedWindowSelect({
+  value,
+  onChange,
+}: {
+  value: ClosedWindow
+  onChange: (value: ClosedWindow) => void
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">Closed</span>
+      <ToggleGroup
+        type="single"
+        value={value}
+        onValueChange={(v) => v && onChange(v as ClosedWindow)}
+        aria-label="Show closed beads from the last"
+      >
+        {CLOSED_WINDOWS.map((w) => (
+          <ToggleGroupItem
+            key={w}
+            value={w}
+            aria-label={w === 'all' ? 'All closed' : `Closed in the last ${w}`}
+          >
+            {w === 'all' ? 'All' : w}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </div>
+  )
 }
 
 export function BoardHeader({
@@ -87,6 +122,8 @@ export function BoardHeader({
   setSort,
   nested,
   setNested,
+  closedWindow,
+  setClosedWindow,
   onCreate,
   liveIndicator,
 }: BoardHeaderProps) {
@@ -135,6 +172,8 @@ export function BoardHeader({
           <ListTree className="size-3.5" aria-hidden="true" />
           Nested
         </Toggle>
+
+        <ClosedWindowSelect value={closedWindow} onChange={setClosedWindow} />
 
         {ready ? (
           <Badge variant="filter" onRemove={() => setReady(false)}>

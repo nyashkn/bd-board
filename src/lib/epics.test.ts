@@ -109,6 +109,8 @@ describe('epicTook', () => {
     expect(epicTook(beads[0], buildChildrenMap(beads))).toBe('5d')
   })
   it('is empty without closed_at', () => {
-    expect(epicTook(b('e', { created_at: '2026-01-01T00:00:00Z' }), new Map())).toBe('')
+    expect(
+      epicTook(b('e', { created_at: '2026-01-01T00:00:00Z' }), new Map()),
+    ).toBe('')
   })
 })

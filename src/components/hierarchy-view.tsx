@@ -1,17 +1,25 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Layers } from 'lucide-react'
 
+import { EpicProgress } from '@/components/epic-progress'
 import { Button } from '@/components/ui/button'
+import { ClosedHiddenNote } from '@/components/status-column-header'
 import { InteractiveRow } from '@/components/ui/interactive-row'
 import { cn } from '@/lib/utils'
 import { isEpic, mapStatus } from '@/lib/types'
 import { PRIORITY_TEXT_CLASS, compareBeads } from '@/lib/sort'
 import { buildChildrenMap, getRootBeads } from '@/lib/tree'
+import { descendantStats, epicTook, isCompleteEpic } from '@/lib/epics'
+import { isHiddenByWindow } from '@/lib/closed-window'
 
+import type { ClosedWindow } from '@/lib/closed-window'
 import type { Bead, BeadColumn } from '@/lib/types'
 
 interface HierarchyViewProps {
   beads: Bead[]
+  closedWindow: ClosedWindow
+  now: number
+  onShowAllClosed: () => void
   onOpen: (bead: Bead) => void
 }
 
@@ -26,11 +34,14 @@ function TreeNode({
   bead,
   depth,
   childrenMap,
+  fullMap,
   onOpen,
 }: {
   bead: Bead
   depth: number
   childrenMap: Map<string, Bead[]>
+  /** Unfiltered tree, so progress counts hidden closed beads too. */
+  fullMap: Map<string, Bead[]>
   onOpen: (bead: Bead) => void
 }) {
   const children = childrenMap.get(bead.id) ?? []
@@ -98,7 +109,14 @@ function TreeNode({
           <span className="truncate text-[12.75px] text-foreground">
             {bead.title}
           </span>
-          {hasChildren ? (
+          {epic ? (
+            <EpicProgress
+              className="ml-auto"
+              stats={descendantStats(bead.id, fullMap)}
+              complete={isCompleteEpic(bead, fullMap)}
+              took={epicTook(bead, fullMap)}
+            />
+          ) : hasChildren ? (
             <span className="ml-auto shrink-0 font-mono text-[10.5px] tabular-nums text-faint">
               {children.length}
             </span>
@@ -114,6 +132,7 @@ function TreeNode({
               bead={child}
               depth={depth + 1}
               childrenMap={childrenMap}
+              fullMap={fullMap}
               onOpen={onOpen}
             />
           ))}
@@ -123,36 +142,56 @@ function TreeNode({
   )
 }
 
-export function HierarchyView({ beads, onOpen }: HierarchyViewProps) {
-  const childrenMap = useMemo(() => buildChildrenMap(beads), [beads])
-  const roots = useMemo(
-    () => [...getRootBeads(beads)].sort(compareBeads('priority')),
-    [beads],
-  )
-
-  if (roots.length === 0) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <span className="text-sm text-muted-foreground">
-          No beads in this project
-        </span>
-      </div>
+export function HierarchyView({
+  beads,
+  closedWindow,
+  now,
+  onShowAllClosed,
+  onOpen,
+}: HierarchyViewProps) {
+  const fullMap = useMemo(() => buildChildrenMap(beads), [beads])
+  const { visible, hiddenCount } = useMemo(() => {
+    const hidden = new Set(
+      beads
+        .filter((b) => isHiddenByWindow(b, fullMap, closedWindow, now))
+        .map((b) => b.id),
     )
-  }
+    return {
+      visible: beads.filter((b) => !hidden.has(b.id)),
+      hiddenCount: hidden.size,
+    }
+  }, [beads, fullMap, closedWindow, now])
+  const childrenMap = useMemo(() => buildChildrenMap(visible), [visible])
+  const roots = useMemo(
+    () => [...getRootBeads(visible)].sort(compareBeads('priority')),
+    [visible],
+  )
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pt-2 pb-4">
-      <div className="flex flex-col gap-0.5">
-        {roots.map((root) => (
-          <TreeNode
-            key={root.id}
-            bead={root}
-            depth={0}
-            childrenMap={childrenMap}
-            onOpen={onOpen}
-          />
-        ))}
-      </div>
+      {hiddenCount > 0 ? (
+        <ClosedHiddenNote hidden={hiddenCount} onShowAll={onShowAllClosed} />
+      ) : null}
+      {roots.length === 0 ? (
+        <div className="flex items-center justify-center py-16">
+          <span className="text-sm text-muted-foreground">
+            No beads in this project
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          {roots.map((root) => (
+            <TreeNode
+              key={root.id}
+              bead={root}
+              depth={0}
+              childrenMap={childrenMap}
+              fullMap={fullMap}
+              onOpen={onOpen}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
