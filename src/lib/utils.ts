@@ -12,6 +12,8 @@ export function cn(...inputs: ClassValue[]) {
  */
 export const PROSE_CLASS =
   'prose prose-sm max-w-none text-foreground prose-headings:scroll-mt-4 prose-pre:bg-muted prose-pre:text-xs ' +
+  // Long words/URLs wrap; code blocks and tables scroll inside themselves, never the page.
+  '[overflow-wrap:anywhere] prose-pre:overflow-x-auto prose-pre:[overflow-wrap:normal] [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto ' +
   '[--tw-prose-body:var(--foreground)] [--tw-prose-headings:var(--foreground)] [--tw-prose-lead:var(--foreground)] ' +
   '[--tw-prose-bold:var(--foreground)] [--tw-prose-counters:var(--muted-foreground)] [--tw-prose-bullets:var(--muted-foreground)] ' +
   '[--tw-prose-links:var(--primary-text)] [--tw-prose-code:var(--foreground)] [--tw-prose-quotes:var(--foreground)] ' +

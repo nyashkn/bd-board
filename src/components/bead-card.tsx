@@ -226,7 +226,7 @@ export function BeadCard({
           ) : null}
         </span>
 
-        <span className="line-clamp-2 text-[12.75px] leading-[1.45] text-foreground">
+        <span className="line-clamp-2 text-[12.75px] leading-[1.45] text-foreground [overflow-wrap:anywhere]">
           {bead.title}
         </span>
 
