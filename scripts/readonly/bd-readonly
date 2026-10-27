@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# bd-readonly: makes bd-board physically unable to write to a beads ledger.
+#
+# bd-board does every read and write by shelling out to a bd binary. For a registry
+# project with "readonly": true it runs this shim instead of bd, so even a bug in the UI
+# or a hand-crafted request cannot change the ledger.
+#
+# Two independent layers, so a gap in one is caught by the other:
+#   1. deny-by-default allowlist of read subcommands, refused here before bd runs;
+#   2. --readonly on every call, so bd itself refuses any write that slips through
+#      (`bd --readonly update` and `bd --readonly config set` both exit 1 and write nothing).
+#
+# Environment:
+#   REAL_BD           required. Path of the real bd binary (there is no default on purpose).
+#   BD_FILTER_LABEL   optional. When set, list/count/export only show beads of type
+#                     BD_FILTER_TYPE (default: epic) that carry this label, plus their
+#                     direct children (see bd-filter.py). Unset or empty: nothing is filtered.
+#                     This is a view filter, not access control: `show <id>` still answers.
+
+REAL_BD="${REAL_BD:-}"
+[ -n "$REAL_BD" ] && [ -x "$REAL_BD" ] || { echo "bd-readonly: set REAL_BD to the path of your own bd binary" >&2; exit 2; }
+case "$(cd "$(dirname "$REAL_BD")" && pwd)/$(basename "$REAL_BD")" in "$(cd "$(dirname "$0")" && pwd)/$(basename "$0")") echo "bd-readonly: REAL_BD must not be this shim" >&2; exit 2 ;; esac
+
+refuse() {
+  echo "bd-readonly: '$*' refused. This project is read-only." >&2
+  exit 1
+}
+
+# The first argument that is not a flag is the subcommand.
+sub=""
+for a in "$@"; do
+  case "$a" in -*) ;; *) sub="$a"; break ;; esac
+done
+
+case "$sub" in
+  "") ;;                                   # bare flags only, e.g. --version
+  where|show|export|list|count|version|help|info|status|context|ready|blocked|stale|graph|children|search|query) ;;
+  comments)
+    for a in "$@"; do [ "$a" = "add" ] && refuse "$@"; done ;;
+  events)
+    ok=0; for a in "$@"; do case "$a" in tail|list) ok=1 ;; esac; done
+    [ "$ok" = 1 ] || refuse "$@" ;;
+  *) refuse "$@" ;;
+esac
+
+# Optional view filter. Text output cannot be filtered, so it is refused while filtering.
+[ -n "${BD_FILTER_LABEL:-}" ] || exec "$REAL_BD" --readonly "$@"
+
+FILTER="$(dirname "$0")/bd-filter.py"
+has() { for a in "${@:2}"; do [ "$a" = "$1" ] && return 0; done; return 1; }
+set -o pipefail
+case "$sub" in
+  list)
+    has --json "$@" || refuse "$@"
+    "$REAL_BD" --readonly "$@" | python3 -I "$FILTER" list; exit $? ;;
+  export)
+    "$REAL_BD" --readonly "$@" | python3 -I "$FILTER" export; exit $? ;;
+  count)
+    has --json "$@" && has --by-status "$@" || refuse "$@"
+    "$REAL_BD" --readonly list --all --json -n 0 | python3 -I "$FILTER" count; exit $? ;;
+esac
+
+exec "$REAL_BD" --readonly "$@"

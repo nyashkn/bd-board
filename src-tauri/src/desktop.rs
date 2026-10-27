@@ -36,6 +36,10 @@ pub struct Project {
     pub missing: bool,
     pub error: Option<String>,
     pub counts: ProjectCounts,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub readonly: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter_label: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -208,6 +212,115 @@ pub fn bd_candidates() -> Vec<String> {
     candidates
 }
 
+/// What to spawn for a project: the candidate binaries and extra environment.
+pub struct BdLaunch {
+    pub candidates: Vec<String>,
+    pub env: Vec<(String, String)>,
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        path.metadata()
+            .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        path.is_file()
+    }
+}
+
+/// Absolute path of the first usable bd candidate (the shim needs a path in REAL_BD).
+fn resolve_real_bd(
+    candidates: &[String],
+    executable: &dyn Fn(&Path) -> bool,
+) -> Result<String, String> {
+    let path_dirs: Vec<PathBuf> = env::var_os("PATH")
+        .map(|p| env::split_paths(&p).collect())
+        .unwrap_or_default();
+    for candidate in candidates {
+        if candidate.contains('/') {
+            if executable(Path::new(candidate)) {
+                return Ok(candidate.clone());
+            }
+            continue;
+        }
+        for dir in &path_dirs {
+            let full = dir.join(candidate);
+            if executable(&full) {
+                return Ok(full.to_string_lossy().to_string());
+            }
+        }
+    }
+    Err(format!("bd not found (tried: {})", candidates.join(", ")))
+}
+
+fn shim_path() -> Result<String, String> {
+    if let Ok(p) = env::var("BD_READONLY_SHIM") {
+        if !p.is_empty() {
+            return Ok(p);
+        }
+    }
+    let rel = "scripts/readonly/bd-readonly";
+    let mut options: Vec<PathBuf> = Vec::new();
+    if let Some(dir) = env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_path_buf))
+    {
+        options.push(dir.join(rel));
+        options.push(dir.join("../Resources").join(rel));
+        options.push(dir.join("../lib/bd board").join(rel));
+    }
+    // Dev builds run from the repo checkout.
+    options.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(rel));
+    options
+        .into_iter()
+        .find(|p| is_executable_file(p))
+        .map(|p| p.to_string_lossy().to_string())
+        .ok_or_else(|| {
+            "read-only shim scripts/readonly/bd-readonly not found (set BD_READONLY_SHIM)"
+                .to_string()
+        })
+}
+
+/// A readonly project runs the shim with REAL_BD set to the normally resolved bd;
+/// filterLabel is only honoured together with readonly. Others are unchanged.
+fn plan_launch(
+    entry: Option<&RegistryEntry>,
+    candidates: Vec<String>,
+    shim: &dyn Fn() -> Result<String, String>,
+    real_bd: &dyn Fn(&[String]) -> Result<String, String>,
+) -> Result<BdLaunch, String> {
+    let Some(entry) = entry.filter(|e| e.readonly) else {
+        return Ok(BdLaunch {
+            candidates,
+            env: Vec::new(),
+        });
+    };
+    let env = vec![
+        ("REAL_BD".to_string(), real_bd(&candidates)?),
+        (
+            "BD_FILTER_LABEL".to_string(),
+            entry.effective_filter_label().unwrap_or_default(),
+        ),
+    ];
+    Ok(BdLaunch {
+        candidates: vec![shim()?],
+        env,
+    })
+}
+
+fn launch_for(dir: &Path) -> Result<BdLaunch, String> {
+    let dir_str = dir.to_string_lossy();
+    let registry = registry::load()?;
+    let entry = registry.projects.iter().find(|e| e.path == dir_str);
+    plan_launch(entry, bd_candidates(), &shim_path, &|c| {
+        resolve_real_bd(c, &is_executable_file)
+    })
+}
+
 fn bd_error_message(stdout: &str, stderr: &str, status: &std::process::ExitStatus) -> String {
     let stdout_trim = stdout.trim();
     let stderr_trim = stderr.trim();
@@ -260,11 +373,11 @@ struct BdCapture {
 }
 
 fn exec_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
-    let candidates = bd_candidates();
+    let BdLaunch { candidates, env } = launch_for(dir)?;
 
     for candidate in &candidates {
         let mut cmd = Command::new(candidate);
-        cmd.current_dir(dir).args(args);
+        cmd.current_dir(dir).args(args).envs(env.iter().cloned());
 
         match cmd.output() {
             Ok(output) => {
@@ -509,6 +622,7 @@ fn run_feed(dir: &Path, since: i64, watch: &FeedWatch, send: &dyn Fn(BeadFeedMes
     };
 
     let mut bin = String::new();
+    let bd_env = launch_for(dir).map(|l| l.env).unwrap_or_default();
     let outcome = {
         let mut exec = |args: &[String]| -> Result<BdCapture, String> {
             let refs: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -544,6 +658,7 @@ fn run_feed(dir: &Path, since: i64, watch: &FeedWatch, send: &dyn Fn(BeadFeedMes
         }
         let mut child = match Command::new(&bin)
             .current_dir(dir)
+            .envs(bd_env.iter().cloned())
             .args(tail_args(cur, None, true))
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -665,7 +780,7 @@ pub fn unwatch_bead_feed(watch_id: u32, watches: tauri::State<'_, FeedWatches>) 
 #[tauri::command]
 pub fn enable_events_journal(project_id: String) -> Result<(), String> {
     run_bd(
-        &resolve_dir(&project_id)?,
+        &resolve_writable_dir(&project_id)?,
         &["config", "set", "events-journal", "true"],
     )
     .map(|_| ())
@@ -871,6 +986,8 @@ fn discover_projects_inner() -> Result<Vec<Project>, String> {
                     deferred: 0,
                     total: 0,
                 },
+                readonly: entry.readonly,
+                filter_label: entry.effective_filter_label(),
             });
             continue;
         }
@@ -889,6 +1006,8 @@ fn discover_projects_inner() -> Result<Vec<Project>, String> {
                     missing: false,
                     error: None,
                     counts,
+                    readonly: entry.readonly,
+                    filter_label: entry.effective_filter_label(),
                 });
             }
             Err(err) => {
@@ -909,6 +1028,8 @@ fn discover_projects_inner() -> Result<Vec<Project>, String> {
                         deferred: 0,
                         total: 0,
                     },
+                    readonly: entry.readonly,
+                    filter_label: entry.effective_filter_label(),
                 });
             }
         }
@@ -975,6 +1096,22 @@ fn resolve_dir(project_id: &str) -> Result<PathBuf, String> {
         ));
     }
     Ok(path)
+}
+
+/// Defence in depth: every write goes through here, so a readonly project refuses before any process runs.
+fn resolve_writable_dir(project_id: &str) -> Result<PathBuf, String> {
+    check_writable(&registry::find(project_id)?)?;
+    resolve_dir(project_id)
+}
+
+fn check_writable(entry: &RegistryEntry) -> Result<(), String> {
+    if entry.readonly {
+        return Err(format!(
+            "project \"{}\" is read-only; writes are refused",
+            entry.label
+        ));
+    }
+    Ok(())
 }
 
 fn derive_children(beads: Vec<Bead>) -> Vec<Bead> {
@@ -1115,7 +1252,7 @@ fn run_bd_mut(dir: &Path, args: &[String]) -> Result<String, String> {
 }
 
 fn update_bead_status_inner(project_id: &str, id: &str, status: &str) -> Result<(), String> {
-    let dir = resolve_dir(project_id)?;
+    let dir = resolve_writable_dir(project_id)?;
     run_bd(&dir, &["update", id, "--status", status])?;
     Ok(())
 }
@@ -1175,7 +1312,7 @@ fn build_update_bead_args(
 }
 
 fn update_bead_inner(project_id: &str, id: &str, update: BeadUpdateInput) -> Result<(), String> {
-    let dir = resolve_dir(project_id)?;
+    let dir = resolve_writable_dir(project_id)?;
     let existing_labels = if update.labels.is_some() {
         get_bead_detail_inner(project_id, id)?.bead.labels
     } else {
@@ -1207,14 +1344,14 @@ fn build_delete_bead_args(id: &str) -> Vec<String> {
 }
 
 fn preview_delete_bead_inner(project_id: &str, id: &str) -> Result<String, String> {
-    let dir = resolve_dir(project_id)?;
+    let dir = resolve_writable_dir(project_id)?;
     let args = build_preview_delete_bead_args(id);
     let out = run_bd_mut(&dir, &args)?;
     Ok(out.trim().to_string())
 }
 
 fn delete_bead_inner(project_id: &str, id: &str) -> Result<(), String> {
-    let dir = resolve_dir(project_id)?;
+    let dir = resolve_writable_dir(project_id)?;
     let args = build_delete_bead_args(id);
     run_bd_mut(&dir, &args)
         .map(|_| ())
@@ -1228,7 +1365,7 @@ fn create_bead_inner(
     kind: Option<&str>,
     parent: Option<&str>,
 ) -> Result<String, String> {
-    let dir = resolve_dir(project_id)?;
+    let dir = resolve_writable_dir(project_id)?;
     let mut args = vec![
         "create".to_string(),
         "--title".to_string(),
@@ -1252,7 +1389,7 @@ fn create_bead_inner(
 }
 
 fn add_comment_inner(project_id: &str, id: &str, text: &str) -> Result<(), String> {
-    let dir = resolve_dir(project_id)?;
+    let dir = resolve_writable_dir(project_id)?;
     run_bd(&dir, &["comment", id, text])?;
     Ok(())
 }
@@ -1500,13 +1637,15 @@ pub fn add_project(path: String, name: Option<String>) -> Result<AddProjectOutco
                 project: Project {
                     id: entry.id.clone(),
                     name: entry.label.clone(),
-                    dir: entry.path,
+                    dir: entry.path.clone(),
                     beads_path: location.beads_path,
                     prefix: location.prefix,
                     external: location.external,
                     missing: false,
                     error: None,
                     counts,
+                    readonly: entry.readonly,
+                    filter_label: entry.effective_filter_label(),
                 },
             })
         }
@@ -1564,13 +1703,15 @@ pub fn init_project(
             return Ok(Project {
                 id: entry.id.clone(),
                 name: entry.label.clone(),
-                dir: entry.path,
+                dir: entry.path.clone(),
                 beads_path: location.beads_path,
                 prefix: location.prefix,
                 external: location.external,
                 missing: false,
                 error: None,
                 counts,
+                readonly: entry.readonly,
+                filter_label: entry.effective_filter_label(),
             });
         }
     }
@@ -1600,13 +1741,15 @@ pub fn init_project(
     Ok(Project {
         id: entry.id.clone(),
         name: entry.label.clone(),
-        dir: entry.path,
+        dir: entry.path.clone(),
         beads_path: location.beads_path,
         prefix: location.prefix,
         external: location.external,
         missing: false,
         error: None,
         counts,
+        readonly: entry.readonly,
+        filter_label: entry.effective_filter_label(),
     })
 }
 
@@ -1895,6 +2038,115 @@ mod tests {
         assert!(result.contains("boom"));
     }
 
+    fn entry(readonly: bool, filter: Option<&str>) -> RegistryEntry {
+        RegistryEntry {
+            id: "p".into(),
+            path: "/p".into(),
+            label: "P".into(),
+            readonly,
+            filter_label: filter.map(String::from),
+        }
+    }
+
+    fn plan(e: Option<&RegistryEntry>) -> Result<BdLaunch, String> {
+        plan_launch(
+            e,
+            vec!["/x/bd".to_string(), "bd".to_string()],
+            &|| Ok("/repo/scripts/readonly/bd-readonly".to_string()),
+            &|_| Ok("/x/bd".to_string()),
+        )
+    }
+
+    #[test]
+    fn plan_launch_leaves_normal_projects_unchanged() {
+        for e in [
+            None,
+            Some(entry(false, None)),
+            Some(entry(false, Some("wo"))),
+        ] {
+            let l = plan(e.as_ref()).unwrap();
+            assert_eq!(l.candidates, vec!["/x/bd".to_string(), "bd".to_string()]);
+            assert!(l.env.is_empty());
+        }
+    }
+
+    #[test]
+    fn plan_launch_runs_the_shim_for_readonly_projects() {
+        let l = plan(Some(&entry(true, None))).unwrap();
+        assert_eq!(
+            l.candidates,
+            vec!["/repo/scripts/readonly/bd-readonly".to_string()]
+        );
+        assert!(l
+            .env
+            .contains(&("REAL_BD".to_string(), "/x/bd".to_string())));
+        assert!(l
+            .env
+            .contains(&("BD_FILTER_LABEL".to_string(), String::new())));
+    }
+
+    #[test]
+    fn plan_launch_passes_filter_label_only_with_readonly() {
+        let l = plan(Some(&entry(true, Some("wo")))).unwrap();
+        assert!(l
+            .env
+            .contains(&("BD_FILTER_LABEL".to_string(), "wo".to_string())));
+    }
+
+    #[test]
+    fn plan_launch_fails_when_the_shim_or_bd_is_missing() {
+        let e = entry(true, None);
+        let no_shim = plan_launch(Some(&e), vec![], &|| Err("no shim".into()), &|_| {
+            Ok("/x/bd".into())
+        });
+        assert!(no_shim.is_err());
+        let no_bd = plan_launch(Some(&e), vec![], &|| Ok("/s".into()), &|_| {
+            Err("no bd".into())
+        });
+        assert!(no_bd.is_err());
+    }
+
+    #[test]
+    fn resolve_real_bd_picks_first_usable_path() {
+        let only_y = |p: &Path| p == Path::new("/y/bd");
+        assert_eq!(
+            resolve_real_bd(&["/x/bd".to_string(), "/y/bd".to_string()], &only_y).unwrap(),
+            "/y/bd"
+        );
+        assert!(resolve_real_bd(&["/x/bd".to_string()], &|_| false).is_err());
+    }
+
+    #[test]
+    fn writes_are_refused_for_readonly_projects_only() {
+        assert!(check_writable(&entry(false, None)).is_ok());
+        let err = check_writable(&entry(true, Some("wo"))).unwrap_err();
+        assert!(err.contains("read-only"));
+    }
+
+    #[test]
+    fn project_serializes_readonly_and_filter_label_only_when_set() {
+        let mut p = Project {
+            id: "p".into(),
+            name: "P".into(),
+            dir: "/p".into(),
+            beads_path: String::new(),
+            prefix: None,
+            external: false,
+            missing: false,
+            error: None,
+            counts: build_counts_from_groups(&[]),
+            readonly: false,
+            filter_label: None,
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert!(v.get("readonly").is_none() && v.get("filterLabel").is_none());
+        p.readonly = true;
+        p.filter_label = Some("wo".into());
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["readonly"], true);
+        assert_eq!(v["filterLabel"], "wo");
+    }
+
     #[test]
     fn bd_candidates_includes_wrapper_before_fallback() {
         // When BD_BIN is not set, we should get the wrapper and fallback
@@ -1985,6 +2237,8 @@ mod tests {
                 missing: false,
                 error: None,
                 counts: build_counts_from_groups(&[]),
+                readonly: false,
+                filter_label: None,
             },
         };
         let value = serde_json::to_value(&outcome).unwrap();

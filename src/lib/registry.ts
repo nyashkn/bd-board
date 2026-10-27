@@ -6,6 +6,41 @@ export interface RegistryEntry {
   id: string
   path: string
   label: string
+  /** Optional. true: bd runs through the read-only shim and the UI blocks writes. */
+  readonly?: boolean
+  /** Optional, only honoured together with `readonly`: see scripts/readonly. */
+  filterLabel?: string
+}
+
+export class RegistryError extends Error {}
+
+/** Validates the optional fields; a wrong type must fail loudly, never silently drop read-only. */
+export function parseRegistryEntry(raw: unknown, index: number): RegistryEntry {
+  const e = raw as Record<string, unknown> | null
+  const where = `registry project #${index + 1}`
+  if (!e || typeof e !== 'object')
+    throw new RegistryError(`${where} is not an object`)
+  for (const key of ['id', 'path', 'label'] as const) {
+    if (typeof e[key] !== 'string') {
+      throw new RegistryError(`${where}: "${key}" must be a string`)
+    }
+  }
+  if (e['readonly'] !== undefined && typeof e['readonly'] !== 'boolean') {
+    throw new RegistryError(`${where}: "readonly" must be a boolean`)
+  }
+  const label = e['filterLabel']
+  if (label !== undefined && (typeof label !== 'string' || !label.trim())) {
+    throw new RegistryError(
+      `${where}: "filterLabel" must be a non-empty string`,
+    )
+  }
+  return {
+    id: e['id'] as string,
+    path: e['path'] as string,
+    label: e['label'] as string,
+    ...(e['readonly'] !== undefined ? { readonly: e['readonly'] } : {}),
+    ...(label !== undefined ? { filterLabel: label.trim() } : {}),
+  }
 }
 
 export interface Registry {
@@ -39,11 +74,12 @@ export async function loadRegistry(): Promise<RegistryEntry[]> {
       )
     }
 
-    return registry.projects
+    return registry.projects.map(parseRegistryEntry)
   } catch (error) {
     if (
-      error instanceof Error &&
-      error.message.includes('unsupported registry version')
+      error instanceof RegistryError ||
+      (error instanceof Error &&
+        error.message.includes('unsupported registry version'))
     ) {
       throw error
     }

@@ -178,6 +178,7 @@ export function startBeadFeed(
   let stopped = false
   let child: ChildProcess | null = null
   let bin = ''
+  let env: NodeJS.ProcessEnv = process.env
 
   const stop = () => {
     stopped = true
@@ -195,6 +196,7 @@ export function startBeadFeed(
       const drainResult = await drainJournal(async (args) => {
         const result = await bdExec(dir, args)
         bin = result.bin
+        env = result.env
         return {
           code: result.code,
           stdout: result.stdout,
@@ -227,6 +229,7 @@ export function startBeadFeed(
         // Spawn the follow process
         child = spawn(bin, tailArgs(cur, { follow: true }), {
           cwd: dir,
+          env,
           stdio: ['ignore', 'pipe', 'ignore'],
         })
 

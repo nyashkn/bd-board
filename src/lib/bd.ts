@@ -3,6 +3,7 @@ import { promisify } from 'node:util'
 import * as fsSync from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { fileURLToPath } from 'node:url'
 import type { BdAdapter } from './bd-contract.ts'
 import type {
   Bead,
@@ -19,6 +20,8 @@ import type {
 } from './types.ts'
 import { parseKnowledgeCommentText } from './knowledge.ts'
 import { loadRegistry } from './registry.ts'
+
+import type { RegistryEntry } from './registry.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -49,6 +52,82 @@ function bdCandidates(): string[] {
   candidates.push(BD_FALLBACK)
 
   return candidates
+}
+
+function isExecutable(file: string): boolean {
+  try {
+    fsSync.accessSync(file, fsSync.constants.X_OK)
+    return fsSync.statSync(file).isFile()
+  } catch {
+    return false
+  }
+}
+
+/** Absolute path of the first usable bd candidate (the shim needs a path in REAL_BD). */
+export function resolveRealBd(
+  candidates: string[] = bdCandidates(),
+  executable: (file: string) => boolean = isExecutable,
+): string {
+  for (const c of candidates) {
+    if (c.includes('/')) {
+      if (executable(c)) return c
+      continue
+    }
+    for (const dir of (process.env['PATH'] ?? '').split(path.delimiter)) {
+      if (dir && executable(path.join(dir, c))) return path.join(dir, c)
+    }
+  }
+  throw new Error(`bd not found (tried: ${candidates.join(', ')})`)
+}
+
+function shimPath(): string {
+  const fromEnv = process.env['BD_READONLY_SHIM']
+  const here = fileURLToPath(
+    new URL('../../scripts/readonly/bd-readonly', import.meta.url),
+  )
+  const options = [
+    fromEnv,
+    here,
+    path.join(process.cwd(), 'scripts', 'readonly', 'bd-readonly'),
+  ]
+  return (
+    options.find((f): f is string => Boolean(f) && isExecutable(f!)) ?? here
+  )
+}
+
+export interface BdLaunch {
+  candidates: string[]
+  /** Extra environment for the child (read-only shim settings). */
+  env?: Record<string, string>
+}
+
+/**
+ * Which binary to spawn for a project. A readonly project runs the shim with
+ * REAL_BD set to the normally resolved bd; filterLabel is only honoured together
+ * with readonly. Everything else behaves exactly as before.
+ */
+export function planLaunch(
+  entry: Pick<RegistryEntry, 'readonly' | 'filterLabel'> | undefined,
+  deps: {
+    candidates?: string[]
+    shim?: () => string
+    realBd?: () => string
+  } = {},
+): BdLaunch {
+  const candidates = deps.candidates ?? bdCandidates()
+  if (!entry?.readonly) return { candidates }
+  return {
+    candidates: [(deps.shim ?? shimPath)()],
+    env: {
+      REAL_BD: (deps.realBd ?? (() => resolveRealBd(candidates)))(),
+      BD_FILTER_LABEL: entry.filterLabel ?? '',
+    },
+  }
+}
+
+async function launchFor(dir: string): Promise<BdLaunch> {
+  const entry = (await loadRegistry()).find((e) => e.path === dir)
+  return planLaunch(entry)
 }
 
 export function bdErrorMessage(
@@ -98,16 +177,24 @@ export function bdErrorMessage(
 export async function bdExec(
   dir: string,
   args: string[],
-): Promise<{ bin: string; code: number; stdout: string; stderr: string }> {
-  const candidates = bdCandidates()
+): Promise<{
+  bin: string
+  env: NodeJS.ProcessEnv
+  code: number
+  stdout: string
+  stderr: string
+}> {
+  const { candidates, env: extra } = await launchFor(dir)
+  const env = { ...process.env, ...extra }
 
   for (const candidate of candidates) {
     try {
       const { stdout, stderr } = await execFileAsync(candidate, args, {
         cwd: dir,
+        env,
         maxBuffer: MAX_BUFFER,
       })
-      return { bin: candidate, code: 0, stdout, stderr }
+      return { bin: candidate, env, code: 0, stdout, stderr }
     } catch (err: unknown) {
       const error = err as {
         code?: string | number
@@ -121,6 +208,7 @@ export async function bdExec(
       if (typeof error.code === 'number') {
         return {
           bin: candidate,
+          env,
           code: error.code,
           stdout: error.stdout ?? '',
           stderr: error.stderr ?? '',
@@ -221,15 +309,27 @@ async function counts(dir: string): Promise<ProjectCounts> {
   }
 }
 
+function projectPolicy(
+  entry: RegistryEntry,
+): Pick<Project, 'readonly' | 'filterLabel'> {
+  if (!entry.readonly) return {}
+  return {
+    readonly: true,
+    ...(entry.filterLabel ? { filterLabel: entry.filterLabel } : {}),
+  }
+}
+
 async function discoverProjects(): Promise<Project[]> {
   const entries = await loadRegistry()
   const results: Project[] = []
 
   for (const entry of entries) {
+    const policy = projectPolicy(entry)
     // Check if folder exists
     if (!fsSync.existsSync(entry.path)) {
       results.push({
         id: entry.id,
+        ...policy,
         name: entry.label,
         dir: entry.path,
         beadsPath: '',
@@ -260,6 +360,7 @@ async function discoverProjects(): Promise<Project[]> {
       if (!probeResult.path) {
         results.push({
           id: entry.id,
+          ...policy,
           name: entry.label,
           dir: entry.path,
           beadsPath: '',
@@ -285,6 +386,7 @@ async function discoverProjects(): Promise<Project[]> {
       const projectCounts = await counts(entry.path)
       results.push({
         id: entry.id,
+        ...policy,
         name: entry.label,
         dir: entry.path,
         beadsPath: probeResult.path,
@@ -298,6 +400,7 @@ async function discoverProjects(): Promise<Project[]> {
       const error = err instanceof Error ? err.message : String(err)
       results.push({
         id: entry.id,
+        ...policy,
         name: entry.label,
         dir: entry.path,
         beadsPath: '',
@@ -328,6 +431,17 @@ async function resolveDir(projectId: string): Promise<string> {
   const entry = entries.find((e) => e.id === projectId)
   if (!entry) {
     throw new Error(`unknown project id: ${projectId}`)
+  }
+  return entry.path
+}
+
+/** Defence in depth: every write goes through here, so a readonly project refuses before any process runs. */
+export async function resolveWritableDir(projectId: string): Promise<string> {
+  const entries = await loadRegistry()
+  const entry = entries.find((e) => e.id === projectId)
+  if (!entry) throw new Error(`unknown project id: ${projectId}`)
+  if (entry.readonly) {
+    throw new Error(`project "${entry.label}" is read-only; writes are refused`)
   }
   return entry.path
 }
@@ -618,7 +732,7 @@ async function updateBeadStatus(
   id: string,
   status: string,
 ): Promise<void> {
-  const dir = await resolveDir(projectId)
+  const dir = await resolveWritableDir(projectId)
   await bdRaw(dir, ['update', id, '--status', status])
 }
 
@@ -659,7 +773,7 @@ async function updateBead(
   id: string,
   opts: BeadUpdate,
 ): Promise<void> {
-  const dir = await resolveDir(projectId)
+  const dir = await resolveWritableDir(projectId)
   const existing =
     opts.labels !== undefined ? await getBeadDetail(projectId, id) : undefined
   const args = buildUpdateBeadArgs(id, opts, existing?.labels ?? [])
@@ -671,13 +785,13 @@ async function previewDeleteBead(
   projectId: string,
   id: string,
 ): Promise<string> {
-  const dir = await resolveDir(projectId)
+  const dir = await resolveWritableDir(projectId)
   const out = await bdRaw(dir, buildPreviewDeleteBeadArgs(id))
   return out.trim()
 }
 
 async function deleteBead(projectId: string, id: string): Promise<void> {
-  const dir = await resolveDir(projectId)
+  const dir = await resolveWritableDir(projectId)
   try {
     await bdRaw(dir, buildDeleteBeadArgs(id))
   } catch (err) {
@@ -698,7 +812,7 @@ async function createBead(
   projectId: string,
   opts: { title: string; description?: string; type?: string; parent?: string },
 ): Promise<string> {
-  const dir = await resolveDir(projectId)
+  const dir = await resolveWritableDir(projectId)
   const args = ['create', '--title', opts.title, '--silent']
   if (opts.description) args.push('-d', opts.description)
   if (opts.type) args.push('--type', opts.type)
@@ -712,12 +826,12 @@ async function addComment(
   id: string,
   text: string,
 ): Promise<void> {
-  const dir = await resolveDir(projectId)
+  const dir = await resolveWritableDir(projectId)
   await bdRaw(dir, ['comment', id, text])
 }
 
 async function enableEventsJournal(projectId: string): Promise<void> {
-  const dir = await resolveDir(projectId)
+  const dir = await resolveWritableDir(projectId)
   await bdRaw(dir, ['config', 'set', 'events-journal', 'true'])
 }
 

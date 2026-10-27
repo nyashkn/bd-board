@@ -126,6 +126,10 @@ export interface Project {
   missing: boolean
   error: string | null
   counts: ProjectCounts
+  /** Registry `readonly: true`: writes are refused and the UI hides them. */
+  readonly?: boolean
+  /** Registry `filterLabel`, only meaningful together with `readonly`. */
+  filterLabel?: string
 }
 
 export type AddProjectOutcome =

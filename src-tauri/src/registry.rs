@@ -7,6 +7,27 @@ pub struct RegistryEntry {
     pub id: String,
     pub path: String,
     pub label: String,
+    /// Optional: bd runs through the read-only shim and the UI blocks writes.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub readonly: bool,
+    /// Optional, only honoured together with `readonly`.
+    #[serde(
+        default,
+        rename = "filterLabel",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub filter_label: Option<String>,
+}
+
+impl RegistryEntry {
+    /// The filter label that applies: only a readonly project is filtered.
+    pub fn effective_filter_label(&self) -> Option<String> {
+        if self.readonly {
+            self.filter_label.clone()
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -45,11 +66,28 @@ pub fn load() -> Result<Registry, String> {
         )
     })?;
 
+    parse_checked(registry)
+}
+
+/// Rejects what serde cannot: a blank filterLabel. Wrong types already fail in serde.
+fn parse_checked(mut registry: Registry) -> Result<Registry, String> {
     if registry.version != 1 {
         return Err(format!(
             "unsupported registry version {}; expected 1",
             registry.version
         ));
+    }
+
+    for (i, entry) in registry.projects.iter_mut().enumerate() {
+        if let Some(label) = entry.filter_label.as_mut() {
+            *label = label.trim().to_string();
+            if label.is_empty() {
+                return Err(format!(
+                    "registry project #{}: \"filterLabel\" must be a non-empty string",
+                    i + 1
+                ));
+            }
+        }
     }
 
     Ok(registry)
@@ -135,6 +173,8 @@ pub fn add(path: &std::path::Path, label: Option<String>) -> Result<RegistryEntr
         id,
         path: canonical_path,
         label: final_label,
+        readonly: false,
+        filter_label: None,
     };
 
     registry.projects.push(entry.clone());
@@ -202,4 +242,70 @@ pub fn find(id: &str) -> Result<RegistryEntry, String> {
         .find(|e| e.id == id)
         .cloned()
         .ok_or_else(|| format!("unknown project id: {id}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(json: &str) -> Result<Registry, String> {
+        serde_json::from_str::<Registry>(json)
+            .map_err(|e| e.to_string())
+            .and_then(parse_checked)
+    }
+
+    #[test]
+    fn optional_fields_default_off() {
+        let r = parse(r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A"}]}"#).unwrap();
+        assert!(!r.projects[0].readonly);
+        assert_eq!(r.projects[0].filter_label, None);
+    }
+
+    #[test]
+    fn parses_readonly_and_trims_filter_label() {
+        let r = parse(
+            r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","readonly":true,"filterLabel":" wo "}]}"#,
+        )
+        .unwrap();
+        assert!(r.projects[0].readonly);
+        assert_eq!(r.projects[0].effective_filter_label(), Some("wo".into()));
+    }
+
+    #[test]
+    fn filter_label_without_readonly_is_not_effective() {
+        let r = parse(
+            r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","filterLabel":"wo"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(r.projects[0].effective_filter_label(), None);
+    }
+
+    #[test]
+    fn rejects_wrong_types_and_blank_label() {
+        assert!(parse(
+            r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","readonly":"yes"}]}"#
+        )
+        .is_err());
+        assert!(parse(
+            r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","filterLabel":3}]}"#
+        )
+        .is_err());
+        assert!(parse(
+            r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","filterLabel":"  "}]}"#
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn roundtrip_keeps_optional_fields_and_omits_defaults() {
+        let r = parse(
+            r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","readonly":true,"filterLabel":"wo"},{"id":"b","path":"/q","label":"B"}]}"#,
+        )
+        .unwrap();
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["projects"][0]["readonly"], true);
+        assert_eq!(v["projects"][0]["filterLabel"], "wo");
+        assert!(v["projects"][1].get("readonly").is_none());
+        assert!(v["projects"][1].get("filterLabel").is_none());
+    }
 }
