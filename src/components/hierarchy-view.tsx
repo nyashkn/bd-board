@@ -133,7 +133,7 @@ export function HierarchyView({ beads, onOpen }: HierarchyViewProps) {
   if (roots.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <span className="text-sm text-muted-foreground/60">
+        <span className="text-sm text-muted-foreground">
           No beads in this project
         </span>
       </div>

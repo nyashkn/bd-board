@@ -1,3 +1,4 @@
+import { formatDuration } from './age'
 import { isEpic, mapStatus } from './types'
 
 import type { Bead, BeadColumn } from './types'
@@ -94,4 +95,12 @@ export function completedAt(
     stack.push(...(childrenMap.get(b.id) ?? []))
   }
   return latest
+}
+
+/** "5d" for a completed epic: created_at to its completion; "" when unknown. */
+export function epicTook(
+  bead: Bead,
+  childrenMap: Map<string, Bead[]>,
+): string {
+  return formatDuration(bead.created_at, completedAt(bead, childrenMap))
 }

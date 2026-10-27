@@ -28,7 +28,7 @@ export function SubtaskProgress({
 
   if (total === 0) {
     return (
-      <span className="block text-[0.7rem] text-muted-foreground/70">
+      <span className="block text-[0.7rem] text-muted-foreground">
         no subtasks
       </span>
     )

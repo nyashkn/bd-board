@@ -104,7 +104,7 @@ function KRow({
       />
       <div className="min-w-0 flex-1">
         <KTag type={entry.type} />
-        <p className="mt-1.5 line-clamp-2 text-[12.75px] leading-[1.58] text-foreground/90">
+        <p className="mt-1.5 line-clamp-2 text-[12.75px] leading-[1.58] text-foreground">
           {entry.content}
         </p>
       </div>
@@ -295,7 +295,7 @@ export function KnowledgeDetailModal({
                         </span>
                       </InteractiveRow>
                     ) : (
-                      <p className="text-xs text-muted-foreground/70">
+                      <p className="text-xs text-muted-foreground">
                         Source bead no longer exists.
                       </p>
                     )}

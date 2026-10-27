@@ -16,6 +16,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { InteractiveRow } from '@/components/ui/interactive-row'
+import { AgeLine } from '@/components/age-line'
 import { SubtaskProgress } from '@/components/subtask-progress'
 import { cn, initials } from '@/lib/utils'
 import { groupBeadLinks, isEpic, mapStatus } from '@/lib/types'
@@ -232,6 +233,8 @@ export function BeadCard({
         {childBeads.length > 0 ? (
           <SubtaskProgress childBeads={childBeads} />
         ) : null}
+
+        <AgeLine bead={bead} />
 
         <span className="flex items-center gap-1.5">
           {labels.slice(0, 2).map((label) => (

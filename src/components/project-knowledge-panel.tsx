@@ -278,7 +278,7 @@ export function ProjectKnowledgePanel({
                             ) : null}
                           </div>
 
-                          <p className="mt-1.5 text-[12.75px] leading-[1.58] whitespace-pre-wrap text-foreground/90">
+                          <p className="mt-1.5 text-[12.75px] leading-[1.58] whitespace-pre-wrap text-foreground">
                             {entry.content}
                           </p>
 

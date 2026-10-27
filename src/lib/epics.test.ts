@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { completedAt, descendantStats, isCompleteEpic } from './epics'
+import { completedAt, descendantStats, epicTook, isCompleteEpic } from './epics'
 import { buildChildrenMap } from './tree'
 
 import type { Bead } from './types'
@@ -97,5 +97,18 @@ describe('completedAt', () => {
 
   it('is undefined when nothing has closed_at', () => {
     expect(completedAt(b('e'), new Map())).toBeUndefined()
+  })
+})
+
+describe('epicTook', () => {
+  it('is created_at to the latest closed_at', () => {
+    const beads = [
+      b('e', { issue_type: 'epic', created_at: '2026-01-01T00:00:00Z' }),
+      b('a', { parent: 'e', closed_at: '2026-01-06T00:00:00Z' }),
+    ]
+    expect(epicTook(beads[0], buildChildrenMap(beads))).toBe('5d')
+  })
+  it('is empty without closed_at', () => {
+    expect(epicTook(b('e', { created_at: '2026-01-01T00:00:00Z' }), new Map())).toBe('')
   })
 })

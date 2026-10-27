@@ -49,7 +49,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn, initials } from '@/lib/utils'
+import { formatAge } from '@/lib/age'
+import { PROSE_CLASS, cn, initials } from '@/lib/utils'
 import { COLUMNS, groupBeadLinks, isEpic, mapStatus } from '@/lib/types'
 import { PRIORITY_TEXT_CLASS, PRIORITY_WORD } from '@/lib/sort'
 import {
@@ -169,7 +170,7 @@ function LinkedBeadList({
               <span
                 className={cn(
                   'truncate text-[12.75px]',
-                  !target && 'text-muted-foreground/60 italic',
+                  !target && 'text-muted-foreground italic',
                 )}
               >
                 {target?.title ?? 'Not on this board'}
@@ -911,7 +912,7 @@ export function BeadDetailModal({
                           }
                         />
                         {childBeads.length === 0 ? (
-                          <p className="text-xs text-muted-foreground/70">
+                          <p className="text-xs text-muted-foreground">
                             No subtasks.
                           </p>
                         ) : (
@@ -1017,7 +1018,7 @@ export function BeadDetailModal({
                                     {relativeDate(entry.created_at)}
                                   </span>
                                 </div>
-                                <p className="mt-1.5 line-clamp-2 text-[12.75px] leading-[1.58] text-foreground/90">
+                                <p className="mt-1.5 line-clamp-2 text-[12.75px] leading-[1.58] text-foreground">
                                   {entry.content}
                                 </p>
                               </div>
@@ -1036,11 +1037,11 @@ export function BeadDetailModal({
                           <Skeleton className="h-3 w-2/3" />
                         </div>
                       ) : description ? (
-                        <div className="prose prose-invert prose-sm max-w-none prose-headings:scroll-mt-4 prose-pre:bg-muted prose-pre:text-xs">
+                        <div className={PROSE_CLASS}>
                           <Markdown>{description}</Markdown>
                         </div>
                       ) : (
-                        <p className="text-xs text-muted-foreground/70">
+                        <p className="text-xs text-muted-foreground">
                           No description.
                         </p>
                       )}
@@ -1052,7 +1053,7 @@ export function BeadDetailModal({
                           icon={CircleCheck}
                           label="Acceptance criteria"
                         />
-                        <div className="prose prose-invert prose-sm max-w-none">
+                        <div className={PROSE_CLASS}>
                           <Markdown>{acceptance}</Markdown>
                         </div>
                       </section>
@@ -1069,7 +1070,7 @@ export function BeadDetailModal({
                       {detailQuery.isLoading ? (
                         <Skeleton className="h-12 w-full" />
                       ) : comments.length === 0 ? (
-                        <p className="text-xs text-muted-foreground/70">
+                        <p className="text-xs text-muted-foreground">
                           No comments yet.
                         </p>
                       ) : (
@@ -1080,7 +1081,7 @@ export function BeadDetailModal({
                               className="rounded-[9px] bg-canvas px-3 py-2.5 ring-1 ring-inset ring-border"
                             >
                               <div className="flex items-center gap-2 text-[11.5px] text-faint">
-                                <span className="font-medium text-foreground/90">
+                                <span className="font-medium text-foreground">
                                   {c.author ?? 'Anonymous'}
                                 </span>
                                 {c.created_at ? (
@@ -1229,9 +1230,21 @@ export function BeadDetailModal({
 
                 <hr className="my-4 border-border" />
 
+                <MetaField label="Created">
+                  <span
+                    className="font-mono text-[12.5px] text-muted-foreground"
+                    title={bead.created_at}
+                  >
+                    {formatAge(bead.created_at, Date.now())}
+                  </span>
+                </MetaField>
+
                 <MetaField label="Updated">
-                  <span className="font-mono text-[12.5px] text-muted-foreground">
-                    {relativeDate(bead.updated_at)}
+                  <span
+                    className="font-mono text-[12.5px] text-muted-foreground"
+                    title={bead.updated_at}
+                  >
+                    {formatAge(bead.updated_at, Date.now())}
                   </span>
                 </MetaField>
 

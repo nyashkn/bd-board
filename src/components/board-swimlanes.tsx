@@ -365,7 +365,7 @@ export function BoardSwimlanes({
   if (!hasAny) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <span className="text-sm text-muted-foreground/60">
+        <span className="text-sm text-muted-foreground">
           No beads match the filters
         </span>
       </div>

@@ -11,7 +11,7 @@ import {
   parseExternalRef,
 } from '@/lib/artifacts'
 import { readArtifactFn } from '@/lib/server'
-import { cn, toErrorMessage } from '@/lib/utils'
+import { PROSE_CLASS, cn, toErrorMessage } from '@/lib/utils'
 
 import type { Artifact, ArtifactFile } from '@/lib/artifacts'
 import type { ReactNode } from 'react'
@@ -22,7 +22,7 @@ export function ArtifactViewer({ file }: { file: ArtifactFile }) {
   switch (file.kind) {
     case 'markdown':
       return (
-        <div className="prose prose-invert prose-sm max-w-none prose-headings:scroll-mt-4 prose-pre:bg-muted prose-pre:text-xs">
+        <div className={PROSE_CLASS}>
           <Markdown>{file.content}</Markdown>
         </div>
       )

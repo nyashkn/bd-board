@@ -6,6 +6,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/**
+ * Markdown body style bound to the foreground token (not prose-invert), so it
+ * has the same contrast as the rest of the UI in light and dark.
+ */
+export const PROSE_CLASS =
+  'prose prose-sm max-w-none text-foreground prose-headings:scroll-mt-4 prose-pre:bg-muted prose-pre:text-xs ' +
+  '[--tw-prose-body:var(--foreground)] [--tw-prose-headings:var(--foreground)] [--tw-prose-lead:var(--foreground)] ' +
+  '[--tw-prose-bold:var(--foreground)] [--tw-prose-counters:var(--muted-foreground)] [--tw-prose-bullets:var(--muted-foreground)] ' +
+  '[--tw-prose-links:var(--primary-text)] [--tw-prose-code:var(--foreground)] [--tw-prose-quotes:var(--foreground)] ' +
+  '[--tw-prose-quote-borders:var(--border-strong)] [--tw-prose-hr:var(--border-strong)] ' +
+  '[--tw-prose-th-borders:var(--border-strong)] [--tw-prose-td-borders:var(--border)] ' +
+  '[--tw-prose-pre-code:var(--foreground)]'
+
 export function initials(name: string): string {
   const parts = name
     .trim()
