@@ -111,12 +111,12 @@ export function ProjectCard({ project }: { project: Project }) {
             staleTime: 3000,
           })
         }
-        className="group block rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        className="group block min-w-0 rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
       >
-        <div className="relative flex h-full items-start gap-3 rounded-[12px] bg-card p-4 shadow-card ring-1 ring-inset ring-border transition-[background-color,box-shadow,transform] duration-[140ms] ease-out group-hover:-translate-y-0.5 group-hover:bg-card-hover group-hover:shadow-[0_8px_22px_-8px_oklch(0_0_0/60%)] group-hover:ring-ring/45">
-          <div className="flex items-start gap-3">
+        <div className="relative flex h-full min-w-0 flex-col rounded-[12px] bg-card p-4 shadow-card ring-1 ring-inset ring-border transition-[background-color,box-shadow,transform] duration-[140ms] ease-out group-hover:-translate-y-0.5 group-hover:bg-card-hover group-hover:shadow-[0_8px_22px_-8px_oklch(0_0_0/60%)] group-hover:ring-ring/45">
+          <div className="flex min-w-0 items-start gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
+              <div className="flex min-w-0 items-center gap-1.5">
                 <h3 className="truncate text-[15px] font-medium tracking-[-0.01em]">
                   {project.name}
                 </h3>
@@ -153,11 +153,11 @@ export function ProjectCard({ project }: { project: Project }) {
             </span>
           ) : null}
 
-          <div className="mt-3.5 grid grid-cols-2 gap-x-3.5 gap-y-1.5">
+          <div className="mt-3.5 grid min-w-0 grid-cols-2 gap-x-3.5 gap-y-1.5">
             {legend.map((item) => (
               <span
                 key={item.key}
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
               >
                 <span
                   className={`size-1.5 shrink-0 rounded-full ${item.dotClassName}`}
