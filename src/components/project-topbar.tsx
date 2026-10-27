@@ -32,7 +32,7 @@ export function ProjectTopbar() {
   const projectName = current?.name ?? project
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-4">
+    <header className="flex h-12 min-w-0 shrink-0 items-center gap-3 border-b border-border bg-background px-4">
       {project ? (
         <>
           <span className="min-w-0 truncate text-sm font-semibold text-foreground capitalize">
@@ -45,7 +45,7 @@ export function ProjectTopbar() {
           <div className="h-5 w-px shrink-0 bg-border" aria-hidden="true" />
 
           <div
-            className="flex items-center gap-1"
+            className="flex shrink-0 items-center gap-1"
             role="tablist"
             aria-label="Project view"
           >
@@ -59,6 +59,8 @@ export function ProjectTopbar() {
                   params={{ project }}
                   search={{ tab: item.key }}
                   role="tab"
+                  aria-label={item.label}
+                  title={item.label}
                   aria-selected={active}
                   className={cn(
                     'relative inline-flex h-12 items-center gap-1.5 px-2.5 text-[13px] font-medium outline-none transition-colors',
@@ -70,14 +72,14 @@ export function ProjectTopbar() {
                   )}
                 >
                   <Icon className="size-3.5" aria-hidden="true" />
-                  {item.label}
+                  <span className="hidden min-[900px]:inline">{item.label}</span>
                 </Link>
               )
             })}
           </div>
         </>
       ) : null}
-      <div className="ml-auto">
+      <div className="ml-auto shrink-0">
         <ThemeToggle />
       </div>
     </header>
