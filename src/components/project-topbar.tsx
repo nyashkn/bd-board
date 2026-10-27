@@ -72,7 +72,9 @@ export function ProjectTopbar() {
                   )}
                 >
                   <Icon className="size-3.5" aria-hidden="true" />
-                  <span className="hidden min-[900px]:inline">{item.label}</span>
+                  <span className="hidden min-[900px]:inline">
+                    {item.label}
+                  </span>
                 </Link>
               )
             })}
