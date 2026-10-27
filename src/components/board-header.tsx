@@ -1,6 +1,7 @@
 import {
   ArrowUpDown,
   Columns3,
+  Filter,
   Layers,
   ListTree,
   Plus,
@@ -23,10 +24,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import { PRIORITIES, SORT_OPTIONS } from '@/lib/sort'
+import {
+  PRIORITIES,
+  SORT_OPTIONS,
+  priorityFilterLabel,
+  visibleLabels,
+} from '@/lib/sort'
 import { CLOSED_WINDOWS } from '@/lib/closed-window'
 
 import type { LucideIcon } from 'lucide-react'
@@ -146,11 +157,34 @@ export function BoardHeader({
     )
   }
 
+  const { shown, hidden } = visibleLabels(availableLabels, labels)
+
+  function renderChip({ label, count }: { label: string; count: number }) {
+    const on = labels.includes(label)
+    return (
+      <Toggle
+        key={label}
+        pressed={on}
+        onPressedChange={() => toggleLabel(label)}
+        className={cn(
+          'h-6 gap-1 rounded-full px-2 text-xs ring-1 ring-inset',
+          on
+            ? 'bg-primary/26 text-primary-text ring-ring/55'
+            : 'text-muted-foreground ring-border',
+        )}
+      >
+        {label}
+        <span className="tabular-nums opacity-60">{count}</span>
+      </Toggle>
+    )
+  }
+
   return (
     <header className="flex flex-col gap-3 pb-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {hierarchy ? null : (
           <>
+            <span className="text-xs text-muted-foreground">Group</span>
             <ToggleGroup
               type="single"
               value={view}
@@ -206,18 +240,20 @@ export function BoardHeader({
           {liveIndicator}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5">
-                <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-                Priority
-                {priorities.length > 0 ? (
-                  <span className="rounded bg-primary/15 px-1 text-[0.65rem] font-semibold tabular-nums text-primary-text">
-                    {priorities.length}
-                  </span>
-                ) : null}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                aria-label="Filter by priority"
+              >
+                <Filter className="size-3.5" aria-hidden="true" />
+                {priorities.length > 0
+                  ? `Priority: ${priorityFilterLabel(priorities)}`
+                  : 'Filter: priority'}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel>Priority</DropdownMenuLabel>
+              <DropdownMenuLabel>Filter by priority</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {PRIORITIES.map((p) => (
                 <DropdownMenuCheckboxItem
@@ -250,9 +286,14 @@ export function BoardHeader({
           {hierarchy ? null : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  aria-label="Sort beads"
+                >
                   <ArrowUpDown className="size-3.5" aria-hidden="true" />
-                  {SORT_OPTIONS.find((o) => o.key === sort)?.label}
+                  Sort: {SORT_OPTIONS.find((o) => o.key === sort)?.label}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
@@ -297,7 +338,7 @@ export function BoardHeader({
 
       {availableLabels.length > 0 ? (
         <div
-          className="flex max-h-20 flex-wrap items-center gap-1.5 overflow-y-auto"
+          className="flex flex-wrap items-center gap-1.5"
           role="group"
           aria-label="Filter by label (view filter only)"
         >
@@ -305,25 +346,26 @@ export function BoardHeader({
             className="size-3.5 shrink-0 text-muted-foreground"
             aria-hidden="true"
           />
-          {availableLabels.map(({ label, count }) => {
-            const on = labels.includes(label)
-            return (
-              <Toggle
-                key={label}
-                pressed={on}
-                onPressedChange={() => toggleLabel(label)}
-                className={cn(
-                  'h-6 gap-1 rounded-full px-2 text-xs ring-1 ring-inset',
-                  on
-                    ? 'bg-primary/26 text-primary-text ring-ring/55'
-                    : 'text-muted-foreground ring-border',
-                )}
+          {shown.map(renderChip)}
+          {hidden.length > 0 ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 rounded-full px-2 text-xs"
+                >
+                  +{hidden.length} more
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                className="flex max-h-72 w-[min(28rem,90vw)] flex-wrap content-start gap-1.5 overflow-y-auto"
               >
-                {label}
-                <span className="tabular-nums opacity-60">{count}</span>
-              </Toggle>
-            )
-          })}
+                {hidden.map(renderChip)}
+              </PopoverContent>
+            </Popover>
+          ) : null}
           {labels.length > 0 ? (
             <Button
               variant="ghost"

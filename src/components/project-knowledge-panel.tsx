@@ -25,7 +25,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getProjectKnowledgeFn } from '@/lib/server'
 import {
   KNOWLEDGE_TYPE_DOT_CLASS,
+  KNOWLEDGE_TYPE_HINT,
   KNOWLEDGE_TYPE_LABEL,
+  KNOWLEDGE_TYPE_PREFIX,
   KNOWLEDGE_TYPES,
 } from '@/lib/knowledge'
 import { cn } from '@/lib/utils'
@@ -193,6 +195,11 @@ export function ProjectKnowledgePanel({
     )
   }
 
+  // Nothing recorded yet (and no filter hiding it): teach the convention in one compact card
+  // and give the whole width to the comments instead of a half-screen empty panel.
+  const noKnowledgeYet =
+    knowledge.length === 0 && !normalizedSearch && type === 'all'
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2 rounded-[8px] bg-canvas px-3 py-2 ring-1 ring-inset ring-border">
@@ -236,71 +243,81 @@ export function ProjectKnowledgePanel({
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.18fr)_minmax(22rem,0.82fr)]">
-        <section className="flex min-h-0 flex-col rounded-[10px] bg-canvas ring-1 ring-inset ring-border">
-          <PanelHeader
-            icon={BookOpen}
-            title="Knowledge"
-            count={filteredKnowledge.length}
-          />
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            {filteredKnowledge.length === 0 ? (
-              <EmptyState text="No structured comments." />
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {filteredKnowledge.map((entry) => {
-                  const bead = beadsById.get(entry.bead_id)
-                  return (
-                    <li
-                      key={entry.id}
-                      className="flex gap-[11px] rounded-[9px] bg-card ring-1 ring-inset ring-border transition-colors hover:bg-card-hover"
-                    >
-                      <span
-                        className={cn(
-                          'w-0.5 shrink-0 self-stretch rounded-full',
-                          KNOWLEDGE_TYPE_DOT_CLASS[entry.type],
-                        )}
-                        aria-hidden="true"
-                      />
-                      <div className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2.5">
-                        <InteractiveRow
-                          variant="plain"
-                          size="flush"
-                          onClick={() => onOpenKnowledge(entry.id)}
-                          className="min-w-0 flex-1 rounded-[6px]"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <TypeBadge type={entry.type} />
-                            {entry.created_at ? (
-                              <span className="text-[11.25px] text-faint">
-                                {relativeDate(entry.created_at)}
-                              </span>
-                            ) : null}
-                          </div>
+      {noKnowledgeYet ? <KnowledgeHowTo /> : null}
 
-                          <p className="mt-1.5 text-[12.75px] leading-[1.58] whitespace-pre-wrap text-foreground">
-                            {entry.content}
-                          </p>
-
-                          {entry.bead_title ? (
-                            <p className="mt-1.5 truncate text-[11.25px] text-faint">
-                              {entry.bead_title}
-                            </p>
-                          ) : null}
-                        </InteractiveRow>
-                        <OpenBeadButton
-                          bead={bead}
-                          beadId={entry.bead_id}
-                          onOpenBead={onOpenBead}
+      <div
+        className={cn(
+          'grid min-h-0 flex-1 grid-cols-1 gap-3',
+          !noKnowledgeYet &&
+            'xl:grid-cols-[minmax(0,1.18fr)_minmax(22rem,0.82fr)]',
+        )}
+      >
+        {noKnowledgeYet ? null : (
+          <section className="flex min-h-0 flex-col rounded-[10px] bg-canvas ring-1 ring-inset ring-border">
+            <PanelHeader
+              icon={BookOpen}
+              title="Knowledge"
+              count={filteredKnowledge.length}
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {filteredKnowledge.length === 0 ? (
+                <EmptyState text="No structured comments." />
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {filteredKnowledge.map((entry) => {
+                    const bead = beadsById.get(entry.bead_id)
+                    return (
+                      <li
+                        key={entry.id}
+                        className="flex gap-[11px] rounded-[9px] bg-card ring-1 ring-inset ring-border transition-colors hover:bg-card-hover"
+                      >
+                        <span
+                          className={cn(
+                            'w-0.5 shrink-0 self-stretch rounded-full',
+                            KNOWLEDGE_TYPE_DOT_CLASS[entry.type],
+                          )}
+                          aria-hidden="true"
                         />
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
-        </section>
+                        <div className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2.5">
+                          <InteractiveRow
+                            variant="plain"
+                            size="flush"
+                            onClick={() => onOpenKnowledge(entry.id)}
+                            className="min-w-0 flex-1 rounded-[6px]"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <TypeBadge type={entry.type} />
+                              {entry.created_at ? (
+                                <span className="text-[11.25px] text-faint">
+                                  {relativeDate(entry.created_at)}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <p className="mt-1.5 text-[12.75px] leading-[1.58] whitespace-pre-wrap text-foreground">
+                              {entry.content}
+                            </p>
+
+                            {entry.bead_title ? (
+                              <p className="mt-1.5 truncate text-[11.25px] text-faint">
+                                {entry.bead_title}
+                              </p>
+                            ) : null}
+                          </InteractiveRow>
+                          <OpenBeadButton
+                            bead={bead}
+                            beadId={entry.bead_id}
+                            onOpenBead={onOpenBead}
+                          />
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="flex min-h-0 flex-col rounded-[10px] bg-canvas ring-1 ring-inset ring-border">
           <PanelHeader
@@ -334,6 +351,11 @@ export function ProjectKnowledgePanel({
                           <span>· {relativeDate(comment.created_at)}</span>
                         ) : null}
                       </div>
+                      {comment.bead_title ? (
+                        <p className="mt-1 truncate text-[11.25px] text-faint">
+                          {comment.bead_title}
+                        </p>
+                      ) : null}
                       <p className="mt-1.5 text-[13px] whitespace-pre-wrap">
                         {comment.text}
                       </p>
@@ -368,6 +390,52 @@ function PanelHeader({
         {count}
       </span>
     </header>
+  )
+}
+
+/** What a knowledge comment is and how an agent writes one. */
+function KnowledgeHowTo() {
+  return (
+    <section
+      className="rounded-[10px] bg-canvas p-3.5 ring-1 ring-inset ring-border"
+      aria-label="How to record knowledge"
+    >
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <BookOpen className="size-3.5" aria-hidden="true" />
+        <h2 className="font-mono text-[10.5px] font-medium tracking-[0.09em] uppercase">
+          No knowledge recorded yet
+        </h2>
+      </div>
+      <p className="mt-2 text-[13px] text-foreground">
+        A knowledge entry is an ordinary bead comment that starts with one of
+        seven prefixes. Agents write one as they work, and it shows up here:
+      </p>
+      <pre className="mt-2 max-w-full overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-[12px] text-foreground">
+        bd comments add &lt;bead-id&gt; &quot;DECISION: use the events journal,
+        not polling&quot;
+      </pre>
+      <ul className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(min(17rem,100%),1fr))] gap-x-4 gap-y-1.5">
+        {KNOWLEDGE_TYPES.map((t) => (
+          <li key={t} className="flex min-w-0 items-start gap-2 text-[12px]">
+            <span
+              className={cn(
+                'mt-1.5 size-1.5 shrink-0 rounded-full',
+                KNOWLEDGE_TYPE_DOT_CLASS[t],
+              )}
+              aria-hidden="true"
+            />
+            <span className="min-w-0">
+              <code className="font-mono font-medium text-foreground">
+                {KNOWLEDGE_TYPE_PREFIX[t]}:
+              </code>{' '}
+              <span className="text-muted-foreground">
+                {KNOWLEDGE_TYPE_HINT[t]}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
