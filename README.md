@@ -205,6 +205,16 @@ The app does not store its own database. It shells out to `bd` with `node:child_
 
 ## Safety Model
 
+## Overflow check
+
+jsdom cannot lay out, so layout regressions are checked in real Chrome. `scripts/check-overflow.mjs` needs no dependency (it speaks the Chrome DevTools protocol with Node's `fetch`/`WebSocket`; set `CHROME=` if Chrome is not at a default path). Against a running dev server, ideally on a read-only registry:
+
+```bash
+BASE_URL=http://localhost:3009 node scripts/check-overflow.mjs   # SHOTS=dir saves PNGs, WIDTHS=720,1000 overrides
+```
+
+It asserts `scrollWidth <= clientWidth` at 720, 1000, 1280 and 1440px for Projects (light and dark), Board (status and epics), Hierarchy, Knowledge and the bead modal. Manual checklist for the same pages and widths: no horizontal scroll, header actions and toolbar wrap, long titles/paths/URLs truncate or wrap, the sidebar works collapsed and expanded. The desktop window cannot shrink below 960x600.
+
 ## E2E (WebdriverIO)
 
 End-to-end tests run through WebdriverIO with the Tauri service (`@wdio/tauri-service`). They are split in two suites because the two things they verify need different runtimes:
