@@ -1,6 +1,9 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { createWorld, destroyWorld } from './world.js'
+import type { World } from './world.js'
+
 const here = path.dirname(fileURLToPath(import.meta.url))
 const appBinaryPath = path.resolve(here, '../src-tauri/target/debug/bd-board')
 
@@ -15,6 +18,9 @@ const EMBEDDED_PORT = 4472
 // independently of `embeddedPort`; leaving them out of sync makes the poller
 // talk to whatever app owns 4445.
 process.env.TAURI_WEBDRIVER_PORT ??= String(EMBEDDED_PORT)
+
+let world: World | undefined
+let realHome: string | undefined
 
 export const config: WebdriverIO.Config = {
   runner: 'local',
@@ -54,6 +60,23 @@ export const config: WebdriverIO.Config = {
   mochaOpts: {
     ui: 'bdd',
     timeout: 90000,
+  },
+
+  /**
+   * The app reads its project registry from $HOME. Point it at a throwaway one (real
+   * `bd init` projects) so the suite never reads or writes the real registry. The
+   * launcher's HOME is restored in onComplete; workers and the app inherit this one.
+   */
+  onPrepare: () => {
+    world = createWorld()
+    realHome = process.env.HOME
+    process.env.E2E_WORLD = JSON.stringify(world)
+    process.env.HOME = world.home
+  },
+
+  onComplete: () => {
+    if (realHome !== undefined) process.env.HOME = realHome
+    if (world) destroyWorld(world)
   },
 
   /**

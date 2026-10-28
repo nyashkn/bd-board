@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Tests that were only checked by hand: `pnpm e2e:fixture` (artifacts panel with a real sandboxed HTML file, escaping/missing/remote artifacts, read-only projects and the shim leaving the ledger unchanged, server functions refusing writes), `src-tauri/tests/real_bd.rs` (read_artifact limits and escapes, registry, shim launch, write guard, comment author, blocked/ready from real `bd` output) and a native `artifacts.e2e.ts`. The native suite now runs against a throwaway HOME.
+- `pnpm desktop:install` (`scripts/install-desktop.sh`): quits a running bd board gracefully, copies the built app with `ditto` to /Applications (or ~/Applications), opens it.
 - Desktop window minimum size 960x600 and `scripts/check-overflow.mjs`, a dependency-free (Chrome DevTools protocol) horizontal-overflow check at 720/1000/1280/1440px.
 - Compact relative ages ("created 12d ago", "updated 3h ago") on bead cards and in the bead modal sidebar, with the full timestamp as tooltip (`src/lib/age.ts`).
 - Closed recency window (`closed=1d|7d|30d|90d|all`, default 7d, remembered in `localStorage`, URL wins) for the Closed column, swimlanes, Hierarchy and lists, with "N of M" counts and a "show all" link. Completed epics are hidden or shown by the same window and show "Done · took 5d" when visible.

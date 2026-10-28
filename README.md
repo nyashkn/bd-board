@@ -93,6 +93,15 @@ Tauri is configured with:
 The path is relative to `src-tauri/tauri.conf.json`, so the installed app embeds
 the repo-root `dist/` directory.
 
+To install the built bundle on macOS, run `pnpm desktop:install` (after
+`pnpm desktop:build`; it builds when the bundle is missing, `REBUILD=1` forces a
+build). It asks a running "bd board" to quit through `osascript` and waits up to
+10 s (it never kills anything; if the app is still open it stops and says so),
+replaces the app with `ditto`, then opens it. It needs no sudo: if `/Applications`
+is not writable it installs to `~/Applications` and says so. It refuses to run
+off macOS. `DEST`, `APP_NAME`, `BUNDLE` and `NO_OPEN=1` override the location,
+name and source (used to test it against a temp directory).
+
 On macOS, the release build writes:
 
 ```text
@@ -243,6 +252,10 @@ End-to-end tests run through WebdriverIO with the Tauri service (`@wdio/tauri-se
 On macOS the native suite uses the embedded provider (`tauri-plugin-wdio-webdriver`); `tauri-driver` has no macOS support. The build activates the `wdio` Rust feature and the `VITE_WDIO` frontend flag, so production binaries never carry the test surface.
 
 IPC mocking only works in the browser suite: Tauri defines `window.__TAURI_INTERNALS__.invoke` as non-writable and non-configurable, and `@wdio/tauri-plugin` only wraps the `withGlobalTauri` global, which the bundled `@tauri-apps/api` never calls.
+
+| Fixture | `pnpm e2e:fixture` | Chrome against a real dev server on :3061 (own HOME, real `bd init` projects, no IPC stubs) | Artifacts panel with real files (sandboxed HTML, escapes, remote links), read-only projects and the shim (`e2e/specs/fixture`) |
+
+The fixture suite (`e2e/world.ts`) builds a temp root with a fake HOME registry and three projects (artifacts, read-only, read-only with `filterLabel`), starts and stops its own Vite server, and removes everything afterwards. The native suite does the same: its app runs with the fake HOME, so `e2e/specs/native/artifacts.e2e.ts` exercises the real `read_artifact` bridge. Rust integration tests against a real `bd init` fixture: `cargo test --test real_bd` in `src-tauri` (skipped with a message when `bd` is missing). Needs `bd` on PATH and Chrome; chromedriver is downloaded on first run.
 
 The native suite pins the embedded WebDriver port (`e2e/wdio.conf.ts`); the default 4445 is shared with any other Tauri app running its own suite, and a session will silently attach to the wrong app.
 
