@@ -97,6 +97,27 @@ describe('server input validation', () => {
     ).toThrow('Comment text is required')
   })
 
+  it('accepts the { project, id, update } envelope the bead modal sends', () => {
+    expect(
+      parseUpdateBeadInput({
+        project: 'bd-board',
+        id: 'bd-board-a2k',
+        update: { title: ' Nested ', priority: 1 },
+      }),
+    ).toEqual({
+      project: 'bd-board',
+      id: 'bd-board-a2k',
+      update: { title: 'Nested', priority: 1 },
+    })
+    expect(() =>
+      parseUpdateBeadInput({
+        project: 'bd-board',
+        id: 'bd-board-a2k',
+        update: {},
+      }),
+    ).toThrow('No bead updates provided')
+  })
+
   it('normalizes update bead input', () => {
     expect(
       parseUpdateBeadInput({

@@ -156,7 +156,9 @@ export function parseUpdateBeadInput(input: unknown): {
   id: string
   update: BeadUpdate
 } {
-  const data = record(input)
+  const envelope = record(input)
+  // The modal sends { project, id, update: {...} }; flat fields are accepted too.
+  const data = 'update' in envelope ? record(envelope['update']) : envelope
   const update: BeadUpdate = {}
 
   if ('title' in data) {
@@ -207,8 +209,8 @@ export function parseUpdateBeadInput(input: unknown): {
   }
 
   return {
-    project: requiredString(data, 'project', PROJECT_RE, 'Project'),
-    id: requiredString(data, 'id', BEAD_ID_RE, 'Bead id'),
+    project: requiredString(envelope, 'project', PROJECT_RE, 'Project'),
+    id: requiredString(envelope, 'id', BEAD_ID_RE, 'Bead id'),
     update,
   }
 }
