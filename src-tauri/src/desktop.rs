@@ -1577,7 +1577,7 @@ pub fn get_bead_detail(project_id: String, id: String) -> Result<BeadDetail, Str
 
 const ARTIFACT_MAX_BYTES: u64 = 2 * 1024 * 1024;
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ArtifactFile {
     pub kind: String,
     pub content: String,

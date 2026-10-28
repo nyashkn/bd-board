@@ -2,8 +2,9 @@ use serde::Serialize;
 use std::env;
 use std::process::Command;
 
-mod desktop;
-mod registry;
+// pub so tests/ can drive the real commands against a `bd init` fixture.
+pub mod desktop;
+pub mod registry;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
