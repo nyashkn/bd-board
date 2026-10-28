@@ -35,6 +35,7 @@
     "dev": "vite dev --port 3009",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
+    "desktop:install": "bash scripts/install-desktop.sh",
     "desktop:prepare": "pnpm build && node scripts/prepare-desktop-build.mjs",
     "version:set": "node scripts/set-version.mjs",
     "generate-routes": "tsr generate",
@@ -53,7 +54,8 @@
     "e2e:build": "VITE_WDIO=1 pnpm tauri build --debug --features wdio --config src-tauri/tauri.wdio.conf.json",
     "e2e": "wdio run ./e2e/wdio.conf.ts",
     "e2e:feed": "wdio run ./e2e/wdio.feed.conf.ts",
-    "e2e:browser": "wdio run ./e2e/wdio.browser.conf.ts"
+    "e2e:browser": "wdio run ./e2e/wdio.browser.conf.ts",
+    "e2e:fixture": "wdio run ./e2e/wdio.fixture.conf.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",
