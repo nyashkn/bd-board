@@ -43,6 +43,8 @@ export const config: WebdriverIO.Config = {
   capabilities: [
     {
       browserName: 'tauri',
+      // one app at a time: every instance would claim the same pinned WebDriver port
+      maxInstances: 1,
       'wdio:tauriServiceOptions': {
         appBinaryPath,
       },
