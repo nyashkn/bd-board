@@ -1,5 +1,6 @@
 /** Command palette search over beads already in memory: fuzzy score, highlight ranges, snippets, ranking. Pure. */
 import { beadArtifacts } from './artifacts'
+import { isReady } from './sort'
 import { beadColumn, isEpic } from './types'
 
 import type { Chip, PaletteQuery } from './palette-query'
@@ -124,8 +125,9 @@ export function makeSnippet(
   ranges: Range[],
   radius = 44,
 ): Snippet {
+  if (!text || !ranges.length)
+    return { text: text.slice(0, radius * 2), ranges: [] }
   const first = ranges[0]
-  if (!text || !first) return { text: text.slice(0, radius * 2), ranges: [] }
   let from = Math.max(0, first.start - radius)
   let to = Math.min(text.length, Math.max(first.end, first.start) + radius)
   if (from > 0) {
@@ -255,6 +257,8 @@ export interface PaletteHit {
   score: number
   idRanges: Range[]
   titleRanges: Range[]
+  /** Ranked only by comments or artifact paths: shown in a separate group below the rest. */
+  late: boolean
   snippet?: Snippet & { kind: SnippetKind }
 }
 
@@ -338,8 +342,19 @@ function matchesStatus(doc: PaletteDoc, value: string): boolean {
   return raw.startsWith(v) || beadColumn(doc.bead).startsWith(v)
 }
 
+export interface ChipContext {
+  /** The user's own assignee name (`is:mine`). */
+  me?: string
+  /** When the current project was last looked at (`is:since`). */
+  since?: { project: string; at: number }
+}
+
 /** Chips narrow results; every chip must hold. Values match case-insensitively by prefix. */
-export function passesChip(doc: PaletteDoc, chip: Chip): boolean {
+export function passesChip(
+  doc: PaletteDoc,
+  chip: Chip,
+  ctx: ChipContext = {},
+): boolean {
   const v = chip.value.toLowerCase()
   switch (chip.kind) {
     case 'status':
@@ -350,6 +365,21 @@ export function passesChip(doc: PaletteDoc, chip: Chip): boolean {
       return doc.labels.some((l) => l.lower.startsWith(v))
     case 'assignee':
       return doc.assignee?.lower.includes(v) ?? false
+    case 'project':
+      return (
+        doc.project.toLowerCase().startsWith(v) ||
+        doc.projectName.toLowerCase().includes(v)
+      )
+    case 'is':
+      if (v === 'mine')
+        return Boolean(ctx.me) && doc.assignee?.lower === ctx.me?.toLowerCase()
+      if (v === 'ready') return isReady(doc.bead) && !doc.closed
+      if (v === 'blocked') return beadColumn(doc.bead) === 'blocked'
+      return (
+        ctx.since !== undefined &&
+        doc.project === ctx.since.project &&
+        doc.updatedMs > ctx.since.at
+      )
     case 'epic':
       // The epic itself counts as being "in" it.
       return [
@@ -361,18 +391,19 @@ export function passesChip(doc: PaletteDoc, chip: Chip): boolean {
   }
 }
 
-export interface SearchOptions {
+export interface SearchOptions extends ChipContext {
   comments?: Map<string, IndexedText[]>
-  /** Restrict to one project id ("Current project" scope). */
-  project?: string
   limit?: number
 }
 
 export const DEFAULT_LIMIT = 50
+export const LATE_LIMIT = 20
 
-/** Closed beads sort last whatever their score; otherwise best score, then most recently updated. */
+/** Closed beads sort last whatever their score (an exact id aside); otherwise best score, then most recently updated. */
 export function compareHits(a: PaletteHit, b: PaletteHit): number {
+  // An exact id is what the user typed: it stays on top even when the bead is closed.
   return (
+    Number(b.score >= WEIGHT.idExact) - Number(a.score >= WEIGHT.idExact) ||
     Number(a.doc.closed) - Number(b.doc.closed) ||
     b.score - a.score ||
     b.doc.updatedMs - a.doc.updatedMs ||
@@ -389,10 +420,15 @@ export function searchDocs(
   if (!words.length && !chips.length) return []
   const hits: PaletteHit[] = []
   for (const doc of docs) {
-    if (opts.project && doc.project !== opts.project) continue
-    if (!chips.every((c) => passesChip(doc, c))) continue
+    if (!chips.every((c) => passesChip(doc, c, opts))) continue
     if (!words.length) {
-      hits.push({ doc, score: 0, idRanges: [], titleRanges: [] })
+      hits.push({
+        doc,
+        score: 0,
+        idRanges: [],
+        titleRanges: [],
+        late: false,
+      })
       continue
     }
     const comments = opts.comments?.get(doc.key) ?? []
@@ -415,6 +451,7 @@ export function searchDocs(
       score: weakest.score,
       idRanges: mergeRanges(idRanges),
       titleRanges: mergeRanges(titleRanges),
+      late: weakest.field === 'comment' || weakest.field === 'artifact',
     }
     if (weakest.field !== 'id' && weakest.field !== 'title' && weakest.text)
       out.snippet = {
@@ -423,5 +460,10 @@ export function searchDocs(
       }
     hits.push(out)
   }
-  return hits.sort(compareHits).slice(0, opts.limit ?? DEFAULT_LIMIT)
+  hits.sort(compareHits)
+  // Comment/artifact hits arrive later and sit in their own group, so the rows above never move.
+  return [
+    ...hits.filter((h) => !h.late).slice(0, opts.limit ?? DEFAULT_LIMIT),
+    ...hits.filter((h) => h.late).slice(0, LATE_LIMIT),
+  ]
 }

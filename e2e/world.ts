@@ -15,7 +15,7 @@ export interface World {
   /** Sentinel text of the file the escaping artifact path points at. */
   outsideSecret: string
   art: { id: string; dir: string; bead: string }
-  ro: { id: string; dir: string; bead: string }
+  ro: { id: string; dir: string; bead: string; described: string }
   rof: { id: string; dir: string; wo: string; child: string; other: string }
 }
 
@@ -111,6 +111,15 @@ export function createWorld(): World {
     '--silent',
   ])
   bd(ro, home, ['create', '--title', 'Second read-only bead', '--silent'])
+  // The word lives only in the description: the command palette must still find it.
+  const described = bd(ro, home, [
+    'create',
+    '--title',
+    'Plain looking bead',
+    '--description',
+    'Remember the pangolin migration before release.',
+    '--silent',
+  ])
 
   const rof = initProject(root, home, 'rof')
   const wo = bd(rof, home, [
@@ -165,7 +174,7 @@ export function createWorld(): World {
     home,
     outsideSecret: OUTSIDE_SECRET,
     art: { id: 'art', dir: art, bead: artBead },
-    ro: { id: 'ro', dir: ro, bead: roBead },
+    ro: { id: 'ro', dir: ro, bead: roBead, described },
     rof: { id: 'rof', dir: rof, wo, child, other },
   }
 }

@@ -1,6 +1,16 @@
 /** Command palette query model: free words plus scope chips (`status:open`, `@ana`, ...). Pure. */
 
-export type ChipKind = 'epic' | 'status' | 'label' | 'type' | 'assignee'
+export type ChipKind =
+  | 'epic'
+  | 'status'
+  | 'label'
+  | 'type'
+  | 'project'
+  | 'assignee'
+  | 'is'
+
+/** `is:` values: assigned to me, ready (`bd ready`), blocked, changed since the last visit. */
+export const IS_VALUES = ['mine', 'ready', 'blocked', 'since'] as const
 
 export interface Chip {
   kind: ChipKind
@@ -16,10 +26,12 @@ export interface PaletteQuery {
 export const MAX_QUERY_CHARS = 200
 export const MAX_WORDS = 8
 
-const KINDS = new Set(['epic', 'status', 'label', 'type'])
+const KINDS = new Set(['epic', 'status', 'label', 'type', 'project', 'is'])
 
 /** `kind:value` or `@name` -> chip; anything else (or an empty value) is a plain word. */
 export function chipOf(token: string): Chip | null {
+  // `mine` and `@me` are shorthands for `is:mine`.
+  if (token === 'mine' || token === '@me') return { kind: 'is', value: 'mine' }
   if (token.startsWith('@')) {
     const value = token.slice(1)
     return value ? { kind: 'assignee', value } : null
@@ -28,7 +40,10 @@ export function chipOf(token: string): Chip | null {
   if (colon <= 0) return null
   const kind = token.slice(0, colon).toLowerCase()
   const value = token.slice(colon + 1)
-  return KINDS.has(kind) && value ? { kind: kind as ChipKind, value } : null
+  if (!KINDS.has(kind) || !value) return null
+  if (kind === 'is' && !(IS_VALUES as readonly string[]).includes(value))
+    return null
+  return { kind: kind as ChipKind, value }
 }
 
 export function chipLabel(chip: Chip): string {

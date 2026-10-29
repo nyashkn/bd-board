@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildQuery, chipOf, commitChips, isEmptyQuery } from './palette-query'
-import {
-  MAX_RECENT,
-  parseRecent,
-  pushRecent,
-  type RecentEntry,
-} from './palette-recent'
+import { MAX_RECENT, parseRecent, pushRecent } from './palette-recent'
 import {
   buildDocs,
   indexComments,
@@ -16,6 +11,7 @@ import {
   searchDocs,
 } from './palette-search'
 
+import type { RecentEntry } from './palette-recent'
 import type { Bead } from './types'
 
 const bead = (id: string, over: Partial<Bead> = {}): Bead => ({
@@ -252,10 +248,6 @@ describe('chips narrow results', () => {
     expect(run('status:open', 'zebra')).toEqual(['p-3', 'p-2'])
     expect(run('status:open @ana', 'zebra')).toEqual(['p-2'])
   })
-
-  it('scopes to a project', () => {
-    expect(ids('zebra', { project: 'other' })).toEqual([])
-  })
 })
 
 describe('recent list', () => {
@@ -278,5 +270,64 @@ describe('recent list', () => {
     expect(
       parseRecent('[null, 3, {"project":"p"}, {"project":"p","id":"x"}]'),
     ).toEqual([{ project: 'p', id: 'x' }])
+  })
+})
+
+describe('pinning, late group, is:/project: chips', () => {
+  const d = buildDocs({ id: 'p', name: 'Proj' }, [
+    bead('p-9', { title: 'Old thing', status: 'closed' }),
+    bead('p-90', { title: 'Newer p-9 mention', ready: false }),
+    bead('p-7', {
+      title: 'Mine',
+      assignee: 'Ana',
+      waiting_on: ['p-9'],
+      ready: false,
+    }),
+    bead('p-8', {
+      title: 'Ready one',
+      ready: true,
+      updated_at: '2026-08-01T00:00:00Z',
+    }),
+  ])
+
+  it('keeps an exact id on top even when the bead is closed', () => {
+    const out = searchDocs(d, buildQuery([], 'p-9')).map((h) => h.doc.bead.id)
+    expect(out[0]).toBe('p-9')
+  })
+
+  it('puts comment-only hits in a separate group, leaving main rows alone', () => {
+    const comments = indexComments('p', [{ bead_id: 'p-7', text: 'gnu note' }])
+    const hits = searchDocs(d, buildQuery([], 'gnu'), { comments })
+    expect(hits.map((h) => [h.doc.bead.id, h.late])).toEqual([['p-7', true]])
+    const keys = (c?: typeof comments) =>
+      searchDocs(d, buildQuery([], 'ready'), { comments: c }).map(
+        (h) => h.doc.key,
+      )
+    expect(keys()).toEqual(keys(comments))
+  })
+
+  it('parses is:, mine, @me and project: chips', () => {
+    expect(chipOf('is:mine')).toEqual({ kind: 'is', value: 'mine' })
+    expect(chipOf('mine')).toEqual({ kind: 'is', value: 'mine' })
+    expect(chipOf('@me')).toEqual({ kind: 'is', value: 'mine' })
+    expect(chipOf('is:bogus')).toBeNull()
+    expect(chipOf('project:web')).toEqual({ kind: 'project', value: 'web' })
+  })
+
+  const run = (token: string, opts = {}) =>
+    searchDocs(d, buildQuery(commitChips(`${token} `).chips, ''), opts).map(
+      (h) => h.doc.bead.id,
+    )
+
+  it('applies is:mine, is:ready, is:blocked, is:since and project:', () => {
+    expect(run('is:mine', { me: 'ana' })).toEqual(['p-7'])
+    expect(run('is:mine')).toEqual([])
+    expect(run('is:ready')).toEqual(['p-8'])
+    expect(run('is:blocked')).toEqual(['p-7'])
+    const since = { project: 'p', at: Date.parse('2026-07-15T00:00:00Z') }
+    expect(run('is:since', { since })).toEqual(['p-8'])
+    expect(run('is:since')).toEqual([])
+    expect(run('project:proj')).toHaveLength(4)
+    expect(run('project:zzz')).toEqual([])
   })
 })

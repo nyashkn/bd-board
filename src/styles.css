@@ -336,4 +336,9 @@
   .skip-link {
     transition: none;
   }
+  [data-slot='dialog-overlay'],
+  [data-slot='dialog-content'] {
+    animation: none !important;
+    transition: none !important;
+  }
 }
