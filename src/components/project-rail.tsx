@@ -28,8 +28,7 @@ import {
   getStoredSidebarCollapsed,
   setStoredSidebarCollapsed,
 } from '@/lib/sidebar-collapse'
-import { isReady } from '@/lib/sort'
-import { beadColumn } from '@/lib/types'
+import { assignedCounts, summarizeBeads } from '@/lib/counts'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -76,6 +75,7 @@ function RailLink({
   collapsed,
   dotClassName,
   count,
+  countTitle,
   onMouseEnter,
   projectId,
   isHovered,
@@ -92,6 +92,8 @@ function RailLink({
   collapsed?: boolean
   dotClassName?: string
   count?: number
+  /** What the count means, when the label alone would not say. */
+  countTitle?: string
   onMouseEnter?: () => void
   projectId?: string
   isHovered?: boolean
@@ -115,7 +117,9 @@ function RailLink({
         params={params}
         search={search}
         aria-current={active ? 'page' : undefined}
-        title={collapsed && typeof children === 'string' ? children : undefined}
+        title={
+          collapsed && typeof children === 'string' ? children : countTitle
+        }
         onMouseEnter={onMouseEnter}
         className={cn(
           'group relative flex h-7 items-center gap-2 rounded-md text-[13px] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60',
@@ -222,8 +226,7 @@ export function ProjectRail() {
     staleTime: 3000,
   })
   const beads = project ? (beadsQuery.data ?? []) : []
-  const readyCount = beads.filter(isReady).length
-  const blockedCount = beads.filter((b) => beadColumn(b) === 'blocked').length
+  const { ready: readyCount, blocked: blockedCount } = summarizeBeads(beads)
 
   const [identity, setIdentity] = useState<string | null>(null)
   useEffect(() => {
@@ -252,9 +255,9 @@ export function ProjectRail() {
     for (const b of beads) if (b.assignee) seen.add(b.assignee)
     return [...seen].sort()
   }, [beads])
-  const mineCount = identity
-    ? beads.filter((b) => b.assignee === identity).length
-    : 0
+  const mine = identity
+    ? assignedCounts(beads, identity)
+    : { active: 0, closed: 0, total: 0 }
 
   function chooseIdentity(value: string) {
     setStoredIdentity(value)
@@ -337,7 +340,8 @@ export function ProjectRail() {
                 icon={Folder}
                 active={p.id === project}
                 collapsed={collapsed}
-                count={p.counts.total}
+                count={p.counts.active ?? p.counts.total}
+                countTitle={`${p.counts.active ?? p.counts.total} open, ${p.counts.closed} closed (${p.counts.total} in all)`}
                 projectId={p.id}
                 isHovered={hoveredProjectId === p.id}
                 onHoverChange={(h) => setHoveredProjectId(h ? p.id : null)}
@@ -364,6 +368,7 @@ export function ProjectRail() {
                 search={{ ready: '1' }}
                 dotClassName="bg-status-closed"
                 count={readyCount}
+                countTitle={`${readyCount} ready to start (bd ready)`}
               >
                 Ready
               </RailLink>
@@ -373,6 +378,7 @@ export function ProjectRail() {
                 search={{ view: 'status' }}
                 dotClassName="bg-status-blocked"
                 count={blockedCount}
+                countTitle={`${blockedCount} waiting on an open dependency (bd blocked)`}
               >
                 Blocked
               </RailLink>
@@ -382,6 +388,7 @@ export function ProjectRail() {
                     to="/p/$project"
                     params={{ project }}
                     search={{ assignee: identity }}
+                    title={`${mine.active} open, ${mine.closed} closed (${mine.total} assigned in all)`}
                     className="flex min-w-0 flex-1 items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                   >
                     <span
@@ -392,7 +399,7 @@ export function ProjectRail() {
                       Assigned to me
                     </span>
                     <span className="shrink-0 font-mono text-[11px] tabular-nums text-faint">
-                      {mineCount}
+                      {mine.active}
                     </span>
                   </Link>
                   <Button
