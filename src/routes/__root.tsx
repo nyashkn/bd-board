@@ -4,6 +4,7 @@ import {
   createRootRouteWithContext,
 } from '@tanstack/react-router'
 
+import { CommandPalette } from '@/components/command-palette'
 import { ProjectRail } from '@/components/project-rail'
 import { ProjectTopbar } from '@/components/project-topbar'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -67,6 +68,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               </main>
             </div>
           </div>
+          <CommandPalette />
           <Toaster richColors position="top-right" />
         </TooltipProvider>
         <Scripts />

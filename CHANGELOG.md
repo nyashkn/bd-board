@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Command palette (Cmd/Ctrl+K, from anywhere): instant search over every bead of every project by id, title, description, labels and assignee, plus comments and artifact paths indexed lazily in a separate group. Filter chips `status:` `type:` `label:` `epic:` `project:` `@name` `is:mine|ready|blocked|since`; Enter opens the bead, Cmd/Ctrl+Enter a new tab, Cmd/Ctrl+C copies its id; Recent beads and Jump to when empty. Read-only projects work the same.
 - Tests that were only checked by hand: `pnpm e2e:fixture` (artifacts panel with a real sandboxed HTML file, escaping/missing/remote artifacts, read-only projects and the shim leaving the ledger unchanged, server functions refusing writes), `src-tauri/tests/real_bd.rs` (read_artifact limits and escapes, registry, shim launch, write guard, comment author, blocked/ready from real `bd` output) and a native `artifacts.e2e.ts`. The native suite now runs against a throwaway HOME.
 - `pnpm desktop:install` (`scripts/install-desktop.sh`): quits a running bd board gracefully, copies the built app with `ditto` to /Applications (or ~/Applications), opens it.
 - Desktop window minimum size 960x600 and `scripts/check-overflow.mjs`, a dependency-free (Chrome DevTools protocol) horizontal-overflow check at 720/1000/1280/1440px.
