@@ -25,7 +25,7 @@
   --card-foreground: oklch(0.2 0.01 270);
   --popover-foreground: oklch(0.2 0.01 270);
   --muted-foreground: oklch(0.47 0.012 270);
-  --faint: oklch(0.55 0.011 270);
+  --faint: oklch(0.52 0.011 270);
 
   --primary: oklch(0.47 0.19 268);
   --primary-hover: oklch(0.41 0.175 268);
@@ -70,7 +70,7 @@
   --status-blocked: oklch(0.52 0.19 22);
   --status-closed: oklch(0.48 0.15 152);
   --status-in_progress: var(--status-progress);
-  --warn: oklch(0.58 0.15 75);
+  --warn: oklch(0.54 0.15 75);
 
   --k-decision: oklch(0.48 0.16 268);
   --k-learned: oklch(0.48 0.13 200);
@@ -101,7 +101,7 @@
   --card-foreground: oklch(0.945 0.004 270);
   --popover-foreground: oklch(0.945 0.004 270);
   --muted-foreground: oklch(0.685 0.012 270);
-  --faint: oklch(0.62 0.011 270);
+  --faint: oklch(0.64 0.011 270);
 
   --primary: oklch(0.54 0.19 268);
   --primary-hover: oklch(0.47 0.175 268);

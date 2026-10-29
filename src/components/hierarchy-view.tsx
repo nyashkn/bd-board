@@ -14,6 +14,7 @@ import {
   MessageSquare,
 } from 'lucide-react'
 
+import { EmptyBoard } from '@/components/empty-board'
 import { EpicProgress } from '@/components/epic-progress'
 import { ChangedDot, useSince } from '@/components/since-band'
 import { Button } from '@/components/ui/button'
@@ -50,6 +51,8 @@ interface HierarchyViewProps {
   now: number
   /** The Board's filters as one predicate; null when none is active. */
   matches: ((bead: Bead) => boolean) | null
+  onSetClosedWindow: (w: ClosedWindow) => void
+  onClearFilters: () => void
   onShowAllClosed: () => void
   onOpen: (bead: Bead) => void
 }
@@ -288,6 +291,8 @@ export function HierarchyView({
   now,
   matches,
   onShowAllClosed,
+  onSetClosedWindow,
+  onClearFilters,
   onOpen,
 }: HierarchyViewProps) {
   const fullMap = useMemo(() => buildChildrenMap(beads), [beads])
@@ -364,13 +369,14 @@ export function HierarchyView({
         />
       </div>
       {roots.length === 0 ? (
-        <div className="flex items-center justify-center py-16">
-          <span className="text-sm text-muted-foreground">
-            {matches
-              ? 'No beads match the filters'
-              : 'No beads in this project'}
-          </span>
-        </div>
+        <EmptyBoard
+          beads={beads}
+          matches={matches}
+          closedWindow={closedWindow}
+          now={now}
+          onSetClosedWindow={onSetClosedWindow}
+          onClearFilters={onClearFilters}
+        />
       ) : (
         <div className="flex flex-col gap-0.5">
           {roots.map((root) => (

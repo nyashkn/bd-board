@@ -17,6 +17,7 @@ import {
 import { ChevronDown, ChevronRight, Layers } from 'lucide-react'
 
 import { BeadCard } from '@/components/bead-card'
+import { EmptyBoard } from '@/components/empty-board'
 import { EpicProgress } from '@/components/epic-progress'
 import {
   ClosedHiddenNote,
@@ -61,6 +62,8 @@ interface BoardSwimlanesProps {
   closedWindow: ClosedWindow
   now: number
   onShowAllClosed: () => void
+  onSetClosedWindow: (w: ClosedWindow) => void
+  onClearFilters: () => void
   onOpen: (bead: Bead) => void
   applyDrop: (activeId: string, toColumn: BeadColumn) => void
 }
@@ -121,7 +124,7 @@ function LaneCell({
         ))}
       </SortableContext>
       {beads.length === 0 ? (
-        <span className="flex flex-1 items-center justify-center py-3 font-mono text-[11px] text-foreground/22">
+        <span className="flex flex-1 items-center justify-center py-3 font-mono text-[11px] text-faint">
           —
         </span>
       ) : null}
@@ -333,6 +336,8 @@ export function BoardSwimlanes({
   closedWindow,
   now,
   onShowAllClosed,
+  onSetClosedWindow,
+  onClearFilters,
   onOpen,
   applyDrop,
 }: BoardSwimlanesProps) {
@@ -460,12 +465,21 @@ export function BoardSwimlanes({
   ])
 
   if (!hasAny) {
+    const filtered =
+      search.trim() || priorities.length || ready || assignee || labels.length
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <span className="text-sm text-muted-foreground">
-          No beads match the filters
-        </span>
-      </div>
+      <EmptyBoard
+        beads={beads}
+        matches={
+          filtered
+            ? (b) => beadMatches(b, search, priorities, ready, assignee, labels)
+            : null
+        }
+        closedWindow={closedWindow}
+        now={now}
+        onSetClosedWindow={onSetClosedWindow}
+        onClearFilters={onClearFilters}
+      />
     )
   }
 
