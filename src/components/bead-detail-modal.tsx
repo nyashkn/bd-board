@@ -42,6 +42,7 @@ import { CreateBeadDialog } from '@/components/create-bead-dialog'
 import { useReadonly } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { BeadLinkButton } from '@/components/bead-link'
 import { InteractiveRow } from '@/components/ui/interactive-row'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -85,7 +86,6 @@ interface BeadDetailModalProps {
   bead: Bead | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onOpenBead: (bead: Bead) => void
   resolveBead: (id: string) => Bead | undefined
   onOpenKnowledge: (id: string) => void
 }
@@ -267,11 +267,9 @@ function CommentHelp({
 function LinkedBeadList({
   items,
   resolveBead,
-  onOpenBead,
 }: {
   items: { id: string; note?: string }[]
   resolveBead: (id: string) => Bead | undefined
-  onOpenBead: (bead: Bead) => void
 }) {
   return (
     <ul className="flex flex-col gap-1.5">
@@ -280,12 +278,7 @@ function LinkedBeadList({
         const column = target ? mapStatus(target.status).column : null
         return (
           <li key={`${id}:${note ?? ''}`}>
-            <InteractiveRow
-              disabled={!target}
-              onClick={() => {
-                if (target) onOpenBead(target)
-              }}
-            >
+            <InteractiveRow disabled={!target} beadId={id}>
               <span
                 className={cn(
                   'size-2 shrink-0 rounded-full',
@@ -338,22 +331,16 @@ function LinkGroup({
   label,
   items,
   resolveBead,
-  onOpenBead,
 }: {
   label: string
   items: { id: string; note?: string }[]
   resolveBead: (id: string) => Bead | undefined
-  onOpenBead: (bead: Bead) => void
 }) {
   if (items.length === 0) return null
   return (
     <div className="flex flex-col gap-1">
       <span className="px-2 text-[11.5px] text-faint">{label}</span>
-      <LinkedBeadList
-        items={items}
-        resolveBead={resolveBead}
-        onOpenBead={onOpenBead}
-      />
+      <LinkedBeadList items={items} resolveBead={resolveBead} />
     </div>
   )
 }
@@ -850,7 +837,6 @@ export function BeadDetailModal({
   bead,
   open,
   onOpenChange,
-  onOpenBead,
   resolveBead,
   onOpenKnowledge,
 }: BeadDetailModalProps) {
@@ -1055,9 +1041,9 @@ export function BeadDetailModal({
                   </DialogDescription>
 
                   {parentBead ? (
-                    <Button
+                    <BeadLinkButton
                       variant="link"
-                      onClick={() => onOpenBead(parentBead)}
+                      beadId={parentBead.id}
                       className="mt-2 h-auto w-fit max-w-full gap-1.5 p-0 text-xs text-muted-foreground"
                     >
                       <CornerUpLeft
@@ -1067,7 +1053,7 @@ export function BeadDetailModal({
                       {isEpic(parentBead) ? 'Epic' : 'Parent'}:{' '}
                       <span className="font-mono">{parentBead.id}</span>
                       <span className="truncate">{parentBead.title}</span>
-                    </Button>
+                    </BeadLinkButton>
                   ) : null}
                 </DialogHeader>
 
@@ -1104,7 +1090,6 @@ export function BeadDetailModal({
                                 id: child.id,
                               }))}
                               resolveBead={resolveBead}
-                              onOpenBead={onOpenBead}
                             />
                             {closedChildren.length > 0 ? (
                               <>
@@ -1134,7 +1119,6 @@ export function BeadDetailModal({
                                       id: child.id,
                                     }))}
                                     resolveBead={resolveBead}
-                                    onOpenBead={onOpenBead}
                                   />
                                 ) : null}
                               </>
@@ -1168,13 +1152,11 @@ export function BeadDetailModal({
                             label="Blocked by"
                             items={blockedBy.map((id) => ({ id }))}
                             resolveBead={resolveBead}
-                            onOpenBead={onOpenBead}
                           />
                           <LinkGroup
                             label="Blocking"
                             items={blocking.map((id) => ({ id }))}
                             resolveBead={resolveBead}
-                            onOpenBead={onOpenBead}
                           />
                           <LinkGroup
                             label="Related"
@@ -1186,7 +1168,6 @@ export function BeadDetailModal({
                                   : `${link.type} (reverse)`,
                             }))}
                             resolveBead={resolveBead}
-                            onOpenBead={onOpenBead}
                           />
                         </div>
                       </section>

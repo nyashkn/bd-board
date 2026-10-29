@@ -301,20 +301,19 @@ function BoardPage() {
   const selected = beadParam ? (beadsById.get(beadParam) ?? null) : null
   const modalOpen = beadParam !== undefined
 
-  // History index before the modal's first push: closing pops back to it so Back never reopens a closed bead.
+  // History index before the modal's first in-app push: closing pops back to it so Back never reopens a closed bead.
+  // A page loaded directly with ?bead= has nothing of ours to pop, so it closes by replacing the URL.
   const modalBase = useRef<number | null>(null)
+  const initialLoadHadBead = useRef(beadParam !== undefined)
+  const prevBead = useRef(beadParam)
   useEffect(() => {
-    if (beadParam === undefined) modalBase.current = null
+    if (beadParam === undefined) {
+      modalBase.current = null
+      initialLoadHadBead.current = false
+    } else if (prevBead.current === undefined && !initialLoadHadBead.current)
+      modalBase.current = historyIndex() - 1
+    prevBead.current = beadParam
   }, [beadParam])
-
-  function openBead(bead: Bead) {
-    if (beadParam === undefined && modalBase.current === null)
-      modalBase.current = historyIndex()
-    navigate({
-      to: '.',
-      search: (prev) => ({ ...prev, bead: bead.id, k: undefined }),
-    })
-  }
 
   function openKnowledge(id: string) {
     navigate({
@@ -457,7 +456,6 @@ function BoardPage() {
               since={since}
               change={change}
               beadsById={beadsById}
-              onOpen={openBead}
               onDismiss={dismissSince}
             />
           ) : null}
@@ -473,7 +471,6 @@ function BoardPage() {
             <ProjectKnowledgePanel
               project={project}
               beadsById={beadsById}
-              onOpenBead={openBead}
               onOpenKnowledge={openKnowledge}
               refetchInterval={feed.status === 'live' ? 60_000 : 12_000}
             />
@@ -488,7 +485,6 @@ function BoardPage() {
               onShowAllClosed={() => setClosedWindow('all')}
               onSetClosedWindow={setClosedWindow}
               onClearFilters={clearFilters}
-              onOpen={openBead}
             />
           ) : view === 'epic' || view === 'priority' ? (
             <BoardSwimlanes
@@ -507,7 +503,6 @@ function BoardPage() {
               onShowAllClosed={() => setClosedWindow('all')}
               onSetClosedWindow={setClosedWindow}
               onClearFilters={clearFilters}
-              onOpen={openBead}
               applyDrop={applyDrop}
             />
           ) : (
@@ -525,7 +520,6 @@ function BoardPage() {
                     column={c.key}
                     label={COLUMN_LABEL[c.key]}
                     beads={columns[c.key]}
-                    onOpen={openBead}
                     nested={nested}
                     total={c.key === 'closed' ? closedTotal : undefined}
                     onShowAll={() => setClosedWindow('all')}
@@ -534,9 +528,7 @@ function BoardPage() {
                 ))}
               </div>
               <DragOverlay>
-                {activeBead ? (
-                  <BeadCard bead={activeBead} onOpen={() => {}} overlay />
-                ) : null}
+                {activeBead ? <BeadCard bead={activeBead} overlay /> : null}
               </DragOverlay>
             </DndContext>
           )}
@@ -546,7 +538,6 @@ function BoardPage() {
             bead={selected}
             open={modalOpen}
             onOpenChange={setModalOpen}
-            onOpenBead={openBead}
             resolveBead={(id) => beadsById.get(id)}
             onOpenKnowledge={openKnowledge}
           />
@@ -556,7 +547,6 @@ function BoardPage() {
             open={knowledgeParam !== undefined}
             onOpenChange={setKnowledgeOpen}
             beadsById={beadsById}
-            onOpenBead={openBead}
             onOpenKnowledge={openKnowledge}
           />
           {readonly ? null : (

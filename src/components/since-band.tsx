@@ -56,13 +56,11 @@ export function SinceBand({
   since,
   change,
   beadsById,
-  onOpen,
   onDismiss,
 }: {
   since: number
   change: ChangeSet
   beadsById: Map<string, Bead>
-  onOpen: (bead: Bead) => void
   onDismiss: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -128,7 +126,7 @@ export function SinceBand({
                   variant="plain"
                   size="flush"
                   disabled={!bead}
-                  onClick={() => bead && onOpen(bead)}
+                  beadId={id}
                   className="flex min-w-0 items-center gap-2 rounded-[6px] px-1.5 py-1 text-[12.5px] hover:bg-card-hover"
                 >
                   <span

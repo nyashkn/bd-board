@@ -25,6 +25,7 @@ import {
   ClosedHiddenNote,
   StatusColumnHeader,
 } from '@/components/status-column-header'
+import { BeadLinkButton } from '@/components/bead-link'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { formatSpan } from '@/lib/age'
@@ -67,7 +68,6 @@ interface BoardSwimlanesProps {
   onShowAllClosed: () => void
   onSetClosedWindow: (w: ClosedWindow) => void
   onClearFilters: () => void
-  onOpen: (bead: Bead) => void
   applyDrop: (activeId: string, toColumn: BeadColumn) => void
 }
 
@@ -102,12 +102,10 @@ function groupByColumn(
 function LaneCell({
   column,
   beads,
-  onOpen,
   nested,
 }: {
   column: BeadColumn
   beads: Bead[]
-  onOpen: (bead: Bead) => void
   nested: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column })
@@ -123,7 +121,7 @@ function LaneCell({
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {beads.map((bead) => (
-          <BeadCard key={bead.id} bead={bead} onOpen={onOpen} nested={nested} />
+          <BeadCard key={bead.id} bead={bead} nested={nested} />
         ))}
       </SortableContext>
       {beads.length === 0 ? (
@@ -143,7 +141,6 @@ function SwimLane({
   nested,
   progress,
   scopedOnly = false,
-  onOpen,
   applyDrop,
   open,
   onToggle,
@@ -156,7 +153,6 @@ function SwimLane({
   progress?: { stats: DescendantStats; complete: boolean; took: string }
   /** Epic with no tasks yet: header only, nothing to lay out in columns. */
   scopedOnly?: boolean
-  onOpen: (bead: Bead) => void
   applyDrop: (activeId: string, toColumn: BeadColumn) => void
   open: boolean
   onToggle: () => void
@@ -222,9 +218,9 @@ function SwimLane({
         </Button>
 
         {epic ? (
-          <Button
+          <BeadLinkButton
             variant="link"
-            onClick={() => onOpen(epic)}
+            beadId={epic.id}
             className="h-auto min-w-0 gap-2 p-0"
           >
             <Layers
@@ -237,7 +233,7 @@ function SwimLane({
             <span className="truncate text-[13px] font-medium tracking-[-0.005em] text-foreground">
               {epic.title}
             </span>
-          </Button>
+          </BeadLinkButton>
         ) : (
           <span className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
             {title}
@@ -275,15 +271,12 @@ function SwimLane({
                 key={key}
                 column={key}
                 beads={byColumn[key]}
-                onOpen={onOpen}
                 nested={nested}
               />
             ))}
           </div>
           <DragOverlay>
-            {activeBead ? (
-              <BeadCard bead={activeBead} onOpen={() => {}} overlay />
-            ) : null}
+            {activeBead ? <BeadCard bead={activeBead} overlay /> : null}
           </DragOverlay>
         </DndContext>
       ) : null}
@@ -343,7 +336,6 @@ export function BoardSwimlanes({
   onShowAllClosed,
   onSetClosedWindow,
   onClearFilters,
-  onOpen,
   applyDrop,
 }: BoardSwimlanesProps) {
   const [collapsed, setCollapsed] = useState(() => readCollapsed(project))
@@ -536,7 +528,6 @@ export function BoardSwimlanes({
             nested={nested}
             progress={lane.progress}
             scopedOnly={lane.scopedOnly}
-            onOpen={onOpen}
             applyDrop={applyDrop}
             open={!collapsed.has(lane.key)}
             onToggle={() => toggleLane(lane.key)}

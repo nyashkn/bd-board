@@ -13,6 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { BeadLinkButton } from '@/components/bead-link'
 import { InteractiveRow } from '@/components/ui/interactive-row'
 import {
   Select,
@@ -45,7 +46,6 @@ type TypeFilter = KnowledgeType | 'all'
 interface ProjectKnowledgePanelProps {
   project: string
   beadsById: Map<string, Bead>
-  onOpenBead: (bead: Bead) => void
   onOpenKnowledge: (id: string) => void
   refetchInterval: number
 }
@@ -103,33 +103,22 @@ function TypeBadge({ type }: { type: KnowledgeType }) {
   )
 }
 
-function OpenBeadButton({
-  bead,
-  beadId,
-  onOpenBead,
-}: {
-  bead?: Bead
-  beadId: string
-  onOpenBead: (bead: Bead) => void
-}) {
+function OpenBeadButton({ bead, beadId }: { bead?: Bead; beadId: string }) {
   return (
-    <Button
-      type="button"
+    <BeadLinkButton
       variant="ghost"
       size="sm"
       className="h-6 px-1.5 font-mono text-[0.7rem] text-muted-foreground hover:text-foreground"
-      disabled={!bead}
-      onClick={() => bead && onOpenBead(bead)}
+      beadId={bead?.id}
     >
       {beadId}
-    </Button>
+    </BeadLinkButton>
   )
 }
 
 export function ProjectKnowledgePanel({
   project,
   beadsById,
-  onOpenBead,
   onOpenKnowledge,
   refetchInterval,
 }: ProjectKnowledgePanelProps) {
@@ -304,11 +293,7 @@ export function ProjectKnowledgePanel({
                               </p>
                             ) : null}
                           </InteractiveRow>
-                          <OpenBeadButton
-                            bead={bead}
-                            beadId={entry.bead_id}
-                            onOpenBead={onOpenBead}
-                          />
+                          <OpenBeadButton bead={bead} beadId={entry.bead_id} />
                         </div>
                       </li>
                     )
@@ -341,11 +326,7 @@ export function ProjectKnowledgePanel({
                         {comment.knowledge_type ? (
                           <TypeBadge type={comment.knowledge_type} />
                         ) : null}
-                        <OpenBeadButton
-                          bead={bead}
-                          beadId={comment.bead_id}
-                          onOpenBead={onOpenBead}
-                        />
+                        <OpenBeadButton bead={bead} beadId={comment.bead_id} />
                         {comment.author ? <span>{comment.author}</span> : null}
                         {comment.created_at ? (
                           <span>· {relativeDate(comment.created_at)}</span>

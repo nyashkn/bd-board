@@ -2,6 +2,7 @@ import * as React from 'react'
 import { cva } from 'class-variance-authority'
 import type { VariantProps } from 'class-variance-authority'
 
+import { BeadLink } from '@/components/bead-link'
 import { cn } from '@/lib/utils'
 
 const interactiveRowVariants = cva(
@@ -31,6 +32,8 @@ interface InteractiveRowProps
     React.ComponentProps<'button'>,
     VariantProps<typeof interactiveRowVariants> {
   active?: boolean
+  /** Render as a real link to `?bead=<id>` instead of a button (stays a button when disabled). */
+  beadId?: string
 }
 
 function InteractiveRow({
@@ -38,21 +41,28 @@ function InteractiveRow({
   variant,
   size,
   active = false,
+  beadId,
   ...props
 }: InteractiveRowProps) {
-  return (
-    <button
-      type="button"
-      data-slot="interactive-row"
-      data-active={active || undefined}
-      className={cn(
-        interactiveRowVariants({ variant, size }),
-        active && 'ring-ring/45 hover:bg-card hover:ring-ring/45',
-        className,
-      )}
-      {...props}
-    />
-  )
+  const common = {
+    'data-slot': 'interactive-row',
+    'data-active': active || undefined,
+    className: cn(
+      interactiveRowVariants({ variant, size }),
+      active && 'ring-ring/45 hover:bg-card hover:ring-ring/45',
+      className,
+    ),
+  }
+  if (beadId && !props.disabled) {
+    return (
+      <BeadLink
+        beadId={beadId}
+        {...common}
+        {...(props as React.ComponentProps<'a'>)}
+      />
+    )
+  }
+  return <button type="button" {...common} {...props} />
 }
 
 export { InteractiveRow, interactiveRowVariants }

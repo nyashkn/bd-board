@@ -20,6 +20,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { BeadLinkButton } from '@/components/bead-link'
 import { InteractiveRow } from '@/components/ui/interactive-row'
 import { getProjectKnowledgeFn } from '@/lib/server'
 import {
@@ -43,7 +44,6 @@ interface KnowledgeDetailModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   beadsById: Map<string, Bead>
-  onOpenBead: (bead: Bead) => void
   onOpenKnowledge: (id: string) => void
 }
 
@@ -118,7 +118,6 @@ export function KnowledgeDetailModal({
   open,
   onOpenChange,
   beadsById,
-  onOpenBead,
   onOpenKnowledge,
 }: KnowledgeDetailModalProps) {
   const query = useQuery({
@@ -189,17 +188,17 @@ export function KnowledgeDetailModal({
                       Copy raw
                     </Button>
                     {bead ? (
-                      <Button
+                      <BeadLinkButton
                         size="sm"
                         variant="ghost"
-                        onClick={() => onOpenBead(bead)}
+                        beadId={bead.id}
                       >
                         <CornerDownRight
                           className="size-3.5"
                           aria-hidden="true"
                         />
                         Open bead
-                      </Button>
+                      </BeadLinkButton>
                     ) : null}
                     <Button
                       size="sm"
@@ -219,10 +218,9 @@ export function KnowledgeDetailModal({
                   Knowledge entry recorded on {entry.bead_id}
                 </DialogDescription>
 
-                <Button
+                <BeadLinkButton
                   variant="link"
-                  onClick={() => bead && onOpenBead(bead)}
-                  disabled={!bead}
+                  beadId={bead?.id}
                   className="mt-2 h-auto w-fit max-w-full gap-1.5 p-0 text-xs text-muted-foreground"
                 >
                   <CornerDownRight
@@ -232,7 +230,7 @@ export function KnowledgeDetailModal({
                   Recorded on
                   <span className="font-mono">{entry.bead_id}</span>
                   <span className="truncate">{entry.bead_title}</span>
-                </Button>
+                </BeadLinkButton>
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-[22px] py-[22px]">
@@ -271,7 +269,7 @@ export function KnowledgeDetailModal({
                       </h3>
                     </div>
                     {bead && beadColumn !== null && beadPriority !== null ? (
-                      <InteractiveRow onClick={() => onOpenBead(bead)}>
+                      <InteractiveRow beadId={bead.id}>
                         <span
                           className={cn(
                             'size-2 shrink-0 rounded-full',
