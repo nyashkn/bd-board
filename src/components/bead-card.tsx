@@ -29,7 +29,6 @@ import type { Bead, BeadColumn } from '@/lib/types'
 
 interface BeadCardProps {
   bead: Bead
-  onOpen: (bead: Bead) => void
   overlay?: boolean
   nested?: boolean
 }
@@ -47,13 +46,7 @@ const STATUS_DOT_CLASS: Record<BeadColumn, string> = {
   closed: 'bg-status-closed',
 }
 
-function NestedChildren({
-  childBeads,
-  onOpen,
-}: {
-  childBeads: Bead[]
-  onOpen: (bead: Bead) => void
-}) {
+function NestedChildren({ childBeads }: { childBeads: Bead[] }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -82,7 +75,7 @@ function NestedChildren({
                 <InteractiveRow
                   variant="plain"
                   size="flush"
-                  onClick={() => onOpen(child)}
+                  beadId={child.id}
                   className="flex items-center gap-2 rounded-[6px] px-2 py-1.5 hover:bg-card-hover"
                 >
                   <span
@@ -141,7 +134,6 @@ function LinkStat({
 
 export function BeadCard({
   bead,
-  onOpen,
   overlay = false,
   nested = false,
 }: BeadCardProps) {
@@ -197,7 +189,7 @@ export function BeadCard({
         variant="plain"
         size="flush"
         data-bead-id={bead.id}
-        onClick={() => onOpen(bead)}
+        beadId={bead.id}
         className="flex cursor-pointer flex-col gap-[7px] rounded-[8px] px-[10px] py-[9px]"
       >
         <span className="flex items-center gap-1.5 pr-5">
@@ -302,7 +294,7 @@ export function BeadCard({
       </InteractiveRow>
 
       {nested && childBeads.length > 0 ? (
-        <NestedChildren childBeads={childBeads} onOpen={onOpen} />
+        <NestedChildren childBeads={childBeads} />
       ) : null}
     </div>
   )

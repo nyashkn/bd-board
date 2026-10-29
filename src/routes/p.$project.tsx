@@ -300,13 +300,6 @@ function BoardPage() {
   const selected = beadParam ? (beadsById.get(beadParam) ?? null) : null
   const modalOpen = beadParam !== undefined
 
-  function openBead(bead: Bead) {
-    navigate({
-      to: '.',
-      search: (prev) => ({ ...prev, bead: bead.id, k: undefined }),
-    })
-  }
-
   function openKnowledge(id: string) {
     navigate({
       to: '.',
@@ -431,7 +424,6 @@ function BoardPage() {
               since={since}
               change={change}
               beadsById={beadsById}
-              onOpen={openBead}
               onDismiss={dismissSince}
             />
           ) : null}
@@ -447,7 +439,6 @@ function BoardPage() {
             <ProjectKnowledgePanel
               project={project}
               beadsById={beadsById}
-              onOpenBead={openBead}
               onOpenKnowledge={openKnowledge}
               refetchInterval={feed.status === 'live' ? 60_000 : 12_000}
             />
@@ -460,7 +451,6 @@ function BoardPage() {
               now={now}
               matches={hierarchyMatches}
               onShowAllClosed={() => setClosedWindow('all')}
-              onOpen={openBead}
             />
           ) : view === 'epic' || view === 'priority' ? (
             <BoardSwimlanes
@@ -476,7 +466,6 @@ function BoardPage() {
               closedWindow={closedWindow}
               now={now}
               onShowAllClosed={() => setClosedWindow('all')}
-              onOpen={openBead}
               applyDrop={applyDrop}
             />
           ) : (
@@ -494,7 +483,6 @@ function BoardPage() {
                     column={c.key}
                     label={COLUMN_LABEL[c.key]}
                     beads={columns[c.key]}
-                    onOpen={openBead}
                     nested={nested}
                     total={c.key === 'closed' ? closedTotal : undefined}
                     onShowAll={() => setClosedWindow('all')}
@@ -503,9 +491,7 @@ function BoardPage() {
                 ))}
               </div>
               <DragOverlay>
-                {activeBead ? (
-                  <BeadCard bead={activeBead} onOpen={() => {}} overlay />
-                ) : null}
+                {activeBead ? <BeadCard bead={activeBead} overlay /> : null}
               </DragOverlay>
             </DndContext>
           )}
@@ -515,7 +501,6 @@ function BoardPage() {
             bead={selected}
             open={modalOpen}
             onOpenChange={setModalOpen}
-            onOpenBead={openBead}
             resolveBead={(id) => beadsById.get(id)}
             onOpenKnowledge={openKnowledge}
           />
@@ -525,7 +510,6 @@ function BoardPage() {
             open={knowledgeParam !== undefined}
             onOpenChange={setKnowledgeOpen}
             beadsById={beadsById}
-            onOpenBead={openBead}
             onOpenKnowledge={openKnowledge}
           />
           {readonly ? null : (

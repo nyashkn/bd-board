@@ -51,7 +51,6 @@ interface HierarchyViewProps {
   /** The Board's filters as one predicate; null when none is active. */
   matches: ((bead: Bead) => boolean) | null
   onShowAllClosed: () => void
-  onOpen: (bead: Bead) => void
 }
 
 // Shape and colour together, so the state survives grayscale.
@@ -74,7 +73,6 @@ function TreeNode({
   matched,
   now,
   onToggle,
-  onOpen,
 }: {
   bead: Bead
   depth: number
@@ -88,7 +86,6 @@ function TreeNode({
   matched?: Set<string>
   now: number
   onToggle: (id: string) => void
-  onOpen: (bead: Bead) => void
 }) {
   const children = useMemo(
     () => [...(childrenMap.get(bead.id) ?? [])].sort(compareHierarchy),
@@ -148,7 +145,7 @@ function TreeNode({
           variant="plain"
           size="flush"
           data-bead-id={bead.id}
-          onClick={() => onOpen(bead)}
+          beadId={bead.id}
           className="flex min-w-0 flex-1 items-center gap-2"
         >
           <Glyph.icon
@@ -272,7 +269,6 @@ function TreeNode({
               matched={matched}
               now={now}
               onToggle={onToggle}
-              onOpen={onOpen}
             />
           ))}
         </div>
@@ -288,7 +284,6 @@ export function HierarchyView({
   now,
   matches,
   onShowAllClosed,
-  onOpen,
 }: HierarchyViewProps) {
   const fullMap = useMemo(() => buildChildrenMap(beads), [beads])
   const { windowed, hiddenCount } = useMemo(() => {
@@ -385,7 +380,6 @@ export function HierarchyView({
               matched={filtered?.matched}
               now={now}
               onToggle={toggle}
-              onOpen={onOpen}
             />
           ))}
         </div>

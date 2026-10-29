@@ -17,7 +17,6 @@ interface KanbanColumnProps {
   column: BeadColumn
   label: string
   beads: Bead[]
-  onOpen: (bead: Bead) => void
   initialLimit?: number
   nested?: boolean
   /** Closed column only: how many closed beads exist before the recency window. */
@@ -31,7 +30,6 @@ export function KanbanColumn({
   column,
   label,
   beads,
-  onOpen,
   initialLimit = 40,
   nested = false,
   total,
@@ -88,12 +86,7 @@ export function KanbanColumn({
                 strategy={verticalListSortingStrategy}
               >
                 {visible.map((bead) => (
-                  <BeadCard
-                    key={bead.id}
-                    bead={bead}
-                    onOpen={onOpen}
-                    nested={nested}
-                  />
+                  <BeadCard key={bead.id} bead={bead} nested={nested} />
                 ))}
               </SortableContext>
 
