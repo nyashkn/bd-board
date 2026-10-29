@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -50,6 +50,7 @@ import {
   windowCutoff,
 } from '@/lib/closed-window'
 import { buildChildrenMap } from '@/lib/tree'
+import { closeSteps, historyIndex } from '@/lib/nav-context'
 import { toErrorMessage } from '@/lib/utils'
 import { useBeadFeed } from '@/hooks/use-bead-feed'
 import { useSinceLastSeen } from '@/hooks/use-since-last-seen'
@@ -300,7 +301,15 @@ function BoardPage() {
   const selected = beadParam ? (beadsById.get(beadParam) ?? null) : null
   const modalOpen = beadParam !== undefined
 
+  // History index before the modal's first push: closing pops back to it so Back never reopens a closed bead.
+  const modalBase = useRef<number | null>(null)
+  useEffect(() => {
+    if (beadParam === undefined) modalBase.current = null
+  }, [beadParam])
+
   function openBead(bead: Bead) {
+    if (beadParam === undefined && modalBase.current === null)
+      modalBase.current = historyIndex()
     navigate({
       to: '.',
       search: (prev) => ({ ...prev, bead: bead.id, k: undefined }),
@@ -328,8 +337,15 @@ function BoardPage() {
   }
 
   function setModalOpen(next: boolean) {
-    if (!next)
-      navigate({ to: '.', search: (prev) => ({ ...prev, bead: undefined }) })
+    if (next) return
+    const steps = closeSteps(modalBase.current, historyIndex())
+    if (steps > 0) window.history.go(-steps)
+    else
+      navigate({
+        to: '.',
+        replace: true,
+        search: (prev) => ({ ...prev, bead: undefined }),
+      })
   }
 
   async function applyDrop(activeId: string, toColumn: BeadColumn) {
@@ -464,6 +480,7 @@ function BoardPage() {
             />
           ) : view === 'epic' || view === 'priority' ? (
             <BoardSwimlanes
+              project={project}
               beads={beads}
               search={search}
               priorities={priorities}
