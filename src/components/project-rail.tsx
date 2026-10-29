@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from '@tanstack/react-router'
+import { Link, useParams, useSearch } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronsLeft,
@@ -29,6 +29,7 @@ import {
   setStoredSidebarCollapsed,
 } from '@/lib/sidebar-collapse'
 import { assignedCounts, summarizeBeads } from '@/lib/counts'
+import { carryToProject, quickFilterSearch } from '@/lib/nav-context'
 
 import type { LucideIcon } from 'lucide-react'
 
@@ -202,6 +203,10 @@ function RailLink({
 
 export function ProjectRail() {
   const { project } = useParams({ strict: false })
+  const currentSearch = useSearch({ strict: false })
+  // Rail links merge into the current view state instead of replacing it.
+  const quick = (patch: Record<string, unknown>) =>
+    quickFilterSearch(currentSearch, patch) as Record<string, string>
   const queryClient = useQueryClient()
   const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null)
   const [editingProject, setEditingProject] = useState<
@@ -337,6 +342,11 @@ export function ProjectRail() {
                 key={p.id}
                 to="/p/$project"
                 params={{ project: p.id }}
+                search={
+                  p.id === project
+                    ? undefined
+                    : (carryToProject(currentSearch) as Record<string, string>)
+                }
                 icon={Folder}
                 active={p.id === project}
                 collapsed={collapsed}
@@ -365,7 +375,7 @@ export function ProjectRail() {
               <RailLink
                 to="/p/$project"
                 params={{ project }}
-                search={{ ready: '1' }}
+                search={quick({ ready: '1' })}
                 dotClassName="bg-status-closed"
                 count={readyCount}
                 countTitle={`${readyCount} ready to start (bd ready)`}
@@ -375,7 +385,7 @@ export function ProjectRail() {
               <RailLink
                 to="/p/$project"
                 params={{ project }}
-                search={{ view: 'status' }}
+                search={quick({ view: 'status' })}
                 dotClassName="bg-status-blocked"
                 count={blockedCount}
                 countTitle={`${blockedCount} waiting on an open dependency (bd blocked)`}
@@ -387,7 +397,7 @@ export function ProjectRail() {
                   <Link
                     to="/p/$project"
                     params={{ project }}
-                    search={{ assignee: identity }}
+                    search={quick({ assignee: identity })}
                     title={`${mine.active} open, ${mine.closed} closed (${mine.total} assigned in all)`}
                     className="flex min-w-0 flex-1 items-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                   >

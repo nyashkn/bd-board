@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useScrollMemory } from '@/hooks/use-scroll-memory'
+import { readCollapsed, writeCollapsed } from '@/lib/view-state'
 import {
   DndContext,
   DragOverlay,
@@ -50,6 +52,7 @@ import type { Bead, BeadColumn } from '@/lib/types'
 export type SwimlaneGroup = 'epic' | 'priority'
 
 interface BoardSwimlanesProps {
+  project: string
   beads: Bead[]
   search: string
   priorities: number[]
@@ -142,7 +145,8 @@ function SwimLane({
   scopedOnly = false,
   onOpen,
   applyDrop,
-  defaultOpen = true,
+  open,
+  onToggle,
 }: {
   epic?: Bead
   title?: ReactNode
@@ -154,9 +158,9 @@ function SwimLane({
   scopedOnly?: boolean
   onOpen: (bead: Bead) => void
   applyDrop: (activeId: string, toColumn: BeadColumn) => void
-  defaultOpen?: boolean
+  open: boolean
+  onToggle: () => void
 }) {
-  const [open, setOpen] = useState(defaultOpen)
   const [activeBead, setActiveBead] = useState<Bead | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -206,9 +210,9 @@ function SwimLane({
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={() => setOpen((v) => !v)}
+          onClick={onToggle}
           aria-expanded={open}
-          aria-label={open ? 'Recolher faixa' : 'Expandir faixa'}
+          aria-label={open ? 'Collapse lane' : 'Expand lane'}
         >
           {open ? (
             <ChevronDown className="size-4" aria-hidden="true" />
@@ -324,6 +328,7 @@ interface Lane {
 }
 
 export function BoardSwimlanes({
+  project,
   beads,
   search,
   priorities,
@@ -341,6 +346,16 @@ export function BoardSwimlanes({
   onOpen,
   applyDrop,
 }: BoardSwimlanesProps) {
+  const [collapsed, setCollapsed] = useState(() => readCollapsed(project))
+  const scroll = useScrollMemory(project, 'board')
+  function toggleLane(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(key)) next.add(key)
+      writeCollapsed(project, next)
+      return next
+    })
+  }
   const { lanes, totals, epicTotals, closedTotal, hasAny } = useMemo(() => {
     const matches = (b: Bead) =>
       beadMatches(b, search, priorities, ready, assignee, labels)
@@ -484,7 +499,11 @@ export function BoardSwimlanes({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+    <div
+      ref={scroll.ref}
+      onScroll={scroll.onScroll}
+      className="min-h-0 flex-1 overflow-y-auto pb-2"
+    >
       <div className="sticky top-0 z-10 grid grid-cols-1 gap-3 bg-background/92 pt-3 pb-2.5 backdrop-blur-[8px] md:grid-cols-2 xl:grid-cols-4">
         {COLUMN_KEYS.map((key) => (
           <div key={key} className="flex min-w-0 flex-col gap-1">
@@ -519,6 +538,8 @@ export function BoardSwimlanes({
             scopedOnly={lane.scopedOnly}
             onOpen={onOpen}
             applyDrop={applyDrop}
+            open={!collapsed.has(lane.key)}
+            onToggle={() => toggleLane(lane.key)}
           />
         ))}
       </div>

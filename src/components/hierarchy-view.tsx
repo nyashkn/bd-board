@@ -39,6 +39,8 @@ import {
   writeExpanded,
 } from '@/lib/hierarchy'
 
+import { useScrollMemory } from '@/hooks/use-scroll-memory'
+
 import type { LucideIcon } from 'lucide-react'
 import type { ClosedWindow } from '@/lib/closed-window'
 import type { RowState } from '@/lib/hierarchy'
@@ -319,6 +321,7 @@ export function HierarchyView({
   )
 
   // Starts collapsed; the choice survives refresh, per project.
+  const scroll = useScrollMemory(project, 'hierarchy')
   const [expanded, setExpanded] = useState(() => readExpanded(project))
   useEffect(() => writeExpanded(project, expanded), [project, expanded])
   function toggle(id: string) {
@@ -330,7 +333,11 @@ export function HierarchyView({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pt-1 pb-4">
+    <div
+      ref={scroll.ref}
+      onScroll={scroll.onScroll}
+      className="min-h-0 flex-1 overflow-y-auto pt-1 pb-4"
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pb-1.5">
         {filtered ? (
           <span className="text-xs text-muted-foreground" role="status">

@@ -13,6 +13,8 @@ function ToggleGroup({
   return (
     <ToggleGroupPrimitive.Root
       data-slot="toggle-group"
+      // roving tabindex: the items are the one Tab stop, not the container too
+      tabIndex={-1}
       className={cn(
         'inline-flex items-center gap-0.5 rounded-md bg-muted/60 p-0.5',
         className,

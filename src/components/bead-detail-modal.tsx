@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
@@ -7,6 +7,7 @@ import {
   AlignLeft,
   AlertTriangle,
   Ban,
+  Bell,
   BookOpen,
   ChevronDown,
   ChevronRight,
@@ -21,6 +22,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Terminal,
   Trash2,
   Waypoints,
 } from 'lucide-react'
@@ -138,6 +140,65 @@ function labelsFromText(value: string): string[] {
     .split(',')
     .map((label) => label.trim())
     .filter(Boolean)
+}
+
+/** Header copy buttons (id, `bd show`, agent nudge); write-free, so they work in read-only projects too. */
+function CopyActions({ beadId }: { beadId: string }) {
+  const [copied, setCopied] = useState('')
+  useEffect(() => {
+    if (!copied) return
+    const t = setTimeout(() => setCopied(''), 1800)
+    return () => clearTimeout(t)
+  }, [copied])
+  const items = [
+    { label: 'id', text: beadId, title: 'Copy bead id' },
+    {
+      label: 'command',
+      text: `bd show ${beadId}`,
+      title: 'Copy bd show command',
+    },
+    {
+      label: 'nudge',
+      text: agentNudgeCommand(beadId),
+      title: 'Copy agent-deck nudge',
+    },
+  ]
+  return (
+    <div className="ml-auto flex shrink-0 items-center gap-1">
+      <span
+        role="status"
+        aria-live="polite"
+        className="min-w-0 text-[11px] text-muted-foreground"
+      >
+        {copied ? `Copied ${copied}` : ''}
+      </span>
+      {items.map((item) => (
+        <Button
+          key={item.label}
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="size-7"
+          aria-label={item.title}
+          title={item.title}
+          onClick={() =>
+            navigator.clipboard
+              .writeText(item.text)
+              .then(() => setCopied(item.label))
+              .catch(() => toast.error('Could not copy'))
+          }
+        >
+          {item.label === 'id' ? (
+            <Copy className="size-3.5" aria-hidden="true" />
+          ) : item.label === 'command' ? (
+            <Terminal className="size-3.5" aria-hidden="true" />
+          ) : (
+            <Bell className="size-3.5" aria-hidden="true" />
+          )}
+        </Button>
+      ))}
+    </div>
+  )
 }
 
 /** Under the comment box: how a comment reaches an agent, who it is posted as, and a nudge to copy. */
@@ -801,6 +862,12 @@ export function BeadDetailModal({
   const [subtaskOpen, setSubtaskOpen] = useState(false)
   const [closedOpen, setClosedOpen] = useState(false)
 
+  // Esc/close hands focus back to the card or row that opened the bead (the URL, not a trigger, opens it).
+  const lastId = useRef('')
+  const openRef = useRef(open)
+  openRef.current = open
+  if (bead) lastId.current = bead.id
+
   const detailQuery = useQuery({
     queryKey: ['bead', project, bead?.id],
     queryFn: () => getBeadDetailFn({ data: { project, id: bead!.id } }),
@@ -906,7 +973,18 @@ export function BeadDetailModal({
           onOpenChange(next)
         }}
       >
-        <DialogContent className="grid max-h-[86vh] w-[94vw] max-w-3xl grid-cols-1 gap-0 overflow-y-auto rounded-[14px] bg-background p-0 shadow-pop sm:max-w-3xl lg:max-w-[1080px] lg:grid-cols-[minmax(0,1fr)_268px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            if (openRef.current) return // switching to the edit/delete dialog
+            const el = document.querySelector<HTMLElement>(
+              `[data-bead-id="${CSS.escape(lastId.current)}"]`,
+            )
+            if (!el) return
+            event.preventDefault()
+            el.focus({ preventScroll: true })
+          }}
+          className="grid max-h-[86vh] w-[94vw] max-w-3xl grid-cols-1 gap-0 overflow-y-auto rounded-[14px] bg-background p-0 shadow-pop sm:max-w-3xl lg:max-w-[1080px] lg:grid-cols-[minmax(0,1fr)_268px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden"
+        >
           {bead ? (
             <>
               <div className="flex min-h-0 min-w-0 flex-col">
@@ -946,8 +1024,9 @@ export function BeadDetailModal({
                       </span>
                     ) : null}
 
+                    <CopyActions beadId={bead.id} />
                     {readonly ? null : (
-                      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <Button
                           size="sm"
                           variant="outline"
