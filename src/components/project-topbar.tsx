@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BookOpen, Columns3, ListTree } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { carrySearch } from '@/lib/nav-context'
 import { getProjects } from '@/lib/server'
 import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -58,7 +59,13 @@ export function ProjectTopbar() {
                   key={item.key}
                   to="/p/$project"
                   params={{ project }}
-                  search={{ tab: item.key }}
+                  search={(prev: Record<string, unknown>) =>
+                    carrySearch(prev, {
+                      tab: item.key,
+                      ready: prev.ready,
+                      assignee: prev.assignee,
+                    })
+                  }
                   role="tab"
                   aria-label={item.label}
                   title={item.label}
