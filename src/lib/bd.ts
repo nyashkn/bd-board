@@ -18,6 +18,7 @@ import type {
   ProjectKnowledgeEntry,
   RelatedBead,
 } from './types.ts'
+import { summarizeBeads } from './counts.ts'
 import { parseKnowledgeCommentText } from './knowledge.ts'
 import { loadRegistry } from './registry.ts'
 import { bdNotFoundMessage, classifyBdVersion } from './bd-errors.ts'
@@ -301,15 +302,7 @@ export function buildCountsFromGroups(
 
 async function counts(dir: string): Promise<ProjectCounts> {
   try {
-    const result = await bdJson<{
-      groups?: { group: string; count: number }[]
-    }>(dir, ['count', '--by-status', '--json'])
-    const base = buildCountsFromGroups(result.groups ?? [])
-    const blocked = await bdJson<Record<string, unknown>[]>(dir, [
-      'blocked',
-      '--json',
-    ]).catch(() => undefined)
-    return blocked ? applyBlockedToCounts(base, blocked) : base
+    return summarizeBeads(await listBeadsIn(dir))
   } catch {
     return {
       open: 0,
@@ -720,7 +713,10 @@ function mapKnowledgeEntry(
 }
 
 async function listBeads(projectId: string): Promise<Bead[]> {
-  const dir = await resolveDir(projectId)
+  return listBeadsIn(await resolveDir(projectId))
+}
+
+async function listBeadsIn(dir: string): Promise<Bead[]> {
   // blocked/ready are bd's own answer to "what waits" and "what can start"; a failure
   // (old bd) leaves them undefined and the UI falls back to status only.
   const optional = (args: string[]) =>

@@ -155,6 +155,11 @@ function Home() {
 function PageHeader({ projects }: { projects: Project[] | undefined }) {
   const count = projects?.length ?? 0
   const beads = projects?.reduce((sum, p) => sum + p.counts.total, 0) ?? 0
+  const active =
+    projects?.reduce(
+      (sum, p) => sum + (p.counts.active ?? p.counts.total),
+      0,
+    ) ?? 0
   const { handleOpenProject, handleInitProject } = useProjectActions()
 
   return (
@@ -167,7 +172,12 @@ function PageHeader({ projects }: { projects: Project[] | undefined }) {
           <p className="text-[13px] text-muted-foreground">
             {count} {count === 1 ? 'project' : 'projects'}
             <span className="px-1.5 text-muted-foreground/50">·</span>
-            {beads.toLocaleString('en-US')} {beads === 1 ? 'bead' : 'beads'}
+            {beads.toLocaleString('en-US')} {beads === 1 ? 'bead' : 'beads'} in
+            all
+            <span className="px-1.5 text-muted-foreground/50">·</span>
+            {active.toLocaleString('en-US')} open
+            <span className="px-1.5 text-muted-foreground/50">·</span>
+            {(beads - active).toLocaleString('en-US')} closed
           </p>
         ) : (
           <Skeleton className="h-4 w-40" />

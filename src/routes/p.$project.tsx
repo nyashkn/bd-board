@@ -327,6 +327,16 @@ function BoardPage() {
     })
   }
 
+  function clearFilters() {
+    patchBoardSearch({
+      q: undefined,
+      p: undefined,
+      ready: undefined,
+      assignee: undefined,
+      l: undefined,
+    })
+  }
+
   function setModalOpen(next: boolean) {
     if (!next)
       navigate({ to: '.', search: (prev) => ({ ...prev, bead: undefined }) })
@@ -460,6 +470,8 @@ function BoardPage() {
               now={now}
               matches={hierarchyMatches}
               onShowAllClosed={() => setClosedWindow('all')}
+              onSetClosedWindow={setClosedWindow}
+              onClearFilters={clearFilters}
               onOpen={openBead}
             />
           ) : view === 'epic' || view === 'priority' ? (
@@ -476,6 +488,8 @@ function BoardPage() {
               closedWindow={closedWindow}
               now={now}
               onShowAllClosed={() => setClosedWindow('all')}
+              onSetClosedWindow={setClosedWindow}
+              onClearFilters={clearFilters}
               onOpen={openBead}
               applyDrop={applyDrop}
             />

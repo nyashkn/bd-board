@@ -120,7 +120,12 @@ export interface ProjectCounts {
   blocked: number
   closed: number
   deferred: number
+  /** Every bead the board can open, closed included. */
   total: number
+  /** total minus closed; absent on error/zero placeholders. */
+  active?: number
+  /** What `bd ready` lists. */
+  ready?: number
 }
 
 export interface Project {

@@ -48,7 +48,7 @@ export function ThemeToggle() {
           value={key}
           aria-label={label}
           title={label}
-          className="px-2"
+          className="min-h-6 min-w-6 px-2"
         >
           <Icon className="size-3.5" aria-hidden="true" />
         </ToggleGroupItem>
