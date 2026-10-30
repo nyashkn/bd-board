@@ -13,7 +13,11 @@ import {
 } from '@/components/ui/select'
 import { useBdStatus } from '@/hooks/use-bd-status'
 import { useCopy } from '@/hooks/use-copy'
-import { buildMigrationPrompt, MIGRATION_OPTIONS } from '@/lib/migration-prompt'
+import {
+  buildMigrationPrompt,
+  MIGRATION_OPTIONS,
+  pathProblem,
+} from '@/lib/migration-prompt'
 import type { MigrationOption } from '@/lib/migration-prompt'
 import { probeDoltModeFn } from '@/lib/server'
 import type { Project } from '@/lib/types'
@@ -34,6 +38,7 @@ export function MigrationPromptSection({ project }: { project: Project }) {
     retry: false,
   })
   const reply = probe.data
+  const problem = pathProblem(project.dir)
   // An error (including explicit `sources`, which are not probed) means mode unknown: no entry point.
   if (!reply || 'error' in reply || reply.embedded !== true) return null
 
@@ -74,6 +79,8 @@ export function MigrationPromptSection({ project }: { project: Project }) {
         <Button
           variant="outline"
           onClick={() => copy(prompt())}
+          disabled={problem !== null}
+          title={problem ?? undefined}
           data-testid="copy-migration-prompt"
         >
           {copyState === 'copied' ? (
@@ -84,6 +91,7 @@ export function MigrationPromptSection({ project }: { project: Project }) {
           Copy prompt
         </Button>
       </div>
+      {problem && <p className="text-xs text-destructive">{problem}</p>}
       <span role="status" aria-live="polite" className="sr-only">
         {copyState === 'copied'
           ? 'Copied'
