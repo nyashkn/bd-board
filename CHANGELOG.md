@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0](https://github.com/nyashkn/bd-board/compare/v0.1.1...v0.2.0) (2026-10-30)
 
-This release adds a Cmd/Ctrl+K command palette, light and dark themes, read-only projects, bead artifacts and opt-in performance monitoring. Blocked and Ready now match what `bd` reports, and the layout no longer overflows on narrow windows. Most of the work landed as direct merges; the three pull requests, [#1](https://github.com/nyashkn/bd-board/pull/1), [#4](https://github.com/nyashkn/bd-board/pull/4) and [#5](https://github.com/nyashkn/bd-board/pull/5), are all release automation.
+This release adds a Cmd/Ctrl+K command palette, light and dark themes, read-only projects, bead artifacts and opt-in performance monitoring. Blocked and Ready now match what `bd` reports, and the layout no longer overflows on narrow windows. Most of the work landed as direct merges; the four pull requests, [#1](https://github.com/nyashkn/bd-board/pull/1), [#4](https://github.com/nyashkn/bd-board/pull/4), [#5](https://github.com/nyashkn/bd-board/pull/5) and [#6](https://github.com/nyashkn/bd-board/pull/6), are all release automation.
 
 ### What's New
 
@@ -65,36 +65,36 @@ The app can send real-user monitoring data to an OpenObserve instance. It is off
 
 #### Release automation
 
-Releases now go through a release-please Release PR with a version check, and the release notes are written by Claude. release-please left the version in `Cargo.lock` unchanged, so the release-notes workflow now sets it on the Release PR, and a follow-up fixed that sync step.
+Releases now go through a release-please Release PR with a version check, and the release notes are written by Claude. release-please left the version in `Cargo.lock` unchanged, so the release-notes workflow now sets it on the Release PR, and a follow-up fixed that sync step. The workflow also runs prettier on the generated `CHANGELOG.md`, so the Release PR passes `pnpm check`.
 
 - [#1](https://github.com/nyashkn/bd-board/pull/1)
 - [#4](https://github.com/nyashkn/bd-board/pull/4)
 - [#5](https://github.com/nyashkn/bd-board/pull/5)
+- [#6](https://github.com/nyashkn/bd-board/pull/6)
 
 ### Fixes
 
-* **Bead edits from the web:** the modal's `{ project, id, update }` request was rejected with "No bead updates provided".
-* **Horizontal overflow:** project cards, the Projects header, stat grids and topbar tabs now fit narrow windows, which collapse tabs to icons below 900px. Long words, URLs, code blocks and tables wrap or scroll inside their own block.
-* **Bead modal:** the whole dialog scrolls below the `lg` breakpoint, and long titles and comments wrap.
-* **Since-you-last-looked:** the last-seen time is no longer rewritten when a view unmounts, which happened in StrictMode and on in-app navigation.
+- **Bead edits from the web:** the modal's `{ project, id, update }` request was rejected with "No bead updates provided".
+- **Horizontal overflow:** project cards, the Projects header, stat grids and topbar tabs now fit narrow windows, which collapse tabs to icons below 900px. Long words, URLs, code blocks and tables wrap or scroll inside their own block.
+- **Bead modal:** the whole dialog scrolls below the `lg` breakpoint, and long titles and comments wrap.
+- **Since-you-last-looked:** the last-seen time is no longer rewritten when a view unmounts, which happened in StrictMode and on in-app navigation.
 
 ### Smaller changes
 
-* **Closed-window note:** it is now a button that shows a date.
-* **Sidebar:** below 768px it is always the icon strip.
-* **Board toolbar:** clearer labels ("Group", "Filter: priority", "Sort: Priority"). Only the 8 most used label chips show, with the rest behind "+N more".
-* **Comment author:** comments pass `--actor` only when `BD_BOARD_AUTHOR` is set.
-* **Docs:** README has a "For agents" section, and `.env.example` no longer lists the removed `BD_ROOTS`.
+- **Closed-window note:** it is now a button that shows a date.
+- **Sidebar:** below 768px it is always the icon strip.
+- **Board toolbar:** clearer labels ("Group", "Filter: priority", "Sort: Priority"). Only the 8 most used label chips show, with the rest behind "+N more".
+- **Comment author:** comments pass `--actor` only when `BD_BOARD_AUTHOR` is set.
 
 ### Missed recent releases
 
 <details>
 <summary>Previous versions</summary>
 
-| Version | Highlights |
-| --- | --- |
+| Version                                                          | Highlights                                                                                                                                |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | [0.1.1](https://github.com/nyashkn/bd-board/releases/tag/v0.1.1) | TanStack Start and Router upgrade clearing three critical XSS advisories, no more "Repair Project" dialog in the browser, README demo GIF |
-| [0.1.0](https://github.com/nyashkn/bd-board/releases/tag/v0.1.0) | Live updates through `bd events tail --follow`, bd 1.3.0 now required, feed smoke test in CI, project registry loads in web builds |
+| [0.1.0](https://github.com/nyashkn/bd-board/releases/tag/v0.1.0) | Live updates through `bd events tail --follow`, bd 1.3.0 now required, feed smoke test in CI, project registry loads in web builds        |
 
 </details>
 
