@@ -2,7 +2,8 @@
 //! error text, and JSON helpers.
 
 use super::queue::{
-    is_read_call, output_with_timeout, queue_for, timeout_from_env, Queues, TIMEOUT_GRACE,
+    env_concurrency, is_read_call, output_with_timeout, queue_for, timeout_from_env, Priority,
+    Queues, TIMEOUT_GRACE,
 };
 use crate::registry::{self, RegistryEntry};
 use serde_json::Value;
@@ -230,16 +231,43 @@ pub(crate) fn exec_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
     exec_bd_with(dir, args, timeout_from_env())
 }
 
+static QUEUES: OnceLock<Queues<BdCapture>> = OnceLock::new();
+
 pub(crate) fn exec_bd_with(
     dir: &Path,
     args: &[&str],
     timeout: std::time::Duration,
 ) -> Result<BdCapture, String> {
-    static QUEUES: OnceLock<Queues<BdCapture>> = OnceLock::new();
+    exec_bd_prio(dir, args, timeout, Priority::User)
+}
+
+/// Like `exec_bd_with`; interval polls and the probe pass `Priority::Background` so user
+/// calls go ahead of them in the project's queue.
+pub(crate) fn exec_bd_prio(
+    dir: &Path,
+    args: &[&str],
+    timeout: std::time::Duration,
+    priority: Priority,
+) -> Result<BdCapture, String> {
     let queue = queue_for(&QUEUES, &dir.to_string_lossy());
     // Reads with the same args share a process; mutations always run.
     let key = is_read_call(args).then(|| format!("{:?}", args));
-    queue.run(key.as_deref(), || spawn_bd(dir, args, timeout))
+    queue.run_prio(key.as_deref(), priority, || spawn_bd(dir, args, timeout))
+}
+
+/// Apply the probe's verdict to `dir`'s queue (4 on a reachable Dolt server, 1 embedded),
+/// unless BD_BOARD_BD_CONCURRENCY pins it.
+pub(crate) fn apply_probe_concurrency(
+    dir: &Path,
+    embedded: Option<bool>,
+    connection_ok: Option<bool>,
+) {
+    if env_concurrency().is_some() {
+        return;
+    }
+    if let Some(n) = super::queue::concurrency_for_probe(embedded, connection_ok) {
+        queue_for(&QUEUES, &dir.to_string_lossy()).set_limit(n);
+    }
 }
 
 pub(crate) fn timeout_message(args: &[&str], timeout: std::time::Duration) -> String {
@@ -254,18 +282,42 @@ pub(crate) fn timeout_message(args: &[&str], timeout: std::time::Duration) -> St
     msg
 }
 
+/// Why a candidate that started could not be run to a result. A write whose output pipes
+/// outlived bd (TimedOut) is an unknown outcome and says so, like a timeout does.
+pub(crate) fn failed_to_run_message(
+    candidate: &str,
+    err: &std::io::Error,
+    args: &[&str],
+) -> String {
+    let mut msg = format!("failed to run {}: {}", candidate, err);
+    if err.kind() == std::io::ErrorKind::TimedOut && !is_read_call(args) {
+        msg.push_str("; the command may have been applied, so check before retrying");
+    }
+    msg
+}
+
 pub(crate) fn spawn_bd(
     dir: &Path,
     args: &[&str],
     timeout: std::time::Duration,
 ) -> Result<BdCapture, String> {
     let BdLaunch { candidates, env } = launch_for(dir)?;
+    spawn_candidates(dir, args, timeout, TIMEOUT_GRACE, &candidates, &env)
+}
 
-    for candidate in &candidates {
+fn spawn_candidates(
+    dir: &Path,
+    args: &[&str],
+    timeout: std::time::Duration,
+    grace: std::time::Duration,
+    candidates: &[String],
+    env: &[(String, String)],
+) -> Result<BdCapture, String> {
+    for candidate in candidates {
         let mut cmd = Command::new(candidate);
         cmd.current_dir(dir).args(args).envs(env.iter().cloned());
 
-        match output_with_timeout(&mut cmd, timeout, TIMEOUT_GRACE) {
+        match output_with_timeout(&mut cmd, timeout, grace) {
             Ok(Err(())) => return Err(timeout_message(args, timeout)),
             Ok(Ok(output)) => {
                 if output.stdout.len() > MAX_BUFFER {
@@ -283,17 +335,21 @@ pub(crate) fn spawn_bd(
                 continue;
             }
             Err(err) => {
-                return Err(format!("failed to run {}: {}", candidate, err));
+                return Err(failed_to_run_message(candidate, &err, args));
             }
         }
     }
 
     // Exhausted all candidates
-    Err(bd_not_found_message(&candidates))
+    Err(bd_not_found_message(candidates))
 }
 
 pub(crate) fn run_bd(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let cap = exec_bd(dir, args)?;
+    run_bd_prio(dir, args, Priority::User)
+}
+
+pub(crate) fn run_bd_prio(dir: &Path, args: &[&str], priority: Priority) -> Result<String, String> {
+    let cap = exec_bd_prio(dir, args, timeout_from_env(), priority)?;
     if cap.status.success() {
         Ok(cap.stdout)
     } else {
@@ -302,7 +358,11 @@ pub(crate) fn run_bd(dir: &Path, args: &[&str]) -> Result<String, String> {
 }
 
 pub(crate) fn bd_json(dir: &Path, args: &[&str]) -> Result<Value, String> {
-    let raw = run_bd(dir, args)?;
+    bd_json_prio(dir, args, Priority::User)
+}
+
+pub(crate) fn bd_json_prio(dir: &Path, args: &[&str], priority: Priority) -> Result<Value, String> {
+    let raw = run_bd_prio(dir, args, priority)?;
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return Ok(Value::Array(Vec::new()));
@@ -320,7 +380,15 @@ pub(crate) fn bd_json_lines(dir: &Path, args: &[&str]) -> Result<Vec<Value>, Str
 }
 
 pub(crate) fn bd_json_array(dir: &Path, args: &[&str]) -> Option<Vec<Value>> {
-    bd_json(dir, args).ok()?.as_array().cloned()
+    bd_json_array_prio(dir, args, Priority::User)
+}
+
+pub(crate) fn bd_json_array_prio(
+    dir: &Path,
+    args: &[&str],
+    priority: Priority,
+) -> Option<Vec<Value>> {
+    bd_json_prio(dir, args, priority).ok()?.as_array().cloned()
 }
 
 pub(crate) fn run_bd_mut(dir: &Path, args: &[String]) -> Result<String, String> {
@@ -337,6 +405,34 @@ mod tests {
         let t = std::time::Duration::from_secs(60);
         assert!(!super::timeout_message(&["show", "x"], t).contains("may have been applied"));
         assert!(super::timeout_message(&["update", "x"], t).contains("may have been applied"));
+    }
+
+    /// `sh <subcommand> x` run in a dir holding scripts named like bd subcommands, each of
+    /// which exits at once while a helper keeps the output pipes open.
+    #[cfg(unix)]
+    #[test]
+    fn a_write_whose_pipes_outlive_bd_still_warns_it_may_have_been_applied() {
+        let d = std::env::temp_dir().join(format!("bd-exec-stray-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        for name in ["show", "update"] {
+            std::fs::write(d.join(name), "sleep 30 &\nexit 0\n").unwrap();
+        }
+        let run = |sub: &str| {
+            spawn_candidates(
+                &d,
+                &[sub, "x"],
+                std::time::Duration::from_secs(5),
+                std::time::Duration::from_millis(200),
+                &["/bin/sh".to_string()],
+                &[],
+            )
+            .err()
+            .expect("the stray helper should fail the call")
+        };
+        let write = run("update");
+        assert!(write.starts_with("failed to run /bin/sh"), "{write}");
+        assert!(write.contains("may have been applied"), "{write}");
+        assert!(!run("show").contains("may have been applied"));
     }
 
     #[test]

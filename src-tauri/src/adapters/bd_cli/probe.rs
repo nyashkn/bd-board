@@ -1,13 +1,21 @@
 //! `bd where` (registry probe) and `bd dolt show` (connector selection probe).
 
-use super::exec::{bd_error_message, exec_bd_with, run_bd};
+use super::exec::{apply_probe_concurrency, bd_error_message, exec_bd_prio, run_bd_prio};
+use super::queue::Priority;
 use crate::domain::{BeadsLocation, DoltProbe};
 use crate::registry;
 use serde_json::Value;
 use std::path::Path;
 
 pub(crate) fn probe_beads_location(dir: &Path) -> Result<BeadsLocation, String> {
-    let raw = run_bd(dir, &["where", "--json"])?;
+    probe_beads_location_prio(dir, Priority::User)
+}
+
+pub(crate) fn probe_beads_location_prio(
+    dir: &Path,
+    priority: Priority,
+) -> Result<BeadsLocation, String> {
+    let raw = run_bd_prio(dir, &["where", "--json"], priority)?;
     let value: Value = serde_json::from_str(&raw)
         .map_err(|err| format!("failed to parse bd where output: {err}"))?;
 
@@ -83,12 +91,20 @@ pub(crate) fn probe_dolt_mode(project_id: &str) -> DoltProbe {
     if !sources.is_empty() {
         return DoltProbe::error("not probed: explicit sources", sources);
     }
-    match exec_bd_with(
-        Path::new(&entry.path),
+    let dir = Path::new(&entry.path);
+    match exec_bd_prio(
+        dir,
         &["dolt", "show", "--json"],
         DOLT_PROBE_TIMEOUT,
+        Priority::Background,
     ) {
-        Ok(cap) if cap.status.success() => parse_dolt_show(&cap.stdout, sources),
+        Ok(cap) if cap.status.success() => {
+            let probe = parse_dolt_show(&cap.stdout, sources);
+            if probe.error.is_none() {
+                apply_probe_concurrency(dir, probe.embedded, probe.connection_ok);
+            }
+            probe
+        }
         Ok(cap) => DoltProbe::error(
             bd_error_message(&cap.stdout, &cap.stderr, &cap.status),
             sources,

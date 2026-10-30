@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BdQueue, isReadCall } from './bd-queue.ts'
+import {
+  applyProbeConcurrency,
+  BdQueue,
+  concurrencyForProbe,
+  execFileGroup,
+  isReadCall,
+  queueFor,
+} from './bd-queue.ts'
 
 const gate = () => {
   let open!: () => void
@@ -94,6 +101,123 @@ describe('BdQueue', () => {
     expect(await q.run(null, async () => 'ok')).toBe('ok')
   })
 
+  it('runs user calls before background ones, FIFO inside each lane', async () => {
+    const q = new BdQueue(1)
+    const log: string[] = []
+    const g = gate()
+    const hold = q.run(null, () => g.p)
+    const job = (name: string, priority: 'user' | 'background') =>
+      q.run(null, async () => void log.push(name), priority)
+    const all = [
+      job('bg1', 'background'),
+      job('bg2', 'background'),
+      job('u1', 'user'),
+      job('u2', 'user'),
+    ]
+    g.open()
+    await Promise.all([hold, ...all])
+    expect(log).toEqual(['u1', 'u2', 'bg1', 'bg2'])
+  })
+
+  it('defaults to user priority and never preempts a running call', async () => {
+    const q = new BdQueue(1)
+    const log: string[] = []
+    const g = gate()
+    const running = q.run(
+      null,
+      async () => {
+        log.push('bg-running')
+        await g.p
+      },
+      'background',
+    )
+    const user = q.run(null, async () => void log.push('user'))
+    await tick()
+    expect(log).toEqual(['bg-running'])
+    g.open()
+    await Promise.all([running, user])
+    expect(log).toEqual(['bg-running', 'user'])
+  })
+
+  it('moves a queued background read up when a user asks for the same one', async () => {
+    const q = new BdQueue(1)
+    const log: string[] = []
+    const g = gate()
+    const hold = q.run(null, () => g.p)
+    const other = q.run(
+      null,
+      async () => void log.push('other-bg'),
+      'background',
+    )
+    const poll = q.run('k', async () => (log.push('k'), 1), 'background')
+    const user = q.run('k', async () => 2, 'user') // joins the poll's call
+    g.open()
+    expect(await Promise.all([hold, other, poll, user])).toEqual([
+      undefined,
+      undefined,
+      1,
+      1,
+    ])
+    expect(log).toEqual(['k', 'other-bg'])
+  })
+
+  it('raising the bound starts queued calls at once', async () => {
+    const q = new BdQueue(1)
+    let running = 0
+    let peak = 0
+    const g = gate()
+    const job = () =>
+      q.run(null, async () => {
+        peak = Math.max(peak, ++running)
+        await g.p
+        running--
+      })
+    const all = [job(), job(), job(), job()]
+    await tick()
+    expect(running).toBe(1)
+    q.setConcurrency(4)
+    await tick()
+    expect(running).toBe(4)
+    g.open()
+    await Promise.all(all)
+    expect(peak).toBe(4)
+  })
+
+  it('picks 4 for a reachable Dolt server and 1 for embedded', () => {
+    expect(concurrencyForProbe({ embedded: false, connectionOk: true })).toBe(4)
+    expect(concurrencyForProbe({ embedded: true })).toBe(1)
+    expect(concurrencyForProbe({ embedded: false, connectionOk: false })).toBe(
+      undefined,
+    )
+    expect(concurrencyForProbe({ embedded: false })).toBe(undefined)
+  })
+
+  it('applies the probe to the project queue unless the env pins the limit', async () => {
+    const peakFor = async (dir: string) => {
+      let running = 0
+      let peak = 0
+      const g = gate()
+      const all = [1, 2, 3, 4, 5].map(() =>
+        queueFor(dir).run(null, async () => {
+          peak = Math.max(peak, ++running)
+          await g.p
+          running--
+        }),
+      )
+      await tick()
+      g.open()
+      await Promise.all(all)
+      return peak
+    }
+    const server = { embedded: false, connectionOk: true }
+    applyProbeConcurrency('/p/server', server, {})
+    expect(await peakFor('/p/server')).toBe(4)
+    applyProbeConcurrency('/p/pinned', server, { BD_BOARD_BD_CONCURRENCY: '2' })
+    expect(await peakFor('/p/pinned')).toBe(1) // env is applied by queueFor, not the probe
+    applyProbeConcurrency('/p/embedded', { embedded: true }, {})
+    expect(await peakFor('/p/embedded')).toBe(1)
+  })
+
   it('classifies read subcommands', () => {
     expect(isReadCall(['show', 'x', '--json'])).toBe(true)
     expect(isReadCall(['update', 'x'])).toBe(false)
@@ -112,6 +236,60 @@ async function fakeBd(script: string | ((dir: string) => string)) {
   vi.stubEnv('BD_BIN', fake)
   return dir
 }
+
+describe('execFileGroup', () => {
+  const run = (script: string, maxBuffer: number) =>
+    execFileGroup('sh', ['-c', script], { maxBuffer, timeout: 5000 })
+
+  it('counts maxBuffer per stream, not stdout plus stderr', async () => {
+    const out = await run('head -c 80 /dev/zero; head -c 80 /dev/zero >&2', 100)
+    expect([out.stdout.length, out.stderr.length]).toEqual([80, 80])
+    await expect(run('head -c 150 /dev/zero >&2', 100)).rejects.toThrow(
+      /maxBuffer/,
+    )
+  })
+
+  it('reports a kill by signal as code null plus the signal', async () => {
+    await expect(run('kill -9 $$', 100)).rejects.toMatchObject({
+      code: null,
+      signal: 'SIGKILL',
+    })
+    await expect(run('exit 3', 100)).rejects.toMatchObject({
+      code: 3,
+      signal: null,
+    })
+  })
+
+  it('forwards SIGINT to live groups, so Ctrl-C in a dev terminal reaches bd', async () => {
+    const { mkdtempSync, readFileSync, existsSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { spawn } = await import('node:child_process')
+    const dir = mkdtempSync(`${tmpdir()}/bdq-sig-`)
+    const mod = new URL('./bd-queue.ts', import.meta.url).href
+    const host = spawn(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `import { execFileGroup } from ${JSON.stringify(mod)}
+         execFileGroup('sh', ['-c', 'echo $$ > ${dir}/pid; sleep 30'], { maxBuffer: 1e6, timeout: 60000 }).catch(() => {})`,
+      ],
+      { stdio: 'ignore' },
+    )
+    try {
+      for (let i = 0; i < 200 && !existsSync(`${dir}/pid`); i++)
+        await new Promise((r) => setTimeout(r, 25))
+      const pid = Number(readFileSync(`${dir}/pid`, 'utf8').trim())
+      const exited = new Promise<void>((r) => host.once('exit', () => r()))
+      host.kill('SIGINT')
+      await exited
+      await new Promise((r) => setTimeout(r, 300))
+      expect(() => process.kill(pid, 0)).toThrow() // the bd group is gone too
+    } finally {
+      host.kill('SIGKILL')
+    }
+  }, 10_000)
+})
 
 describe('bdExec timeout', () => {
   it('stops a hung bd and says so', async () => {
@@ -190,6 +368,21 @@ describe('bdExec timeout', () => {
       )
       await expect(bdExec(dir, ['show', 'x'])).rejects.not.toThrow(
         /may have been applied/,
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('reports a bd killed by a signal as that, not as exit 1', async () => {
+    const { bdExec } = await import('./bd.ts')
+    const dir = await fakeBd('kill -9 $$')
+    try {
+      await expect(bdExec(dir, ['show', 'x'])).rejects.toThrow(
+        /killed by SIGKILL/,
+      )
+      await expect(bdExec(dir, ['update', 'x'])).rejects.toThrow(
+        /killed by SIGKILL.*may have been applied/,
       )
     } finally {
       vi.unstubAllEnvs()

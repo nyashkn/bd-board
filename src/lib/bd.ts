@@ -22,6 +22,7 @@ import { summarizeBeads } from './counts.ts'
 import { parseKnowledgeCommentText } from './knowledge.ts'
 import { loadRegistry } from './registry.ts'
 import {
+  applyProbeConcurrency,
   BdBufferError,
   BdTimeoutError,
   execFileGroup,
@@ -29,6 +30,7 @@ import {
   queued,
   timeoutFromEnv,
 } from './bd-queue.ts'
+import type { Priority } from './bd-queue.ts'
 import { parseDoltShow } from './connectors/select.ts'
 import type { ProbeReply } from './connectors/select.ts'
 import { bdNotFoundMessage, classifyBdVersion } from './bd-errors.ts'
@@ -202,13 +204,17 @@ type BdResult = {
   stderr: string
 }
 
-/** One bd process per project at a time; identical in-flight reads share a process. */
+/**
+ * One bd process per project at a time (more on a Dolt server); identical in-flight reads
+ * share a process. Interval polls pass 'background' so user calls go ahead of them.
+ */
 export function bdExec(
   dir: string,
   args: string[],
   timeout = timeoutFromEnv(process.env),
+  priority: Priority = 'user',
 ): Promise<BdResult> {
-  return queued(dir, args, () => spawnBd(dir, args, timeout))
+  return queued(dir, args, () => spawnBd(dir, args, timeout), priority)
 }
 
 async function spawnBd(
@@ -230,7 +236,8 @@ async function spawnBd(
       return { bin: candidate, env, code: 0, stdout, stderr }
     } catch (err: unknown) {
       const error = err as {
-        code?: string | number
+        code?: string | number | null
+        signal?: string | null
         stdout?: string
         stderr?: string
       }
@@ -245,6 +252,14 @@ async function spawnBd(
       }
       if (err instanceof BdBufferError) {
         throw new Error('bd output exceeded buffer')
+      }
+      if (error.signal) {
+        throw new Error(
+          `bd ${args[0] ?? ''} killed by ${error.signal}` +
+            (isReadCall(args)
+              ? ''
+              : '; the command may have been applied, so check before retrying'),
+        )
       }
       if (error.code === 'ENOENT') {
         continue
@@ -268,16 +283,24 @@ async function spawnBd(
   throw new Error(bdNotFoundMessage(candidates, process.env['BD_BIN']))
 }
 
-async function bdRaw(dir: string, args: string[]): Promise<string> {
-  const result = await bdExec(dir, args)
+async function bdRaw(
+  dir: string,
+  args: string[],
+  priority: Priority = 'user',
+): Promise<string> {
+  const result = await bdExec(dir, args, undefined, priority)
   if (result.code !== 0) {
     throw new Error(bdErrorMessage(result.stdout, result.stderr, result.code))
   }
   return result.stdout
 }
 
-async function bdJson<T>(dir: string, args: string[]): Promise<T> {
-  const raw = await bdRaw(dir, args)
+async function bdJson<T>(
+  dir: string,
+  args: string[],
+  priority: Priority = 'user',
+): Promise<T> {
+  const raw = await bdRaw(dir, args, priority)
   const trimmed = raw.trim()
   if (!trimmed) return [] as unknown as T
   return JSON.parse(trimmed) as T
@@ -334,9 +357,12 @@ export function buildCountsFromGroups(
   return buildCounts(groups.map((g) => ({ status: g.group, c: g.count })))
 }
 
-async function counts(dir: string): Promise<ProjectCounts> {
+async function counts(
+  dir: string,
+  priority: Priority = 'user',
+): Promise<ProjectCounts> {
   try {
-    return summarizeBeads(await listBeadsIn(dir))
+    return summarizeBeads(await listBeadsIn(dir, priority))
   } catch {
     return {
       open: 0,
@@ -395,7 +421,7 @@ async function discoverProjects(): Promise<Project[]> {
         path?: string
         database_path?: string
         prefix?: string
-      }>(entry.path, ['where', '--json'])
+      }>(entry.path, ['where', '--json'], 'background')
 
       if (!probeResult.path) {
         results.push({
@@ -423,7 +449,7 @@ async function discoverProjects(): Promise<Project[]> {
       const expectedBeads = path.join(entry.path, '.beads')
       const external = probeResult.path !== expectedBeads
 
-      const projectCounts = await counts(entry.path)
+      const projectCounts = await counts(entry.path, 'background')
       results.push({
         id: entry.id,
         ...policy,
@@ -750,13 +776,22 @@ async function listBeads(projectId: string): Promise<Bead[]> {
   return listBeadsIn(await resolveDir(projectId))
 }
 
-async function listBeadsIn(dir: string): Promise<Bead[]> {
+async function listBeadsIn(
+  dir: string,
+  priority: Priority = 'user',
+): Promise<Bead[]> {
   // blocked/ready are bd's own answer to "what waits" and "what can start"; a failure
   // (old bd) leaves them undefined and the UI falls back to status only.
   const optional = (args: string[]) =>
-    bdJson<Record<string, unknown>[]>(dir, args).catch(() => undefined)
+    bdJson<Record<string, unknown>[]>(dir, args, priority).catch(
+      () => undefined,
+    )
   const [raw, blocked, ready] = await Promise.all([
-    bdJson<Record<string, unknown>[]>(dir, ['list', '--all', '--json']),
+    bdJson<Record<string, unknown>[]>(
+      dir,
+      ['list', '--all', '--json'],
+      priority,
+    ),
     optional(['blocked', '--json']),
     optional(['ready', '--json', '-n', '0']),
   ])
@@ -1011,11 +1046,14 @@ export async function probeDoltMode(projectId: string): Promise<ProbeReply> {
       entry.path,
       ['dolt', 'show', '--json'],
       PROBE_TIMEOUT_MS,
+      'background',
     )
     if (r.code !== 0) {
       return { error: bdErrorMessage(r.stdout, r.stderr, r.code), sources }
     }
-    return { ...parseDoltShow(r.stdout), sources }
+    const probe = parseDoltShow(r.stdout)
+    if (!('error' in probe)) applyProbeConcurrency(entry.path, probe)
+    return { ...probe, sources }
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err), sources }
   }
