@@ -15,6 +15,15 @@ export interface World {
   /** Sentinel text of the file the escaping artifact path points at. */
   outsideSecret: string
   art: { id: string; dir: string; bead: string }
+  /** Own project so other specs' bead counts stay unchanged. */
+  ref: {
+    id: string
+    dir: string
+    /** Description holds a `:::bead` directive pointing at `target`. */
+    bead: string
+    target: string
+    targetTitle: string
+  }
   ro: { id: string; dir: string; bead: string; described: string }
   rof: { id: string; dir: string; wo: string; child: string; other: string }
   /** Created but NOT in the registry: a spec registers it itself, so project and bead counts elsewhere hold. */
@@ -105,6 +114,25 @@ export function createWorld(): World {
     JSON.stringify({ artifacts: JSON.stringify(artifacts) }),
   ])
 
+  const refs = initProject(root, home, 'refs')
+  const targetTitle = 'Referenced target bead'
+  const target = bd(refs, home, [
+    'create',
+    '--title',
+    targetTitle,
+    '--description',
+    'Target description line.',
+    '--silent',
+  ])
+  const refBead = bd(refs, home, [
+    'create',
+    '--title',
+    'Bead with a reference',
+    '--description',
+    `See also:\n\n:::bead ${target} demo-missing`,
+    '--silent',
+  ])
+
   const ro = initProject(root, home, 'ro')
   const roBead = bd(ro, home, [
     'create',
@@ -167,6 +195,7 @@ export function createWorld(): World {
       version: 1,
       projects: [
         { id: 'art', path: art, label: 'art' },
+        { id: 'refs', path: refs, label: 'refs' },
         { id: 'ro', path: ro, label: 'ro', readonly: true },
         {
           id: 'rof',
@@ -184,6 +213,7 @@ export function createWorld(): World {
     home,
     outsideSecret: OUTSIDE_SECRET,
     art: { id: 'art', dir: art, bead: artBead },
+    ref: { id: 'refs', dir: refs, bead: refBead, target, targetTitle },
     ro: { id: 'ro', dir: ro, bead: roBead, described },
     rof: { id: 'rof', dir: rof, wo, child, other },
     ask: { id: 'ask', dir: ask, bead: askBead },
