@@ -3,12 +3,12 @@
 These suites use **WebdriverIO** (mocha + `@wdio/tauri-service`), not Playwright.
 Run everything from the repo root with `export PATH=$HOME/.bun/bin:$PATH`.
 
-| Suite | Command | Drives | Needs |
-| --- | --- | --- | --- |
-| Fixture | `pnpm e2e:fixture` | a dev server in a headless browser, real `bd` projects in a throwaway `$HOME` (`e2e/world.ts`) | no Rust build |
-| Browser | `pnpm e2e:browser` | the dev server with mocked Tauri IPC | no Rust build |
-| Feed | `pnpm e2e:feed` | live-updates feed | no Rust build |
-| Native | `pnpm e2e` | the real Tauri window through the embedded WebDriver (port 4472) | a debug build with the `wdio` feature |
+| Suite   | Command            | Drives                                                                                         | Needs                                 |
+| ------- | ------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Fixture | `pnpm e2e:fixture` | a dev server in a headless browser, real `bd` projects in a throwaway `$HOME` (`e2e/world.ts`) | no Rust build                         |
+| Browser | `pnpm e2e:browser` | the dev server with mocked Tauri IPC                                                           | no Rust build                         |
+| Feed    | `pnpm e2e:feed`    | live-updates feed                                                                              | no Rust build                         |
+| Native  | `pnpm e2e`         | the real Tauri window through the embedded WebDriver (port 4472)                               | a debug build with the `wdio` feature |
 
 ## Native
 

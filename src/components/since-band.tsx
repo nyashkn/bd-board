@@ -13,9 +13,15 @@ interface SinceValue {
   changes: Map<string, ChangeKind>
   /** Newest comment time (ms) per bead id. */
   latestComment: Map<string, number>
+  /** Bead ids with an unanswered `stopped` question (needs the owner). */
+  asking: Set<string>
 }
 
-const EMPTY: SinceValue = { changes: new Map(), latestComment: new Map() }
+const EMPTY: SinceValue = {
+  changes: new Map(),
+  latestComment: new Map(),
+  asking: new Set(),
+}
 
 export const SinceContext = createContext<SinceValue>(EMPTY)
 

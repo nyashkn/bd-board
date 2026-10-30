@@ -81,6 +81,11 @@ jobs:
                 -f body="$(cat notes.md)" -F draft=true --jq .id)
             fi
           fi
+          # release-please may have created the release with its own body; the tracked
+          # CHANGELOG.md section is the source of truth.
+          if [ -z "$GENERATE" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -f body="$(cat notes.md)" > /dev/null
+          fi
           echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
 
   build:
