@@ -21,7 +21,7 @@ import type { RumSdk } from './rum.ts'
 const config = (over: Partial<RumConfig> = {}): RumConfig => ({
   site: '127.0.0.1:1',
   organizationIdentifier: 'kn',
-  applicationId: 'bd-board',
+  applicationName: 'bd-board',
   clientToken: 't',
   env: 'test',
   profile: 'full',

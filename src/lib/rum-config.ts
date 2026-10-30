@@ -9,7 +9,9 @@ export type RumProfile = 'full' | 'standard' | 'minimal'
 export interface RumConfig {
   site: string
   organizationIdentifier: string
-  applicationId: string
+  /** SDK 0.4.3 has no `applicationName` option: this is sent as its `applicationId`. */
+  applicationName: string
+  applicationId?: string
   clientToken: string
   service?: string
   env: string
@@ -71,8 +73,8 @@ export function parseRumConfig(raw: unknown): RumConfigResult {
       config: {
         site,
         organizationIdentifier,
-        // The org-level RUM application id; any stable label works when the UI gave none.
-        applicationId: str(r.applicationId) || 'bd-board',
+        applicationName: str(r.applicationName) || 'bd-board',
+        applicationId: str(r.applicationId) || undefined,
         clientToken,
         service,
         env: str(r.env) || 'production',
@@ -101,6 +103,7 @@ export function configFromEnv(
     enabled: k('ENABLED'),
     site: k('SITE'),
     organizationIdentifier: k('ORG'),
+    applicationName: k('APP_NAME'),
     applicationId: k('APP_ID'),
     clientToken: k('CLIENT_TOKEN'),
     service: k('SERVICE'),

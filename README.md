@@ -182,9 +182,9 @@ Off by default. bd board sends nothing anywhere unless a config enables it **and
 ```json
 {
   "enabled": true,
-  "site": "<rum-ingest-host>",
-  "organizationIdentifier": "<org>",
-  "applicationId": "<optional>",
+  "site": "o2-rum.nl.ds.ke",
+  "organizationIdentifier": "kn",
+  "applicationName": "bd-board",
   "clientToken": "<write-only RUM client token>",
   "env": "production",
   "profile": "full",
@@ -194,7 +194,7 @@ Off by default. bd board sends nothing anywhere unless a config enables it **and
 }
 ```
 
-`site` is `host[:port]` without a scheme. `service` defaults to `bd-board-web` or `bd-board-desktop`; `version` comes from `package.json`. `userName` defaults to `BD_BOARD_AUTHOR`.
+`site` is `host[:port]` without a scheme. `applicationName` (default `bd-board`) is sent as the SDK's `applicationId`, since SDK 0.4.3 has no `applicationName` option; set `applicationId` to override it. The API version is `v1`. `service` defaults to `bd-board-web` or `bd-board-desktop`; `version` comes from `package.json`. `userName` defaults to `BD_BOARD_AUTHOR`.
 
 **Privacy profile** (`profile`): **`full` = everything, and it is the default once RUM is enabled.** In every profile, including `full`, the RUM client token, environment variable values and `Authorization`/`Cookie` headers are never sent.
 
@@ -206,7 +206,15 @@ Off by default. bd board sends nothing anywhere unless a config enables it **and
 
 **What is measured**: web vitals and resources (SDK), views named `board`, `hierarchy`, `projects`, `knowledge`, `bead-modal`; cold-load phases; palette open, per-typing-burst search p50/p95, index and comment-index builds, scope/chip use and the rank of the picked result; every `bd` call (command name, duration, ok/error; never arguments or output outside `full`); modal open to content, route transitions, live-feed reconnects; errors.
 
-**Setup**: create the RUM application and client token in OpenObserve, put them in `rum.json`, and have the operator add the app origin to the intake's CORS allow-list (`http://localhost:3009` for the dev web app, the desktop webview origin for the desktop app).
+**One-liner** (writes `~/.config/bd-board/rum.json` with mode 600, refuses to overwrite without `--force`, prints only `written (token length N)`; the web server reads the same file):
+
+```bash
+~/.claude/bin/infisical-dokploy-shared-services --path=/openobserve bash scripts/rum-setup.sh
+```
+
+It expects the key `OPENOBSERVE_KN_RUM_TOKEN` from that Infisical path in the environment. Optional `RUM_SITE`, `RUM_ORG`, `RUM_ENV`, `RUM_PROFILE`.
+
+**Setup**: create the RUM application and client token in OpenObserve, put them in `rum.json`, and have the operator add the app origin to the intake's CORS allow-list (`http://localhost:3009` for the dev web app and `tauri://localhost` for the desktop app; the native e2e confirmed the desktop webview sends `Origin: tauri://localhost`).
 
 **Dashboard**: `python3 scripts/o2/gen_bd_board_rum_dashboard.py` writes `scripts/o2/bd-board-rum.json`; post it to `/api/<org>/dashboards`. Column names it assumes are listed at the top of the script.
 

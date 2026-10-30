@@ -29,6 +29,7 @@ describe('parseRumConfig', () => {
         replaySampleRate: 100,
         insecureHTTP: false,
         site: 'o2.example.com',
+        applicationName: 'bd-board',
       })
     }
   })

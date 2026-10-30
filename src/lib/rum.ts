@@ -213,7 +213,7 @@ export function sdkInitConfig({
 }: Omit<ActivateOptions, 'sdk'>): Record<string, unknown> {
   const full = config.profile === 'full'
   return {
-    applicationId: config.applicationId,
+    applicationId: config.applicationId ?? config.applicationName,
     clientToken: config.clientToken,
     site: config.site,
     organizationIdentifier: config.organizationIdentifier,
