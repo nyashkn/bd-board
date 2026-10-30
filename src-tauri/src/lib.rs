@@ -5,6 +5,7 @@ use std::process::Command;
 // pub so tests/ can drive the real commands against a `bd init` fixture.
 pub mod desktop;
 pub mod registry;
+pub mod rum;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +71,7 @@ pub fn run() {
             desktop::watch_bead_feed,
             desktop::unwatch_bead_feed,
             desktop::enable_events_journal,
+            rum::rum_config,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

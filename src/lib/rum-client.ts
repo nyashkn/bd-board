@@ -17,10 +17,7 @@ export const APP_VERSION =
 export async function loadRumConfig(
   desktop: boolean,
 ): Promise<RumConfigResult> {
-  const build = configFromEnv(
-    import.meta.env,
-    'VITE_O2_RUM_',
-  )
+  const build = configFromEnv(import.meta.env, 'VITE_O2_RUM_')
   let runtime: unknown
   try {
     if (desktop) {
