@@ -22,7 +22,7 @@ pub struct RegistryEntry {
     pub sources: Vec<String>,
 }
 
-/// The URL schemes a `sources` entry may use (see src/lib/connector-select.ts).
+/// The URL schemes a `sources` entry may use (see src/lib/connectors/select.ts).
 const SOURCE_SCHEMES: [&str; 3] = ["bd:", "mysql://", "https://"];
 
 impl RegistryEntry {

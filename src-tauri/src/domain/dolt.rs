@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 /// What `bd dolt show --json` says about a project (mirrors `ProbeReply` in
-/// src/lib/connector-select.ts): either the mode fields or `error`, plus the registry `sources`.
+/// src/lib/connectors/select.ts): either the mode fields or `error`, plus the registry `sources`.
 #[derive(Serialize, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DoltProbe {

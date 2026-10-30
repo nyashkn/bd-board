@@ -27,17 +27,29 @@ fn crate_paths(src: &Path, layer: &str) -> Vec<(String, String)> {
     let mut found = Vec::new();
     for file in files {
         let text = fs::read_to_string(&file).unwrap();
+        let name = file.strip_prefix(src).unwrap().display().to_string();
         for line in text.lines() {
+            if line.trim_start().starts_with("//") {
+                continue;
+            }
             let mut rest = line;
             while let Some(i) = rest.find("crate::") {
                 let tail = &rest[i + "crate::".len()..];
+                // `crate::{a, b::c}` names several modules at once.
+                if let Some(group) = tail.strip_prefix('{') {
+                    let end = group.find('}').unwrap_or(group.len());
+                    for item in group[..end].split(',') {
+                        let item = item.trim();
+                        let module = item.split("::").next().unwrap_or(item);
+                        found.push((name.clone(), module.to_string()));
+                    }
+                    rest = &group[end..];
+                    continue;
+                }
                 let end = tail
                     .find(|c: char| !(c.is_alphanumeric() || c == '_'))
                     .unwrap_or(tail.len());
-                found.push((
-                    file.strip_prefix(src).unwrap().display().to_string(),
-                    tail[..end].to_string(),
-                ));
+                found.push((name.clone(), tail[..end].to_string()));
                 rest = &tail[end..];
             }
         }
