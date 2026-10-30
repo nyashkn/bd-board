@@ -1,0 +1,9 @@
+{
+  // Placeholders only. Nothing here is deployed by the repo; see README.md.
+  // `wrangler dev` simulates R2 locally. Never add `remote: true` for local work.
+  "name": "bd-board-snapshot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "r2_buckets": [{ "binding": "SNAP", "bucket_name": "bd-board-snapshots" }],
+  // Secrets READ_TOKEN and WRITE_TOKEN are set with `wrangler secret put`, never in this file.
+}

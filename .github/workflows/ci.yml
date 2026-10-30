@@ -36,6 +36,8 @@ jobs:
       - run: pnpm check
       - run: pnpm exec eslint --max-warnings=0
       - run: pnpm test
+      - run: pnpm --dir workers/snapshot install --frozen-lockfile
+      - run: pnpm test:snapshot-worker
       - run: node scripts/check-release-version.mjs
 
   feed-smoke:

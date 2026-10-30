@@ -46,6 +46,8 @@ export default [
       'node_modules/**',
       'prettier.config.js',
       'src/routeTree.gen.ts',
+      // Own dependencies and tsconfig (Workers types); typechecked by its own `typecheck` script.
+      'workers/**',
     ],
   },
 ]
