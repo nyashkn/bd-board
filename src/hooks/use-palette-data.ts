@@ -1,7 +1,8 @@
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 
-import { getBeads, getProjectKnowledgeFn, getProjects } from '@/lib/server'
+import { connectorFor } from '@/lib/core'
+import { getProjects } from '@/lib/server'
 import { askingBeads } from '@/lib/bead-questions'
 import { buildDocs, indexComments, replaceAsking } from '@/lib/palette-search'
 import { rumDuration, rumNow } from '@/lib/rum'
@@ -54,7 +55,7 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
   const beads = useQueries({
     queries: projects.map((p) => ({
       queryKey: ['beads', p.id],
-      queryFn: () => getBeads({ data: { project: p.id } }),
+      queryFn: () => connectorFor(p.id).listBeads({ data: { project: p.id } }),
       staleTime: 30_000,
       retry: false,
       enabled: open,
@@ -95,7 +96,8 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
           const project = id
           const knowledge = await queryClient.fetchQuery({
             queryKey: ['project-knowledge', project],
-            queryFn: () => getProjectKnowledgeFn({ data: { project } }),
+            queryFn: () =>
+              connectorFor(project).projectKnowledge({ data: { project } }),
             staleTime: 60_000,
           })
           if (stopped()) return
