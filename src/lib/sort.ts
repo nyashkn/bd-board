@@ -1,6 +1,6 @@
-import { groupBeadLinks, mapStatus } from './types'
+import { groupBeadLinks, mapStatus } from './types.ts'
 
-import type { Bead } from './types'
+import type { Bead } from './types.ts'
 
 export type SortKey = 'priority' | 'recent' | 'title'
 

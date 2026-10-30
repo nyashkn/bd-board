@@ -26,13 +26,10 @@ import { LiveUpdatesIndicator } from '@/components/live-updates-indicator'
 import { ReadonlyContext } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { SinceBand, SinceContext } from '@/components/since-band'
-import {
-  getBeads,
-  getProjectKnowledgeFn,
-  getProjects,
-  updateBeadStatusFn,
-} from '@/lib/server'
+import { connectorFor } from '@/lib/core'
+import { getProjects } from '@/lib/server'
 import { diffSince, latestCommentByBead } from '@/lib/activity'
+import { askingBeads } from '@/lib/bead-questions'
 import { COLUMNS, beadColumn, isEpic } from '@/lib/types'
 import {
   beadMatches,
@@ -218,7 +215,7 @@ function BoardPage() {
 
   const beadsQuery = useQuery({
     queryKey: ['beads', project],
-    queryFn: () => getBeads({ data: { project } }),
+    queryFn: () => connectorFor(project).listBeads({ data: { project } }),
     refetchInterval: feed.status === 'live' ? 60_000 : 8_000,
     staleTime: 3000,
     retry: false,
@@ -236,7 +233,8 @@ function BoardPage() {
   const { since, dismiss: dismissSince } = useSinceLastSeen(project)
   const commentsQuery = useQuery({
     queryKey: ['project-knowledge', project],
-    queryFn: () => getProjectKnowledgeFn({ data: { project } }),
+    queryFn: () =>
+      connectorFor(project).projectKnowledge({ data: { project } }),
     enabled: since !== null,
     staleTime: 30_000,
     retry: false,
@@ -250,8 +248,12 @@ function BoardPage() {
     [beads, since, latestComment],
   )
   const sinceValue = useMemo(
-    () => ({ changes: change?.byBead ?? new Map(), latestComment }),
-    [change, latestComment],
+    () => ({
+      changes: change?.byBead ?? new Map(),
+      latestComment,
+      asking: askingBeads(commentsQuery.data?.comments ?? []),
+    }),
+    [change, latestComment, commentsQuery.data],
   )
 
   const beadsById = useMemo(() => {
@@ -376,7 +378,7 @@ function BoardPage() {
       ),
     )
     try {
-      await updateBeadStatusFn({
+      await connectorFor(project).updateStatus({
         data: { project, id: activeId, status: toColumn },
       })
     } catch (error) {

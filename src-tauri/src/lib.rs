@@ -6,6 +6,7 @@ use std::process::Command;
 pub mod desktop;
 pub mod registry;
 pub mod rum;
+pub mod source;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

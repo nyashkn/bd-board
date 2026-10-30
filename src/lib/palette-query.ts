@@ -9,8 +9,14 @@ export type ChipKind =
   | 'assignee'
   | 'is'
 
-/** `is:` values: assigned to me, ready (`bd ready`), blocked, changed since the last visit. */
-export const IS_VALUES = ['mine', 'ready', 'blocked', 'since'] as const
+/** `is:` values: assigned to me, ready (`bd ready`), blocked, changed since the last visit, waiting on an answer. */
+export const IS_VALUES = [
+  'mine',
+  'ready',
+  'blocked',
+  'since',
+  'asking',
+] as const
 
 export interface Chip {
   kind: ChipKind

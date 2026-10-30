@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import Markdown from 'react-markdown'
 import {
   AlignLeft,
   AlertTriangle,
@@ -39,10 +38,12 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { BeadArtifacts } from '@/components/bead-artifacts'
 import { CreateBeadDialog } from '@/components/create-bead-dialog'
+import { QuestionCard } from '@/components/bead-question-card'
 import { useReadonly } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BeadLinkButton } from '@/components/bead-link'
+import { BeadMarkdown, CommentText } from '@/components/bead-ref-chip'
 import { InteractiveRow } from '@/components/ui/interactive-row'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -56,6 +57,12 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatAge } from '@/lib/age'
 import { agentNudgeCommand } from '@/lib/comment-author'
+import {
+  blockQuestion,
+  formatAnswer,
+  parseQuestions,
+  splitQuestionBlocks,
+} from '@/lib/bead-questions'
 import { splitClosed } from '@/lib/hierarchy'
 import { PROSE_CLASS, cn, initials } from '@/lib/utils'
 import { COLUMNS, groupBeadLinks, isEpic, mapStatus } from '@/lib/types'
@@ -67,16 +74,7 @@ import {
   KNOWLEDGE_TYPE_LABEL,
   KNOWLEDGE_TYPE_TEXT_CLASS as K_TEXT_CLASS,
 } from '@/lib/knowledge'
-import {
-  addCommentFn,
-  deleteBeadFn,
-  getBeadDetailFn,
-  getCommentAuthorFn,
-  getProjectKnowledgeFn,
-  previewDeleteBeadFn,
-  updateBeadFn,
-  updateBeadStatusFn,
-} from '@/lib/server'
+import { connectorFor } from '@/lib/core'
 
 import type { LucideIcon } from 'lucide-react'
 import type { FormEvent, ReactNode } from 'react'
@@ -436,7 +434,7 @@ function BeadEditDialog({
 
   const mutation = useMutation({
     mutationFn: () =>
-      updateBeadFn({
+      connectorFor(project).updateBead({
         data: {
           project,
           id: bead.id,
@@ -664,13 +662,15 @@ function BeadDeleteDialog({
 
   const previewQuery = useQuery({
     queryKey: ['delete-preview', project, bead.id],
-    queryFn: () => previewDeleteBeadFn({ data: { project, id: bead.id } }),
+    queryFn: () =>
+      connectorFor(project).previewDelete({ data: { project, id: bead.id } }),
     enabled: open,
     retry: false,
   })
 
   const mutation = useMutation({
-    mutationFn: () => deleteBeadFn({ data: { project, id: bead.id } }),
+    mutationFn: () =>
+      connectorFor(project).deleteBead({ data: { project, id: bead.id } }),
     onSuccess: () => {
       toast.success(`Bead ${bead.id} deleted`)
       queryClient.invalidateQueries({ queryKey: ['beads', project] })
@@ -857,7 +857,8 @@ export function BeadDetailModal({
 
   const detailQuery = useQuery({
     queryKey: ['bead', project, bead?.id],
-    queryFn: () => getBeadDetailFn({ data: { project, id: bead!.id } }),
+    queryFn: () =>
+      connectorFor(project).beadDetail({ data: { project, id: bead!.id } }),
     enabled: open && !!bead,
     staleTime: 3000,
   })
@@ -878,7 +879,7 @@ export function BeadDetailModal({
 
   const authorQuery = useQuery({
     queryKey: ['comment-author', project],
-    queryFn: () => getCommentAuthorFn({ data: { project } }),
+    queryFn: () => connectorFor(project).commentAuthor({ data: { project } }),
     enabled: open && !!bead && !readonly,
     staleTime: 60_000,
     retry: false,
@@ -886,7 +887,8 @@ export function BeadDetailModal({
 
   const knowledgeQuery = useQuery({
     queryKey: ['project-knowledge', project],
-    queryFn: () => getProjectKnowledgeFn({ data: { project } }),
+    queryFn: () =>
+      connectorFor(project).projectKnowledge({ data: { project } }),
     enabled: open && !!bead,
     staleTime: 4000,
   })
@@ -918,7 +920,9 @@ export function BeadDetailModal({
 
   const statusMutation = useMutation({
     mutationFn: (status: BeadColumn) =>
-      updateBeadStatusFn({ data: { project, id: bead!.id, status } }),
+      connectorFor(project).updateStatus({
+        data: { project, id: bead!.id, status },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['beads', project] })
       queryClient.invalidateQueries({ queryKey: ['bead', project, bead?.id] })
@@ -934,10 +938,12 @@ export function BeadDetailModal({
       reopen?: boolean
     }) => {
       if (reopen)
-        await updateBeadStatusFn({
+        await connectorFor(project).updateStatus({
           data: { project, id: bead!.id, status: 'open' },
         })
-      return addCommentFn({ data: { project, id: bead!.id, text } })
+      return connectorFor(project).addComment({
+        data: { project, id: bead!.id, text },
+      })
     },
     onSuccess: () => {
       setComment('')
@@ -949,10 +955,25 @@ export function BeadDetailModal({
     },
   })
 
+  // Own mutation: answering must not clear the comment draft or share its pending state.
+  const answerMutation = useMutation({
+    mutationFn: ({ text }: { id: string; text: string }) =>
+      connectorFor(project).addComment({
+        data: { project, id: bead!.id, text },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bead', project, bead?.id] })
+      queryClient.invalidateQueries({
+        queryKey: ['project-knowledge', project],
+      })
+    },
+  })
+
   const parentBead = bead?.parent ? resolveBead(bead.parent) : undefined
   const description = detail?.description ?? bead?.description ?? ''
   const acceptance = detail?.acceptance_criteria ?? bead?.acceptance_criteria
   const comments = detail?.comments ?? []
+  const questions = useMemo(() => parseQuestions(comments), [comments])
   const isClosed = bead?.status === 'closed'
   // A comment does not bump updated_at: show the newest comment as activity when it is later.
   const lastCommentAt = comments.reduce(
@@ -1251,7 +1272,9 @@ export function BeadDetailModal({
                         </div>
                       ) : description ? (
                         <div className={PROSE_CLASS}>
-                          <Markdown>{description}</Markdown>
+                          <BeadMarkdown resolveBead={resolveBead}>
+                            {description}
+                          </BeadMarkdown>
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground">
@@ -1267,7 +1290,9 @@ export function BeadDetailModal({
                           label="Acceptance criteria"
                         />
                         <div className={PROSE_CLASS}>
-                          <Markdown>{acceptance}</Markdown>
+                          <BeadMarkdown resolveBead={resolveBead}>
+                            {acceptance}
+                          </BeadMarkdown>
                         </div>
                       </section>
                     ) : null}
@@ -1288,7 +1313,7 @@ export function BeadDetailModal({
                         </p>
                       ) : (
                         <ul className="flex flex-col gap-2">
-                          {comments.map((c) => (
+                          {comments.map((c, i) => (
                             <li
                               key={c.id}
                               className="min-w-0 rounded-[9px] bg-canvas px-3 py-2.5 ring-1 ring-inset ring-border"
@@ -1301,9 +1326,44 @@ export function BeadDetailModal({
                                   <span>· {relativeDate(c.created_at)}</span>
                                 ) : null}
                               </div>
-                              <p className="mt-1.5 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere]">
-                                {c.text}
-                              </p>
+                              {splitQuestionBlocks(c.text).map((part, n) =>
+                                'block' in part ? (
+                                  <QuestionCard
+                                    key={n}
+                                    question={
+                                      blockQuestion(questions, i, part.block)!
+                                    }
+                                    readonly={readonly}
+                                    pending={answerMutation.isPending}
+                                    error={
+                                      answerMutation.isError &&
+                                      answerMutation.variables.id ===
+                                        blockQuestion(questions, i, part.block)!
+                                          .id
+                                        ? answerMutation.error.message
+                                        : undefined
+                                    }
+                                    onAnswer={(choice) => {
+                                      const id = blockQuestion(
+                                        questions,
+                                        i,
+                                        part.block,
+                                      )!.id
+                                      answerMutation.mutate({
+                                        id,
+                                        text: formatAnswer(id, choice),
+                                      })
+                                    }}
+                                  />
+                                ) : (
+                                  <CommentText
+                                    key={n}
+                                    resolveBead={resolveBead}
+                                  >
+                                    {part.text}
+                                  </CommentText>
+                                ),
+                              )}
                             </li>
                           ))}
                         </ul>

@@ -228,10 +228,8 @@ export function CommandPalette() {
   const openedAt = useRef(0)
   const chose = useRef(false)
 
-  const { projects, docs, comments, loading, indexing } = usePaletteData(
-    open,
-    current,
-  )
+  const { projects, docs, comments, asking, loading, indexing } =
+    usePaletteData(open, current)
   const deferredInput = useDeferredValue(input)
   const query = useMemo(
     () => buildQuery(chips, deferredInput),
@@ -250,12 +248,13 @@ export function CommandPalette() {
     const t0 = rumNow()
     const found = searchDocs(docs, query, {
       comments,
+      asking,
       ...ctx,
       scope: scope === ALL_SCOPE ? undefined : scope,
     })
     rumKeystroke(rumNow() - t0)
     return found
-  }, [docs, query, comments, ctx, scope])
+  }, [docs, query, comments, asking, ctx, scope])
   const docsByKey = useMemo(() => new Map(docs.map((d) => [d.key, d])), [docs])
   const now = useMemo(() => Date.now(), [docs, open])
   const empty = isEmptyQuery(query)

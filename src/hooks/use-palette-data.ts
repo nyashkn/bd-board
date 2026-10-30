@@ -1,8 +1,10 @@
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 
-import { getBeads, getProjectKnowledgeFn, getProjects } from '@/lib/server'
-import { buildDocs, indexComments } from '@/lib/palette-search'
+import { connectorFor } from '@/lib/core'
+import { getProjects } from '@/lib/server'
+import { askingBeads } from '@/lib/bead-questions'
+import { buildDocs, indexComments, replaceAsking } from '@/lib/palette-search'
 import { rumDuration, rumNow } from '@/lib/rum'
 
 import type { IndexedText, PaletteDoc } from '@/lib/palette-search'
@@ -17,6 +19,8 @@ export interface PaletteData {
   projects: { id: string; name: string }[]
   docs: PaletteDoc[]
   comments: Map<string, IndexedText[]>
+  /** Doc keys with an unanswered `stopped` question (`is:asking`), from the indexed comments. */
+  asking: Set<string>
   /** Beads still loading for at least one project. */
   loading: boolean
   /** Comments are being fetched in the background. */
@@ -51,7 +55,7 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
   const beads = useQueries({
     queries: projects.map((p) => ({
       queryKey: ['beads', p.id],
-      queryFn: () => getBeads({ data: { project: p.id } }),
+      queryFn: () => connectorFor(p.id).listBeads({ data: { project: p.id } }),
       staleTime: 30_000,
       retry: false,
       enabled: open,
@@ -75,6 +79,7 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
   const [comments, setComments] = useState(
     () => new Map<string, IndexedText[]>(),
   )
+  const [asking, setAsking] = useState(() => new Set<string>())
   const [indexing, setIndexing] = useState(false)
   const loading = beads.loading || projectsQuery.isLoading
   const projectKey = projects.map((p) => p.id).join()
@@ -91,7 +96,8 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
           const project = id
           const knowledge = await queryClient.fetchQuery({
             queryKey: ['project-knowledge', project],
-            queryFn: () => getProjectKnowledgeFn({ data: { project } }),
+            queryFn: () =>
+              connectorFor(project).projectKnowledge({ data: { project } }),
             staleTime: 60_000,
           })
           if (stopped()) return
@@ -101,6 +107,8 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
             comments: knowledge.comments.length,
           })
           setComments((prev) => new Map([...prev, ...index]))
+          const ask = askingBeads(knowledge.comments)
+          setAsking((prev) => replaceAsking(prev, project, ask))
         } catch {
           // one project failing to export must not stop the others
         }
@@ -126,6 +134,7 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
     projects: projects.map((p) => ({ id: p.id, name: p.name })),
     docs,
     comments,
+    asking,
     loading,
     indexing,
   }
