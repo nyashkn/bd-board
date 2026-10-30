@@ -1,0 +1,38 @@
+# On push to main, opens or updates a Release PR built from Conventional Commit
+# subjects: it bumps package.json, src-tauri/Cargo.toml and Cargo.lock together and
+# writes the CHANGELOG.md section. A human merges it; nothing auto-merges.
+# Merging tags vX.Y.Z, which starts release.yml (builds the installers, publishes).
+#
+# Set RELEASE_PLEASE_TOKEN (a PAT with contents + pull-requests write): a tag pushed
+# with the default GITHUB_TOKEN does not start release.yml.
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  actions: write # dispatch release-notes.yml
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    if: github.repository == 'nyashkn/bd-board'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # v5.0.0
+      - id: rp
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      # claude-code-action rejects `push` events, so hand the branch to release-notes.yml.
+      - name: dispatch release notes
+        if: steps.rp.outputs.prs_created == 'true' && startsWith(fromJSON(steps.rp.outputs.pr || '{}').headBranchName, 'release-please--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ fromJSON(steps.rp.outputs.pr || '{}').headBranchName }}
+        run: gh workflow run release-notes.yml -R "$GITHUB_REPOSITORY" -f branch="$BRANCH"
