@@ -1,4 +1,5 @@
 import {
+  disableMotion,
   resetApp,
   sidebarWidth,
   storedCollapsed,
@@ -68,8 +69,10 @@ describe('sidebar collapse', () => {
         )) === true,
       { timeout: 20000, timeoutMsg: 'app did not reload' },
     )
+    await disableMotion()
 
-    expect(await sidebarWidth()).toBe(COLLAPSED)
+    // The rail mounts expanded and collapses in an effect; wait for the settle.
+    await waitForSidebarWidth(COLLAPSED)
     await expect($('[aria-label="Expand sidebar"]')).toBeDisplayed()
     expect(await storedCollapsed()).toBe('1')
   })
@@ -130,9 +133,11 @@ describe('sidebar collapse', () => {
       { timeout: 5000, timeoutMsg: 'navigation to project failed' },
     )
 
-    // Verify Home link is no longer active
-    current = await homeLink.getAttribute('aria-current')
-    expect(current).toBeNull()
+    // Verify Home link is no longer active (active state follows the route a render later)
+    await browser.waitUntil(
+      async () => (await homeLink.getAttribute('aria-current')) === null,
+      { timeout: 5000, timeoutMsg: 'Home link stayed active on a project' },
+    )
 
     // Click Home to return
     await homeLink.click()

@@ -5,7 +5,9 @@ import { createWorld, destroyWorld } from './world.js'
 import type { World } from './world.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const appBinaryPath = path.resolve(here, '../src-tauri/target/debug/bd-board')
+const appBinaryPath =
+  process.env.E2E_APP_BINARY ??
+  path.resolve(here, '../src-tauri/target/debug/bd-board')
 
 /**
  * Pinned away from the 4445 default: other Tauri apps on this machine run their
