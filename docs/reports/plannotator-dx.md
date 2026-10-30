@@ -3,14 +3,17 @@
 Date 2026-10-30. Plannotator CLI 0.28.x (local), repo backnotprop/plannotator (~9.7k stars), org github.com/plannotator.
 
 ## Could not access
+
 - npmjs.com profile page (not tried past the registry; used `registry.npmjs.org` search by maintainer instead, which worked).
 - plannotator.ai / docs.plannotator.ai pages: not fetched. Keyboard shortcuts, command palette, sidebar/tab and theming details of the annotation UI are NOT verified. Only found: Vim-controls spec (`docs/vim-controls.md`: opt-in, default off, never fires in inputs/dialogs, keyboard annotations go through the same pipeline as pointer ones), inbox search is ⌘K, and Amp has a command palette.
 - Did not run the UI or open the Inbox window. Everything below is from `plannotator --help`, `plannotator inbox --help` (the long agent guide), the repo README, `apps/hook/README.md`, and the byoa / artifact-server READMEs.
 
 ## What Plannotator is
+
 A local browser review surface plus a local Inbox. Plan review, `annotate <file|url|folder>`, `review` (diffs/PRs), `annotate-last`, guided reviews (`guide export|share`), `sessions`, `archive`.
 
 ## (1) Two-way interaction: evidence
+
 - **Plan review via hooks.** Claude Code: `PermissionRequest` hook with matcher `ExitPlanMode` runs `plannotator` (stdin JSON). Approve lets the agent proceed on the exact approved text; deny sends annotations back as the reason (apps/hook/README.md).
 - **Non-blocking mode (Claude Code >= 2.1.287).** Review does not make Claude wait: the turn ends and the decision arrives later as a new message (`PLANNOTATOR_CLAUDE_MOD=0` restores the old flow). This is the key trick: the human answers on their own time.
 - **Gate flags on annotate/review:** `--gate` adds an Approve button; `--json` emits a decision JSON; `--hook` emits hook-native block/pass JSON; `--require-approval` exits 1 unless approved (exit 2 on usage errors); `--result-file <path>` atomically publishes the JSON. So a script or a Stop hook can gate on a human.
@@ -23,9 +26,11 @@ A local browser review surface plus a local Inbox. Plan review, `annotate <file|
 - **Other bidirectional pieces:** BYOA (plannotator/byoa: a web app's chat talks to your running Claude Code/Pi/OpenCode session, the app exposes tools to it, `/byoa connect <url>` pairing code). Artifact Server (plannotator/artifact-server: MCP server with versions, comment threads, `dispatch_inbox` claim/delivered/failed; `@plannotator/artifact-server-claude-channel` pushes annotation bundles into an opted-in Claude Code session and closes them via comment API).
 
 ## (2) UI/UX seen in docs
+
 - Annotate-by-selection (comment on exact words), file/folder/URL/HTML annotation, side-by-side diff review with file tree, "Ask AI" about what you review, 👍 one-click ack, per-thread "Send now" while the agent is mid-turn, Undo window (~10 s) before an ack reaches the agent, ⌘K message search, opt-in Vim keys (default off, never in inputs), light/dark Inbox art. Share links: small markdown in URL fragment, large payloads AES-256-GCM ciphertext with key in the fragment (PrivateBin model), 7-day expiry, `PLANNOTATOR_SHARE=disabled`; now moving to hosted "Workspaces" (deprecated OSS sharing).
 
 ## (3) DX
+
 - One command: `curl -fsSL https://plannotator.ai/install.sh | bash` installs the binary, detects agents, writes hooks/skills/slash commands. `--minimal` = binary only.
 - Claude Code: `/plugin marketplace add backnotprop/plannotator` then `/plugin install`. Manual `settings.json` hook snippet also documented.
 - The Inbox auto-connects found agents (adds a `plannotator-inbox` MCP entry), never re-adds one you removed, prints what it added on stderr; `PLANNOTATOR_INBOX_CONNECT=0` skips. `inbox --notes <ids>` adds a note to agent instruction files only with the person's yes.
@@ -54,8 +59,10 @@ What bd-board has today (README, src/lib): board/hierarchy/knowledge tabs, bead 
    A "Seen" one-click ack comment (`ACK:`) that tells the agent no reply is needed; 5-10 s Undo before a nudge is sent; ⌘K palette (search beads + jump to project) next to the existing `/` and `?`. Opt-in vim keys only if wanted: Plannotator ships them default-off and never inside inputs, which bd-board's existing keyboard.ts already respects.
 
 ### Not worth borrowing
+
 Hosted Workspaces/sharing (bd-board is local-first; share links are even being deprecated upstream), Tailscale publishing, multi-agent MCP auto-registration, guided reviews.
 
 ### Open questions
+
 - Does `bd` already have gate/human-wait primitives? Check before idea 3.
 - Which session id does the nudge target per bead? Needs a mapping (assignee -> agent-deck session).

@@ -43,6 +43,7 @@ P  PROPERTIES       P1 deterministic · P2 never throws · P3 hit contains terms
 ```
 
 ## Behaviour decisions
+
 - Accents fold both ways (`cafe`↔`Café`).
 - Typo tolerance (owner-approved): letters-only words 5+ chars 1 edit, 8+ 2 edits; title/description/labels/assignee; never ids, chips, comments, artifacts; always ranked below real matches; highlight = the whole typo'd token.
 - Parent-epic title matches only via `epic:`.
