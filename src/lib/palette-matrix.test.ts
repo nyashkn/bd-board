@@ -329,6 +329,13 @@ describe('C chips', () => {
   it('C9 is:blocked includes status blocked and waiting_on', () => {
     expect(sorted('is:blocked')).toEqual(['a-13', 'a-6'])
   })
+  it('C9b is:asking needs the asking set and matches by doc key', () => {
+    expect(ids('is:asking')).toEqual([])
+    expect(ids('is:asking', { asking: new Set(['alpha:a-6']) })).toEqual([
+      'a-6',
+    ])
+    expect(ids('is:asking', { asking: new Set(['nope:a-6']) })).toEqual([])
+  })
   it('C10 is:since only in the since-project, only newer', () => {
     const since = { project: 'alpha', at: Date.parse('2026-06-15T00:00:00Z') }
     expect(ids('is:since', { since })).toEqual(['a-4'])

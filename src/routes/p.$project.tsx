@@ -33,6 +33,7 @@ import {
   updateBeadStatusFn,
 } from '@/lib/server'
 import { diffSince, latestCommentByBead } from '@/lib/activity'
+import { askingBeads } from '@/lib/bead-questions'
 import { COLUMNS, beadColumn, isEpic } from '@/lib/types'
 import {
   beadMatches,
@@ -250,8 +251,12 @@ function BoardPage() {
     [beads, since, latestComment],
   )
   const sinceValue = useMemo(
-    () => ({ changes: change?.byBead ?? new Map(), latestComment }),
-    [change, latestComment],
+    () => ({
+      changes: change?.byBead ?? new Map(),
+      latestComment,
+      asking: askingBeads(commentsQuery.data?.comments ?? []),
+    }),
+    [change, latestComment, commentsQuery.data],
   )
 
   const beadsById = useMemo(() => {

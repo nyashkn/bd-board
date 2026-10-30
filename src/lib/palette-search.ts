@@ -471,6 +471,8 @@ export interface ChipContext {
   me?: string
   /** When the current project was last looked at (`is:since`). */
   since?: { project: string; at: number }
+  /** Doc keys with an unanswered `stopped` question (`is:asking`). */
+  asking?: Set<string>
 }
 
 /** Chips narrow results; every chip must hold. Values match case-insensitively by prefix. */
@@ -503,6 +505,7 @@ export function passesChip(
           isReady(doc.bead) && !doc.closed && beadColumn(doc.bead) !== 'blocked'
         )
       if (v === 'blocked') return beadColumn(doc.bead) === 'blocked'
+      if (v === 'asking') return ctx.asking?.has(doc.key) ?? false
       return (
         ctx.since !== undefined &&
         doc.project === ctx.since.project &&
