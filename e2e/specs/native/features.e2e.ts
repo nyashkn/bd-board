@@ -7,7 +7,8 @@ import type { World } from '../../world.js'
 
 const world = JSON.parse(process.env.E2E_WORLD ?? 'null') as World | null
 const SHOTS =
-  process.env.E2E_SHOTS ?? path.join(tmpdir(), 'bd-board-native-e2e-screenshots')
+  process.env.E2E_SHOTS ??
+  path.join(tmpdir(), 'bd-board-native-e2e-screenshots')
 mkdirSync(SHOTS, { recursive: true })
 
 // WebDriver key codes (webdriverio's Key is not importable from here).
@@ -177,9 +178,7 @@ describe('new features in the real desktop window', () => {
           ...document.querySelectorAll('nav[aria-label="Projects"] li a'),
         ].map((a) => (a as HTMLElement).innerText.replace(/\s+/g, ' ').trim()),
         main:
-          (
-            document.querySelector('main')
-          )?.innerText.replace(/\s+/g, ' ') ?? '',
+          document.querySelector('main')?.innerText.replace(/\s+/g, ' ') ?? '',
       }))
     await browser.waitUntil(async () => (await read()).rail.length >= 3, {
       timeout: 20000,

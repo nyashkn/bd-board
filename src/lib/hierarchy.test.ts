@@ -70,10 +70,10 @@ describe('rowState', () => {
 describe('row labels', () => {
   it('derives initials and short ids', () => {
     expect(initials('kn')).toBe('KN')
-    expect(initials('nyashkn@gmail.com')).toBe('NY')
+    expect(initials('jane.doe@example.com')).toBe('JD')
     expect(initials('Jane Doe')).toBe('JD')
     expect(initials(undefined)).toBe('')
-    expect(shortId('ldb-b6n.8')).toBe('b6n.8')
+    expect(shortId('demo-b6n.8')).toBe('b6n.8')
   })
 })
 

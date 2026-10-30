@@ -3,13 +3,13 @@
 # error stacks show original code. DRY RUN by default: prints what it would do, sends nothing.
 #
 #   O2_RUM_SOURCEMAPS=1 pnpm build            # emits hidden .map files (vite.config.ts)
-#   O2_SM_URL=https://openobserve.lan.ds.ke O2_SM_ORG=kn O2_SM_USER=... O2_SM_PASSWORD=... \
+#   O2_SM_URL=https://openobserve.example.com O2_SM_ORG=my-org O2_SM_USER=... O2_SM_PASSWORD=... \
 #     bash scripts/upload-sourcemaps.sh --service bd-board-web --env production [--send]
 #
 # Env (never commit values):
-#   O2_SM_URL       base URL of the OpenObserve API on the tailnet, e.g. https://openobserve.lan.ds.ke
+#   O2_SM_URL       base URL of the OpenObserve API (not the public RUM intake), e.g. https://openobserve.example.com
 #                   (the public RUM host serves /rum only)
-#   O2_SM_ORG       organization identifier (kn)
+#   O2_SM_ORG       organization identifier
 #   O2_SM_USER      org admin user (not root; a service account gets 401 while RBAC is uninitialised)
 #   O2_SM_PASSWORD  that user's password, sent as HTTP Basic, never echoed
 # Flags: --service  must equal the RUM `service` (bd-board-web | bd-board-desktop)

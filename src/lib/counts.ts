@@ -1,7 +1,7 @@
-import { isReady } from './sort'
-import { beadColumn } from './types'
+import { isReady } from './sort.ts'
+import { beadColumn } from './types.ts'
 
-import type { Bead, ProjectCounts } from './types'
+import type { Bead, ProjectCounts } from './types.ts'
 
 export interface BeadCounts extends ProjectCounts {
   /** What `bd ready` lists. */
