@@ -19,6 +19,10 @@ Visual kanban board and multi-project dashboard for [`bd` (beads)](https://githu
 - Closed recency window (`closed` URL param: `1d`, `7d` default, `30d`, `90d`, `all`; last choice also kept in `localStorage`, URL wins). Closed beads older than the window are hidden on the board (status, epic, priority views), in Hierarchy and in lists; the Closed column reads "34 of 265" with an "N older hidden, show all" link. Closed time is `closed_at`, falling back to `updated_at`. Sidebar and dashboard counts are unchanged.
 - Completed epics (all descendants closed, or a closed epic with none) follow the same window by their latest closed time; when shown they get a "Done · took 5d" badge (created to last close).
 - Compact ages on cards, the Hierarchy and the bead modal: "created 12d ago · updated 3h ago" (minutes < 1h, hours < 48h, days < 90d, then months, then years), full timestamp on hover.
+- Command palette (Cmd/Ctrl+K, from anywhere): instant search across every project by id, title, description, labels and assignee, with comments and artifact paths indexed lazily in a separate group. Small typos still find the bead, ranked below exact matches. Filter chips: `status:` `type:` `label:` `epic:` `project:` `@name` `is:mine|ready|blocked|since`. Enter opens, Cmd/Ctrl+Enter opens in a new tab, Cmd/Ctrl+C copies the id. A scope pill switches the project (Ctrl/Cmd+Shift+L lists projects, Ctrl/Cmd+Shift+. cycles them). Recent beads and Jump to show when the query is empty. Read-only projects work the same.
+- Every bead card and row is a real link (`?bead=<id>`), so open-in-new-tab, copy-link and middle-click work. Search and filters carry across tabs and projects; lane collapse and scroll are remembered; closing the bead modal returns to where you were and restores focus.
+- Counts come from one derivation, and an empty board says why (filtered out, closed window, nothing yet) and offers the fix.
+- The modal has copy buttons for the bead id, the `bd show` command and an agent-deck nudge, also in read-only projects.
 - Bead detail modal with markdown description, acceptance criteria, comments, parent and child navigation.
 - Artifacts in the bead detail modal: a bead's `spec_id` (shown as "Spec"), its `artifacts` metadata and, for epics, its children's artifacts open inline (markdown rendered, HTML in a sandboxed iframe, images, json/txt). The `external_ref` shows as a link (http/https) or plain "Ref" text. How to attach one: see For agents.
 - "Since you last looked" band on the Board and Hierarchy: new, closed, commented and otherwise updated beads since you last had the project open (kept per project in `localStorage`, `bd-board:last-seen:<project>`), with a dot on each changed card or row. Comments do not bump a bead's `updated_at`, so the band, the card age line and the Hierarchy age also count the newest comment. The comment times come from the same `bd export` read the Knowledge tab uses (one extra call per 30 s, shared cache), so the cost is one full export per refresh on large projects; if it fails the band falls back to `updated_at` only.
@@ -106,7 +110,7 @@ On macOS, the release build writes:
 
 ```text
 src-tauri/target/release/bundle/macos/bd board.app
-src-tauri/target/release/bundle/dmg/bd board_0.1.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/bd board_<version>_aarch64.dmg
 ```
 
 Windows packaging is part of the Tauri roadmap for this project, but the current
@@ -309,6 +313,16 @@ IPC mocking only works in the browser suite: Tauri defines `window.__TAURI_INTER
 The fixture suite (`e2e/world.ts`) builds a temp root with a fake HOME registry and three projects (artifacts, read-only, read-only with `filterLabel`), starts and stops its own Vite server, and removes everything afterwards. The native suite does the same: its app runs with the fake HOME, so `e2e/specs/native/artifacts.e2e.ts` exercises the real `read_artifact` bridge. Rust integration tests against a real `bd init` fixture: `cargo test --test real_bd` in `src-tauri` (skipped with a message when `bd` is missing). Needs `bd` on PATH and Chrome; chromedriver is downloaded on first run.
 
 The native suite pins the embedded WebDriver port (`e2e/wdio.conf.ts`); the default 4445 is shared with any other Tauri app running its own suite, and a session will silently attach to the wrong app.
+
+## Releasing
+
+Releases follow [Semantic Versioning](https://semver.org/) and every change is listed in [CHANGELOG.md](CHANGELOG.md).
+
+1. Commit with [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, ...).
+2. Each push to `main` updates a Release PR that bumps `package.json`, `src-tauri/Cargo.toml` and `Cargo.lock` together and writes the changelog section. Claude rewrites it using [.github/release-notes-guide.md](.github/release-notes-guide.md).
+3. Merging that PR tags `vX.Y.Z`; the Release workflow builds the macOS and Windows installers and publishes the release with the changelog section as its notes.
+
+`main` only takes changes through a pull request. `pnpm version:set <x.y.z>` is the manual fallback.
 
 ## Safety Model
 

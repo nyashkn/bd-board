@@ -1,1200 +1,1200 @@
 {
- "version": 5,
- "title": "bd-board RUM",
- "description": "Web vitals, cold-load phases, palette and bd-call timings, errors and sessions for bd-board-web and bd-board-desktop. Source: _rumdata.",
- "role": "",
- "owner": "",
- "tabs": [
-  {
-   "tabId": "default",
-   "name": "Default",
-   "panels": [
+  "version": 5,
+  "title": "bd-board RUM",
+  "description": "Web vitals, cold-load phases, palette and bd-call timings, errors and sessions for bd-board-web and bd-board-desktop. Source: _rumdata.",
+  "role": "",
+  "owner": "",
+  "tabs": [
     {
-     "id": "Panel_1",
-     "type": "line",
-     "title": "LCP p75 by service (ms)",
-     "description": "Good < 2500 ms. Web has the server-function round trip; desktop uses IPC.",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT histogram(_timestamp) AS x, service, approx_percentile_cont(view_largest_contentful_paint / 1000000, 0.75) AS lcp_ms FROM \"_rumdata\" WHERE type = 'view' AND view_largest_contentful_paint IS NOT NULL GROUP BY x, service ORDER BY x",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "x",
-          "alias": "x",
-          "column": "x",
-          "color": null
-         }
-        ],
-        "y": [
-         {
-          "label": "lcp_ms",
-          "alias": "lcp_ms",
-          "column": "lcp_ms",
-          "color": null
-         }
-        ],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
+      "tabId": "default",
+      "name": "Default",
+      "panels": [
+        {
+          "id": "Panel_1",
+          "type": "line",
+          "title": "LCP p75 by service (ms)",
+          "description": "Good < 2500 ms. Web has the server-function round trip; desktop uses IPC.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x, service, approx_percentile_cont(view_largest_contentful_paint / 1000000, 0.75) AS lcp_ms FROM \"_rumdata\" WHERE type = 'view' AND view_largest_contentful_paint IS NOT NULL GROUP BY x, service ORDER BY x",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "x",
+                    "alias": "x",
+                    "column": "x",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "lcp_ms",
+                    "alias": "lcp_ms",
+                    "column": "lcp_ms",
+                    "color": null
+                  }
+                ],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 0,
+            "w": 16,
+            "h": 8,
+            "i": 1
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
+        },
+        {
+          "id": "Panel_2",
+          "type": "line",
+          "title": "INP p75 by service (ms)",
+          "description": "Good < 200 ms.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x, service, approx_percentile_cont(view_interaction_to_next_paint / 1000000, 0.75) AS inp_ms FROM \"_rumdata\" WHERE type = 'view' AND view_interaction_to_next_paint IS NOT NULL GROUP BY x, service ORDER BY x",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "x",
+                    "alias": "x",
+                    "column": "x",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "inp_ms",
+                    "alias": "inp_ms",
+                    "column": "inp_ms",
+                    "color": null
+                  }
+                ],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 16,
+            "y": 0,
+            "w": 16,
+            "h": 8,
+            "i": 2
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
+        },
+        {
+          "id": "Panel_3",
+          "type": "line",
+          "title": "CLS p75 by service",
+          "description": "Good < 0.1.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x, service, approx_percentile_cont(view_cumulative_layout_shift, 0.75) AS cls FROM \"_rumdata\" WHERE type = 'view' AND view_cumulative_layout_shift IS NOT NULL GROUP BY x, service ORDER BY x",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "x",
+                    "alias": "x",
+                    "column": "x",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "cls",
+                    "alias": "cls",
+                    "column": "cls",
+                    "color": null
+                  }
+                ],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 32,
+            "y": 0,
+            "w": 16,
+            "h": 8,
+            "i": 3
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
+        },
+        {
+          "id": "Panel_4",
+          "type": "table",
+          "title": "Cold-load phases (ms)",
+          "description": "Time since navigation start: skeleton on screen, projects list, first beads rendered.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT vital_name AS phase, service, count(*) AS n, approx_percentile_cont(vital_duration / 1000000, 0.5) AS p50_ms, approx_percentile_cont(vital_duration / 1000000, 0.95) AS p95_ms FROM \"_rumdata\" WHERE type = 'vital' AND vital_name IN ('cold.skeleton', 'cold.projects', 'cold.beads') GROUP BY phase, service ORDER BY phase",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "phase",
+                    "alias": "phase",
+                    "column": "phase",
+                    "color": null
+                  },
+                  {
+                    "label": "service",
+                    "alias": "service",
+                    "column": "service",
+                    "color": null
+                  },
+                  {
+                    "label": "n",
+                    "alias": "n",
+                    "column": "n",
+                    "color": null
+                  },
+                  {
+                    "label": "p50_ms",
+                    "alias": "p50_ms",
+                    "column": "p50_ms",
+                    "color": null
+                  },
+                  {
+                    "label": "p95_ms",
+                    "alias": "p95_ms",
+                    "column": "p95_ms",
+                    "color": null
+                  }
+                ],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 8,
+            "w": 24,
+            "h": 8,
+            "i": 4
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
+        },
+        {
+          "id": "Panel_5",
+          "type": "line",
+          "title": "Palette search per keystroke (ms)",
+          "description": "p50 and p95 per typing burst, as reported by the app; averaged per bucket.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x, vital_name AS series, avg(vital_duration / 1000000) AS ms FROM \"_rumdata\" WHERE type = 'vital' AND vital_name IN ('palette.search.p50', 'palette.search.p95') GROUP BY x, series ORDER BY x",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "x",
+                    "alias": "x",
+                    "column": "x",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "ms",
+                    "alias": "ms",
+                    "column": "ms",
+                    "color": null
+                  }
+                ],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 24,
+            "y": 8,
+            "w": 24,
+            "h": 8,
+            "i": 5
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
+        },
+        {
+          "id": "Panel_6",
+          "type": "table",
+          "title": "Palette open and index build (ms)",
+          "description": "",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT vital_name AS step, count(*) AS n, approx_percentile_cont(vital_duration / 1000000, 0.5) AS p50_ms, approx_percentile_cont(vital_duration / 1000000, 0.95) AS p95_ms FROM \"_rumdata\" WHERE type = 'vital' AND vital_name IN ('palette.open', 'palette.index.build', 'palette.index.comments') GROUP BY step ORDER BY step",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "step",
+                    "alias": "step",
+                    "column": "step",
+                    "color": null
+                  },
+                  {
+                    "label": "n",
+                    "alias": "n",
+                    "column": "n",
+                    "color": null
+                  },
+                  {
+                    "label": "p50_ms",
+                    "alias": "p50_ms",
+                    "column": "p50_ms",
+                    "color": null
+                  },
+                  {
+                    "label": "p95_ms",
+                    "alias": "p95_ms",
+                    "column": "p95_ms",
+                    "color": null
+                  }
+                ],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 16,
+            "w": 24,
+            "h": 7,
+            "i": 6
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
+        },
+        {
+          "id": "Panel_7",
+          "type": "bar",
+          "title": "bd call p95 by command (ms)",
+          "description": "Client-side round trip of every bd call (server function or IPC).",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT replace(vital_name, 'bd.call.', '') AS cmd, approx_percentile_cont(vital_duration / 1000000, 0.95) AS p95_ms FROM \"_rumdata\" WHERE type = 'vital' AND vital_name LIKE 'bd.call.%' GROUP BY cmd ORDER BY p95_ms DESC",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "cmd",
+                    "alias": "cmd",
+                    "column": "cmd",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "p95_ms",
+                    "alias": "p95_ms",
+                    "column": "p95_ms",
+                    "color": null
+                  }
+                ],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 24,
+            "y": 16,
+            "w": 24,
+            "h": 7,
+            "i": 7
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
+        },
+        {
+          "id": "Panel_8",
+          "type": "line",
+          "title": "Errors per 100 views",
+          "description": "",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT histogram(_timestamp) AS x, service, 100.0 * sum(CASE WHEN type = 'error' THEN 1 ELSE 0 END) / greatest(sum(CASE WHEN type = 'view' THEN 1 ELSE 0 END), 1) AS errors_per_100_views FROM \"_rumdata\" GROUP BY x, service ORDER BY x",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "x",
+                    "alias": "x",
+                    "column": "x",
+                    "color": null
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "errors_per_100_views",
+                    "alias": "errors_per_100_views",
+                    "column": "errors_per_100_views",
+                    "color": null
+                  }
+                ],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 23,
+            "w": 24,
+            "h": 7,
+            "i": 8
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
+        },
+        {
+          "id": "Panel_9",
+          "type": "table",
+          "title": "Sessions by profile and version",
+          "description": "",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT context_profile AS profile, service, version, count(distinct session_id) AS sessions FROM \"_rumdata\" WHERE type = 'view' GROUP BY profile, service, version ORDER BY sessions DESC",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "profile",
+                    "alias": "profile",
+                    "column": "profile",
+                    "color": null
+                  },
+                  {
+                    "label": "service",
+                    "alias": "service",
+                    "column": "service",
+                    "color": null
+                  },
+                  {
+                    "label": "version",
+                    "alias": "version",
+                    "column": "version",
+                    "color": null
+                  },
+                  {
+                    "label": "sessions",
+                    "alias": "sessions",
+                    "column": "sessions",
+                    "color": null
+                  }
+                ],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 24,
+            "y": 23,
+            "w": 24,
+            "h": 7,
+            "i": 9
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
+        },
+        {
+          "id": "Panel_10",
+          "type": "table",
+          "title": "Modal, route and feed (ms / count)",
+          "description": "",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT vital_name AS step, count(*) AS n, approx_percentile_cont(vital_duration / 1000000, 0.5) AS p50_ms, approx_percentile_cont(vital_duration / 1000000, 0.95) AS p95_ms FROM \"_rumdata\" WHERE type = 'vital' AND vital_name IN ('modal.ready', 'route.transition') GROUP BY step ORDER BY step",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "step",
+                    "alias": "step",
+                    "column": "step",
+                    "color": null
+                  },
+                  {
+                    "label": "n",
+                    "alias": "n",
+                    "column": "n",
+                    "color": null
+                  },
+                  {
+                    "label": "p50_ms",
+                    "alias": "p50_ms",
+                    "column": "p50_ms",
+                    "color": null
+                  },
+                  {
+                    "label": "p95_ms",
+                    "alias": "p95_ms",
+                    "column": "p95_ms",
+                    "color": null
+                  }
+                ],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 30,
+            "w": 24,
+            "h": 6,
+            "i": 10
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
+        },
+        {
+          "id": "Panel_11",
+          "type": "table",
+          "title": "Palette result rank picked, scope and chip use",
+          "description": "palette.pick carries the row rank; palette.scope and palette.chip count usage; feed.reconnect counts live-feed drops.",
+          "config": {
+            "show_legends": true,
+            "legends_position": null,
+            "decimals": 0,
+            "line_thickness": 1.5,
+            "step_value": "0",
+            "top_results_others": false,
+            "axis_border_show": false,
+            "label_option": {
+              "rotate": 0
+            },
+            "show_symbol": false,
+            "line_interpolation": "smooth",
+            "legend_width": {
+              "unit": "px"
+            },
+            "base_map": {
+              "type": "osm"
+            },
+            "map_type": {
+              "type": "world"
+            },
+            "map_view": {
+              "zoom": 1,
+              "lat": 0,
+              "lng": 0
+            },
+            "map_symbol_style": {
+              "size": "by Value",
+              "size_by_value": {
+                "min": 1,
+                "max": 100
+              },
+              "size_fixed": 2
+            },
+            "drilldown": [],
+            "mark_line": [],
+            "override_config": [],
+            "connect_nulls": false,
+            "no_value_replacement": "",
+            "wrap_table_cells": false,
+            "table_transpose": false,
+            "table_dynamic_columns": false
+          },
+          "queries": [
+            {
+              "query": "SELECT action_target_name AS action, count(*) AS n, avg(context_rank) AS avg_rank FROM \"_rumdata\" WHERE type = 'action' AND (action_target_name LIKE 'palette.%' OR action_target_name = 'feed.reconnect') GROUP BY action ORDER BY n DESC",
+              "customQuery": true,
+              "fields": {
+                "stream": "_rumdata",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "action",
+                    "alias": "action",
+                    "column": "action",
+                    "color": null
+                  },
+                  {
+                    "label": "n",
+                    "alias": "n",
+                    "column": "n",
+                    "color": null
+                  },
+                  {
+                    "label": "avg_rank",
+                    "alias": "avg_rank",
+                    "column": "avg_rank",
+                    "color": null
+                  }
+                ],
+                "y": [],
+                "z": [],
+                "breakdown": [],
+                "filter": {
+                  "filterType": "group",
+                  "logicalOperator": "AND",
+                  "conditions": []
+                }
+              },
+              "config": {
+                "promql_legend": "",
+                "layer_type": "scatter",
+                "weight_fixed": 1,
+                "limit": 0,
+                "min": 0,
+                "max": 100,
+                "time_shift": []
+              }
+            }
+          ],
+          "layout": {
+            "x": 24,
+            "y": 30,
+            "w": 24,
+            "h": 6,
+            "i": 11
+          },
+          "htmlContent": "",
+          "markdownContent": "",
+          "customChartContent": ""
         }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 0,
-      "y": 0,
-      "w": 16,
-      "h": 8,
-      "i": 1
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
-    },
-    {
-     "id": "Panel_2",
-     "type": "line",
-     "title": "INP p75 by service (ms)",
-     "description": "Good < 200 ms.",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT histogram(_timestamp) AS x, service, approx_percentile_cont(view_interaction_to_next_paint / 1000000, 0.75) AS inp_ms FROM \"_rumdata\" WHERE type = 'view' AND view_interaction_to_next_paint IS NOT NULL GROUP BY x, service ORDER BY x",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "x",
-          "alias": "x",
-          "column": "x",
-          "color": null
-         }
-        ],
-        "y": [
-         {
-          "label": "inp_ms",
-          "alias": "inp_ms",
-          "column": "inp_ms",
-          "color": null
-         }
-        ],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
-        }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 16,
-      "y": 0,
-      "w": 16,
-      "h": 8,
-      "i": 2
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
-    },
-    {
-     "id": "Panel_3",
-     "type": "line",
-     "title": "CLS p75 by service",
-     "description": "Good < 0.1.",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT histogram(_timestamp) AS x, service, approx_percentile_cont(view_cumulative_layout_shift, 0.75) AS cls FROM \"_rumdata\" WHERE type = 'view' AND view_cumulative_layout_shift IS NOT NULL GROUP BY x, service ORDER BY x",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "x",
-          "alias": "x",
-          "column": "x",
-          "color": null
-         }
-        ],
-        "y": [
-         {
-          "label": "cls",
-          "alias": "cls",
-          "column": "cls",
-          "color": null
-         }
-        ],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
-        }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 32,
-      "y": 0,
-      "w": 16,
-      "h": 8,
-      "i": 3
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
-    },
-    {
-     "id": "Panel_4",
-     "type": "table",
-     "title": "Cold-load phases (ms)",
-     "description": "Time since navigation start: skeleton on screen, projects list, first beads rendered.",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT vital_name AS phase, service, count(*) AS n, approx_percentile_cont(vital_duration / 1000000, 0.5) AS p50_ms, approx_percentile_cont(vital_duration / 1000000, 0.95) AS p95_ms FROM \"_rumdata\" WHERE type = 'vital' AND vital_name IN ('cold.skeleton', 'cold.projects', 'cold.beads') GROUP BY phase, service ORDER BY phase",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "phase",
-          "alias": "phase",
-          "column": "phase",
-          "color": null
-         },
-         {
-          "label": "service",
-          "alias": "service",
-          "column": "service",
-          "color": null
-         },
-         {
-          "label": "n",
-          "alias": "n",
-          "column": "n",
-          "color": null
-         },
-         {
-          "label": "p50_ms",
-          "alias": "p50_ms",
-          "column": "p50_ms",
-          "color": null
-         },
-         {
-          "label": "p95_ms",
-          "alias": "p95_ms",
-          "column": "p95_ms",
-          "color": null
-         }
-        ],
-        "y": [],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
-        }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 0,
-      "y": 8,
-      "w": 24,
-      "h": 8,
-      "i": 4
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
-    },
-    {
-     "id": "Panel_5",
-     "type": "line",
-     "title": "Palette search per keystroke (ms)",
-     "description": "p50 and p95 per typing burst, as reported by the app; averaged per bucket.",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT histogram(_timestamp) AS x, vital_name AS series, avg(vital_duration / 1000000) AS ms FROM \"_rumdata\" WHERE type = 'vital' AND vital_name IN ('palette.search.p50', 'palette.search.p95') GROUP BY x, series ORDER BY x",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "x",
-          "alias": "x",
-          "column": "x",
-          "color": null
-         }
-        ],
-        "y": [
-         {
-          "label": "ms",
-          "alias": "ms",
-          "column": "ms",
-          "color": null
-         }
-        ],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
-        }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 24,
-      "y": 8,
-      "w": 24,
-      "h": 8,
-      "i": 5
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
-    },
-    {
-     "id": "Panel_6",
-     "type": "table",
-     "title": "Palette open and index build (ms)",
-     "description": "",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT vital_name AS step, count(*) AS n, approx_percentile_cont(vital_duration / 1000000, 0.5) AS p50_ms, approx_percentile_cont(vital_duration / 1000000, 0.95) AS p95_ms FROM \"_rumdata\" WHERE type = 'vital' AND vital_name IN ('palette.open', 'palette.index.build', 'palette.index.comments') GROUP BY step ORDER BY step",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "step",
-          "alias": "step",
-          "column": "step",
-          "color": null
-         },
-         {
-          "label": "n",
-          "alias": "n",
-          "column": "n",
-          "color": null
-         },
-         {
-          "label": "p50_ms",
-          "alias": "p50_ms",
-          "column": "p50_ms",
-          "color": null
-         },
-         {
-          "label": "p95_ms",
-          "alias": "p95_ms",
-          "column": "p95_ms",
-          "color": null
-         }
-        ],
-        "y": [],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
-        }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 0,
-      "y": 16,
-      "w": 24,
-      "h": 7,
-      "i": 6
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
-    },
-    {
-     "id": "Panel_7",
-     "type": "bar",
-     "title": "bd call p95 by command (ms)",
-     "description": "Client-side round trip of every bd call (server function or IPC).",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT replace(vital_name, 'bd.call.', '') AS cmd, approx_percentile_cont(vital_duration / 1000000, 0.95) AS p95_ms FROM \"_rumdata\" WHERE type = 'vital' AND vital_name LIKE 'bd.call.%' GROUP BY cmd ORDER BY p95_ms DESC",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "cmd",
-          "alias": "cmd",
-          "column": "cmd",
-          "color": null
-         }
-        ],
-        "y": [
-         {
-          "label": "p95_ms",
-          "alias": "p95_ms",
-          "column": "p95_ms",
-          "color": null
-         }
-        ],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
-        }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 24,
-      "y": 16,
-      "w": 24,
-      "h": 7,
-      "i": 7
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
-    },
-    {
-     "id": "Panel_8",
-     "type": "line",
-     "title": "Errors per 100 views",
-     "description": "",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT histogram(_timestamp) AS x, service, 100.0 * sum(CASE WHEN type = 'error' THEN 1 ELSE 0 END) / greatest(sum(CASE WHEN type = 'view' THEN 1 ELSE 0 END), 1) AS errors_per_100_views FROM \"_rumdata\" GROUP BY x, service ORDER BY x",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "x",
-          "alias": "x",
-          "column": "x",
-          "color": null
-         }
-        ],
-        "y": [
-         {
-          "label": "errors_per_100_views",
-          "alias": "errors_per_100_views",
-          "column": "errors_per_100_views",
-          "color": null
-         }
-        ],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
-        }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 0,
-      "y": 23,
-      "w": 24,
-      "h": 7,
-      "i": 8
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
-    },
-    {
-     "id": "Panel_9",
-     "type": "table",
-     "title": "Sessions by profile and version",
-     "description": "",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT context_profile AS profile, service, version, count(distinct session_id) AS sessions FROM \"_rumdata\" WHERE type = 'view' GROUP BY profile, service, version ORDER BY sessions DESC",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "profile",
-          "alias": "profile",
-          "column": "profile",
-          "color": null
-         },
-         {
-          "label": "service",
-          "alias": "service",
-          "column": "service",
-          "color": null
-         },
-         {
-          "label": "version",
-          "alias": "version",
-          "column": "version",
-          "color": null
-         },
-         {
-          "label": "sessions",
-          "alias": "sessions",
-          "column": "sessions",
-          "color": null
-         }
-        ],
-        "y": [],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
-        }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 24,
-      "y": 23,
-      "w": 24,
-      "h": 7,
-      "i": 9
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
-    },
-    {
-     "id": "Panel_10",
-     "type": "table",
-     "title": "Modal, route and feed (ms / count)",
-     "description": "",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT vital_name AS step, count(*) AS n, approx_percentile_cont(vital_duration / 1000000, 0.5) AS p50_ms, approx_percentile_cont(vital_duration / 1000000, 0.95) AS p95_ms FROM \"_rumdata\" WHERE type = 'vital' AND vital_name IN ('modal.ready', 'route.transition') GROUP BY step ORDER BY step",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "step",
-          "alias": "step",
-          "column": "step",
-          "color": null
-         },
-         {
-          "label": "n",
-          "alias": "n",
-          "column": "n",
-          "color": null
-         },
-         {
-          "label": "p50_ms",
-          "alias": "p50_ms",
-          "column": "p50_ms",
-          "color": null
-         },
-         {
-          "label": "p95_ms",
-          "alias": "p95_ms",
-          "column": "p95_ms",
-          "color": null
-         }
-        ],
-        "y": [],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
-        }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 0,
-      "y": 30,
-      "w": 24,
-      "h": 6,
-      "i": 10
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
-    },
-    {
-     "id": "Panel_11",
-     "type": "table",
-     "title": "Palette result rank picked, scope and chip use",
-     "description": "palette.pick carries the row rank; palette.scope and palette.chip count usage; feed.reconnect counts live-feed drops.",
-     "config": {
-      "show_legends": true,
-      "legends_position": null,
-      "decimals": 0,
-      "line_thickness": 1.5,
-      "step_value": "0",
-      "top_results_others": false,
-      "axis_border_show": false,
-      "label_option": {
-       "rotate": 0
-      },
-      "show_symbol": false,
-      "line_interpolation": "smooth",
-      "legend_width": {
-       "unit": "px"
-      },
-      "base_map": {
-       "type": "osm"
-      },
-      "map_type": {
-       "type": "world"
-      },
-      "map_view": {
-       "zoom": 1,
-       "lat": 0,
-       "lng": 0
-      },
-      "map_symbol_style": {
-       "size": "by Value",
-       "size_by_value": {
-        "min": 1,
-        "max": 100
-       },
-       "size_fixed": 2
-      },
-      "drilldown": [],
-      "mark_line": [],
-      "override_config": [],
-      "connect_nulls": false,
-      "no_value_replacement": "",
-      "wrap_table_cells": false,
-      "table_transpose": false,
-      "table_dynamic_columns": false
-     },
-     "queries": [
-      {
-       "query": "SELECT action_target_name AS action, count(*) AS n, avg(context_rank) AS avg_rank FROM \"_rumdata\" WHERE type = 'action' AND (action_target_name LIKE 'palette.%' OR action_target_name = 'feed.reconnect') GROUP BY action ORDER BY n DESC",
-       "customQuery": true,
-       "fields": {
-        "stream": "_rumdata",
-        "stream_type": "logs",
-        "x": [
-         {
-          "label": "action",
-          "alias": "action",
-          "column": "action",
-          "color": null
-         },
-         {
-          "label": "n",
-          "alias": "n",
-          "column": "n",
-          "color": null
-         },
-         {
-          "label": "avg_rank",
-          "alias": "avg_rank",
-          "column": "avg_rank",
-          "color": null
-         }
-        ],
-        "y": [],
-        "z": [],
-        "breakdown": [],
-        "filter": {
-         "filterType": "group",
-         "logicalOperator": "AND",
-         "conditions": []
-        }
-       },
-       "config": {
-        "promql_legend": "",
-        "layer_type": "scatter",
-        "weight_fixed": 1,
-        "limit": 0,
-        "min": 0,
-        "max": 100,
-        "time_shift": []
-       }
-      }
-     ],
-     "layout": {
-      "x": 24,
-      "y": 30,
-      "w": 24,
-      "h": 6,
-      "i": 11
-     },
-     "htmlContent": "",
-     "markdownContent": "",
-     "customChartContent": ""
+      ]
     }
-   ]
+  ],
+  "variables": {
+    "list": [],
+    "showDynamicFilters": false
+  },
+  "defaultDatetimeDuration": {
+    "type": "relative",
+    "relativeTimePeriod": "7d"
   }
- ],
- "variables": {
-  "list": [],
-  "showDynamicFilters": false
- },
- "defaultDatetimeDuration": {
-  "type": "relative",
-  "relativeTimePeriod": "7d"
- }
 }
