@@ -5,6 +5,7 @@ import {
   concurrencyForProbe,
   execFileGroup,
   isReadCall,
+  queued,
   queueFor,
 } from './bd-queue.ts'
 
@@ -187,7 +188,7 @@ describe('BdQueue', () => {
     expect(concurrencyForProbe({ embedded: false, connectionOk: true })).toBe(4)
     expect(concurrencyForProbe({ embedded: true })).toBe(1)
     expect(concurrencyForProbe({ embedded: false, connectionOk: false })).toBe(
-      undefined,
+      1,
     )
     expect(concurrencyForProbe({ embedded: false })).toBe(undefined)
   })
@@ -221,6 +222,33 @@ describe('BdQueue', () => {
   it('classifies read subcommands', () => {
     expect(isReadCall(['show', 'x', '--json'])).toBe(true)
     expect(isReadCall(['update', 'x'])).toBe(false)
+    expect(isReadCall(['dolt', 'show', '--json'])).toBe(true)
+    expect(isReadCall(['dolt', 'push'])).toBe(false)
+  })
+
+  it('keeps writes serialized and in order even at concurrency 4', async () => {
+    const dir = '/p/writes'
+    queueFor(dir).setConcurrency(4)
+    const log: string[] = []
+    let running = 0
+    let peak = 0
+    const g = gate()
+    const write = (name: string, wait: Promise<void>) =>
+      queued(dir, ['update', name], async () => {
+        peak = Math.max(peak, ++running)
+        log.push(`${name}+`)
+        await wait
+        running--
+        log.push(`${name}-`)
+      })
+    const a = write('a', g.p)
+    const b = write('b', Promise.resolve())
+    await tick()
+    expect(log).toEqual(['a+']) // b waits for a, though 3 slots are free
+    g.open()
+    await Promise.all([a, b])
+    expect(peak).toBe(1)
+    expect(log).toEqual(['a+', 'a-', 'b+', 'b-'])
   })
 })
 
@@ -259,6 +287,39 @@ describe('execFileGroup', () => {
       signal: null,
     })
   })
+
+  it('leaves the exit to another SIGTERM handler, so an async shutdown can finish', async () => {
+    const { mkdtempSync, readFileSync, existsSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { spawn } = await import('node:child_process')
+    const dir = mkdtempSync(`${tmpdir()}/bdq-term-`)
+    const mod = new URL('./bd-queue.ts', import.meta.url).href
+    const host = spawn(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `import { writeFileSync } from 'node:fs'
+         process.once('SIGTERM', () => setTimeout(() => { writeFileSync('${dir}/shutdown', 'done'); process.exit(0) }, 400))
+         const { execFileGroup } = await import(${JSON.stringify(mod)})
+         execFileGroup('sh', ['-c', 'echo $$ > ${dir}/pid; sleep 30'], { maxBuffer: 1e6, timeout: 60000 }).catch(() => {})`,
+      ],
+      { stdio: 'ignore' },
+    )
+    try {
+      for (let i = 0; i < 200 && !existsSync(`${dir}/pid`); i++)
+        await new Promise((r) => setTimeout(r, 25))
+      const pid = Number(readFileSync(`${dir}/pid`, 'utf8').trim())
+      const exited = new Promise<void>((r) => host.once('exit', () => r()))
+      host.kill('SIGTERM')
+      await exited
+      expect(existsSync(`${dir}/shutdown`)).toBe(true) // not cut short by a re-raise
+      await new Promise((r) => setTimeout(r, 300))
+      expect(() => process.kill(pid, 0)).toThrow()
+    } finally {
+      host.kill('SIGKILL')
+    }
+  }, 10_000)
 
   it('forwards SIGINT to live groups, so Ctrl-C in a dev terminal reaches bd', async () => {
     const { mkdtempSync, readFileSync, existsSync } = await import('node:fs')
@@ -383,6 +444,22 @@ describe('bdExec timeout', () => {
       )
       await expect(bdExec(dir, ['update', 'x'])).rejects.toThrow(
         /killed by SIGKILL.*may have been applied/,
+      )
+      // the probe is a read: no hint
+      await expect(bdExec(dir, ['dolt', 'show', '--json'])).rejects.not.toThrow(
+        /may have been applied/,
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('keeps bd stderr in a signal-kill message', async () => {
+    const { bdExec } = await import('./bd.ts')
+    const dir = await fakeBd('echo lock held >&2; kill -9 $$')
+    try {
+      await expect(bdExec(dir, ['show', 'x'])).rejects.toThrow(
+        /killed by SIGKILL: lock held/,
       )
     } finally {
       vi.unstubAllEnvs()

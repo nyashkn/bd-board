@@ -2,8 +2,8 @@
 //! error text, and JSON helpers.
 
 use super::queue::{
-    env_concurrency, is_read_call, output_with_timeout, queue_for, timeout_from_env, Priority,
-    Queues, TIMEOUT_GRACE,
+    env_concurrency, is_read_call, output_with_timeout, queue_for, queue_for_limit, run_write,
+    timeout_from_env, Priority, Queues, TIMEOUT_GRACE,
 };
 use crate::registry::{self, RegistryEntry};
 use serde_json::Value;
@@ -232,6 +232,10 @@ pub(crate) fn exec_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
 }
 
 static QUEUES: OnceLock<Queues<BdCapture>> = OnceLock::new();
+/// Writes to a project pass this limit-1 queue before the slot queue above.
+static WRITE_QUEUES: OnceLock<Queues<BdCapture>> = OnceLock::new();
+
+const MAY_HAVE_BEEN_APPLIED: &str = "; the command may have been applied, so check before retrying";
 
 pub(crate) fn exec_bd_with(
     dir: &Path,
@@ -249,10 +253,16 @@ pub(crate) fn exec_bd_prio(
     timeout: std::time::Duration,
     priority: Priority,
 ) -> Result<BdCapture, String> {
-    let queue = queue_for(&QUEUES, &dir.to_string_lossy());
-    // Reads with the same args share a process; mutations always run.
-    let key = is_read_call(args).then(|| format!("{:?}", args));
-    queue.run_prio(key.as_deref(), priority, || spawn_bd(dir, args, timeout))
+    let dir_key = dir.to_string_lossy();
+    let queue = queue_for(&QUEUES, &dir_key);
+    if is_read_call(args) {
+        // Reads with the same args share a process.
+        let key = format!("{:?}", args);
+        return queue.run_prio(Some(&key), priority, || spawn_bd(dir, args, timeout));
+    }
+    // Mutations always run, one at a time and in arrival order, whatever the slot bound.
+    let writes = queue_for_limit(&WRITE_QUEUES, &dir_key, 1);
+    run_write(&writes, &queue, priority, || spawn_bd(dir, args, timeout))
 }
 
 /// Apply the probe's verdict to `dir`'s queue (4 on a reachable Dolt server, 1 embedded),
@@ -277,7 +287,7 @@ pub(crate) fn timeout_message(args: &[&str], timeout: std::time::Duration) -> St
         timeout.as_secs()
     );
     if !is_read_call(args) {
-        msg.push_str("; the command may have been applied, so check before retrying");
+        msg.push_str(MAY_HAVE_BEEN_APPLIED);
     }
     msg
 }
@@ -291,7 +301,7 @@ pub(crate) fn failed_to_run_message(
 ) -> String {
     let mut msg = format!("failed to run {}: {}", candidate, err);
     if err.kind() == std::io::ErrorKind::TimedOut && !is_read_call(args) {
-        msg.push_str("; the command may have been applied, so check before retrying");
+        msg.push_str(MAY_HAVE_BEEN_APPLIED);
     }
     msg
 }
@@ -348,12 +358,21 @@ pub(crate) fn run_bd(dir: &Path, args: &[&str]) -> Result<String, String> {
     run_bd_prio(dir, args, Priority::User)
 }
 
+/// The error for a bd that ran and failed. A write killed by a signal may have been applied.
+pub(crate) fn failure_message(args: &[&str], cap: &BdCapture) -> String {
+    let mut msg = bd_error_message(&cap.stdout, &cap.stderr, &cap.status);
+    if cap.status.code().is_none() && !is_read_call(args) {
+        msg.push_str(MAY_HAVE_BEEN_APPLIED);
+    }
+    msg
+}
+
 pub(crate) fn run_bd_prio(dir: &Path, args: &[&str], priority: Priority) -> Result<String, String> {
     let cap = exec_bd_prio(dir, args, timeout_from_env(), priority)?;
     if cap.status.success() {
         Ok(cap.stdout)
     } else {
-        Err(bd_error_message(&cap.stdout, &cap.stderr, &cap.status))
+        Err(failure_message(args, &cap))
     }
 }
 
@@ -433,6 +452,32 @@ mod tests {
         assert!(write.starts_with("failed to run /bin/sh"), "{write}");
         assert!(write.contains("may have been applied"), "{write}");
         assert!(!run("show").contains("may have been applied"));
+    }
+
+    /// A write killed by a signal reports the same hint as Node; a read (or the probe) does not.
+    #[cfg(unix)]
+    #[test]
+    fn a_signal_killed_write_may_have_been_applied() {
+        let d = std::env::temp_dir().join(format!("bd-exec-kill-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        for name in ["show", "update", "dolt"] {
+            std::fs::write(d.join(name), "kill -9 $$\n").unwrap();
+        }
+        let msg = |args: &[&str]| {
+            let cap = spawn_candidates(
+                &d,
+                args,
+                std::time::Duration::from_secs(5),
+                std::time::Duration::from_millis(200),
+                &["/bin/sh".to_string()],
+                &[],
+            )
+            .unwrap();
+            failure_message(args, &cap)
+        };
+        assert!(msg(&["update", "x"]).contains("may have been applied"));
+        assert!(!msg(&["show", "x"]).contains("may have been applied"));
+        assert!(!msg(&["dolt", "show", "--json"]).contains("may have been applied"));
     }
 
     #[test]

@@ -2,7 +2,8 @@
  * Per-project bd call queue. Embedded Dolt holds a process lock, so parallel `bd` calls
  * against one project serialize badly (8 parallel `show` = 4.3 s vs ~0.4 s each alone).
  * Calls for a project run through a bounded queue (default 1, 4 once the probe says the
- * project is on a reachable Dolt server); a read with the same key that is still queued
+ * project is on a reachable Dolt server); writes also pass a limit-1 FIFO queue in front of
+ * it, so they land in arrival order whatever the bound; a read with the same key that is still queued
  * shares that call's result (single-flight). Two FIFO lanes: user-initiated calls go before
  * background polls; a running call is never preempted.
  */
@@ -25,6 +26,8 @@ const READ_COMMANDS = new Set([
 ])
 
 export function isReadCall(args: readonly string[]): boolean {
+  // `dolt show` is the probe; other `dolt` subcommands (push, commit, ...) write.
+  if (args[0] === 'dolt') return args[1] === 'show'
   return READ_COMMANDS.has(args[0] ?? '')
 }
 
@@ -142,12 +145,13 @@ export function concurrencyFromEnv(env: NodeJS.ProcessEnv): number {
   return envConcurrency(env) ?? DEFAULT_CONCURRENCY
 }
 
-/** What the probe says about a project's limit: server and reachable = 4, embedded = 1, else unknown. */
+/** What the probe says about a project's limit: reachable server = 4, embedded or unreachable server = 1, else unknown. */
 export function concurrencyForProbe(p: {
   embedded?: boolean
   connectionOk?: boolean
 }): number | undefined {
-  if (p.embedded === true) return DEFAULT_CONCURRENCY
+  if (p.embedded === true || p.connectionOk === false)
+    return DEFAULT_CONCURRENCY
   if (p.embedded === false && p.connectionOk === true) return SERVER_CONCURRENCY
   return undefined
 }
@@ -177,15 +181,32 @@ export function queueFor(dir: string): BdQueue {
   return q
 }
 
-/** Queue a bd call for `dir`; reads coalesce on dir + args. */
+const writeQueues = new Map<string, BdQueue>()
+
+/** Writes to one project go through this limit-1 queue, so they stay in arrival order. */
+function writeQueueFor(dir: string): BdQueue {
+  let q = writeQueues.get(dir)
+  if (!q) {
+    q = new BdQueue(1)
+    writeQueues.set(dir, q)
+  }
+  return q
+}
+
+/** Queue a bd call for `dir`; reads coalesce on dir + args, writes run one at a time in order. */
 export function queued<T>(
   dir: string,
   args: readonly string[],
   fn: () => Promise<T>,
   priority: Priority = 'user',
 ): Promise<T> {
-  const key = isReadCall(args) ? JSON.stringify([dir, args]) : null
-  return queueFor(dir).run(key, fn, priority)
+  if (!isReadCall(args))
+    return writeQueueFor(dir).run(
+      null,
+      () => queueFor(dir).run(null, fn, priority),
+      priority,
+    )
+  return queueFor(dir).run(JSON.stringify([dir, args]), fn, priority)
 }
 
 /** Time between SIGTERM and SIGKILL when a call times out. */
@@ -201,24 +222,32 @@ export class BdBufferError extends Error {
 
 type Child = ReturnType<typeof spawn>
 
+// On globalThis so a hot-reloaded copy of this module shares the set and does not stack listeners.
+const shared = globalThis as {
+  __bdLiveGroups?: Set<number>
+  __bdSignalsHooked?: boolean
+}
+
 /** Process groups of the bd calls that are running now. */
-const liveGroups = new Set<number>()
-let signalsHooked = false
+const liveGroups = (shared.__bdLiveGroups ??= new Set<number>())
 
 /**
  * bd children lead their own process group, so a Ctrl-C or hangup aimed at this process
  * (the dev server) no longer reaches them. On SIGINT/SIGTERM/SIGHUP, SIGTERM every live
- * group, then hand the signal back so the process still exits (or its other handlers run).
+ * group. If no one else listens for that signal, hand it back so the process still exits;
+ * otherwise leave the exit to the other handler (Vite's shutdown is async and must finish).
  * A SIGKILL of this process cannot be forwarded; bd's pipes close, which ends most calls.
  */
 function hookSignals(): void {
-  if (signalsHooked || process.platform === 'win32') return
-  signalsHooked = true
+  if (shared.__bdSignalsHooked || process.platform === 'win32') return
+  shared.__bdSignalsHooked = true
   for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+    const owned = process.listenerCount(sig) === 0
     const onSignal = () => {
       stopLiveGroups()
       process.removeListener(sig, onSignal)
-      if (process.listenerCount(sig) === 0) process.kill(process.pid, sig)
+      if (owned && process.listenerCount(sig) === 0)
+        process.kill(process.pid, sig)
     }
     process.on(sig, onSignal)
   }

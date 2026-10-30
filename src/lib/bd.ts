@@ -254,8 +254,10 @@ async function spawnBd(
         throw new Error('bd output exceeded buffer')
       }
       if (error.signal) {
+        const why = (error.stderr ?? '').trim()
         throw new Error(
           `bd ${args[0] ?? ''} killed by ${error.signal}` +
+            (why ? `: ${why}` : '') +
             (isReadCall(args)
               ? ''
               : '; the command may have been applied, so check before retrying'),
