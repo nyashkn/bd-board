@@ -173,6 +173,47 @@ The project list comes only from the registry; the old `BD_ROOTS` variable is ig
 
 Reads and writes are both enabled by default: the app executes local `bd` mutations (create, edit, comment, status update, delete) with no separate opt-in.
 
+## Telemetry (OpenObserve RUM)
+
+Off by default. bd board sends nothing anywhere unless a config enables it **and** holds a client token; with either missing, RUM stays silent (an enabled-but-invalid config logs one `console.warn` and stays off). It only ever talks to the one `site` you configure; there is no built-in host.
+
+**Config** (`~/.config/bd-board/rum.json`, read by the desktop app and by the web server on every request, so no rebuild is needed; `O2_RUM_*` env vars on the server override it, and `VITE_O2_RUM_*` build-time vars are the fallback):
+
+```json
+{
+  "enabled": true,
+  "site": "<rum-ingest-host>",
+  "organizationIdentifier": "<org>",
+  "applicationId": "<optional>",
+  "clientToken": "<write-only RUM client token>",
+  "env": "production",
+  "profile": "full",
+  "sampleRate": 100,
+  "replaySampleRate": 100,
+  "insecureHTTP": false
+}
+```
+
+`site` is `host[:port]` without a scheme. `service` defaults to `bd-board-web` or `bd-board-desktop`; `version` comes from `package.json`. `userName` defaults to `BD_BOARD_AUTHOR`.
+
+**Privacy profile** (`profile`, default `full` once enabled):
+
+| Profile    | Sent                                                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `full`     | everything: session replay, full URLs including `?bead=` and `q=`, click targets, the author name (and a hash id), error text, project names on timings |
+| `standard` | no replay, query strings stripped, text and click targets masked, no user, error text capped at 200 chars, timings without project names                |
+| `minimal`  | `standard` without click events: performance and errors only                                                                                            |
+
+**What is measured**: web vitals and resources (SDK), views named `board`, `hierarchy`, `projects`, `knowledge`, `bead-modal`; cold-load phases; palette open, per-typing-burst search p50/p95, index and comment-index builds, scope/chip use and the rank of the picked result; every `bd` call (command name, duration, ok/error; never arguments or output outside `full`); modal open to content, route transitions, live-feed reconnects; errors.
+
+**Setup**: create the RUM application and client token in OpenObserve, put them in `rum.json`, and have the operator add the app origin to the intake's CORS allow-list (`http://localhost:3009` for the dev web app, the desktop webview origin for the desktop app).
+
+**Dashboard**: `python3 scripts/o2/gen_bd_board_rum_dashboard.py` writes `scripts/o2/bd-board-rum.json`; post it to `/api/<org>/dashboards`. Column names it assumes are listed at the top of the script.
+
+**Source maps**: `O2_RUM_SOURCEMAPS=1 pnpm build` emits hidden maps, then `bash scripts/upload-sourcemaps.sh --service bd-board-web --env production` (dry run; add `--send` with `O2_SM_URL`, `O2_SM_ORG`, `O2_SM_TOKEN`). Service, env and version must match what the SDK reports. OpenObserve documents source maps as Enterprise-only.
+
+**Tests**: `pnpm test` covers the config validator, the profile scrubber, the call wrapper and the off-path overhead; `pnpm e2e:rum` runs the browser against a fake local intake.
+
 ## For agents
 
 Three conventions the board understands. None needs the board running.

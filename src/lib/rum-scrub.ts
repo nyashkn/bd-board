@@ -8,6 +8,7 @@ export interface ScrubEvent {
   error?: { message?: string; stack?: string }
   action?: { type?: string; target?: { name?: string } }
   usr?: unknown
+  context?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -25,6 +26,8 @@ export function stripQuery(url: string): string {
  *  minimal  standard, plus no click events: performance and errors only.
  */
 export function scrubEvent(event: ScrubEvent, profile: RumProfile): boolean {
+  // Lets the dashboard split sessions by privacy profile.
+  event.context = { ...event.context, profile }
   if (profile === 'full') return true
   if (event.view?.url) event.view.url = stripQuery(event.view.url)
   if (event.view?.referrer)

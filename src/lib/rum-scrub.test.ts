@@ -30,6 +30,12 @@ describe('stripQuery', () => {
 })
 
 describe('scrubEvent', () => {
+  it('tags every kept event with its profile, keeping existing context', () => {
+    const e: ScrubEvent = { type: 'vital', context: { ok: true } }
+    scrubEvent(e, 'standard')
+    expect(e.context).toEqual({ ok: true, profile: 'standard' })
+  })
+
   it('full keeps URL with query, click target and user', () => {
     const v = viewEvent()
     expect(scrubEvent(v, 'full')).toBe(true)
