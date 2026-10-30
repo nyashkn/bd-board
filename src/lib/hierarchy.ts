@@ -50,7 +50,7 @@ export function compareHierarchy(a: Bead, b: Bead): number {
   )
 }
 
-/** "KN" from "kn", "nyashkn@gmail.com" or "Jane Doe"; empty when unassigned. */
+/** "KN" from "kn", "jane.doe@example.com" or "Jane Doe"; empty when unassigned. */
 export function initials(assignee?: string): string {
   const name = (assignee ?? '').split('@')[0].trim()
   if (!name) return ''
@@ -60,7 +60,7 @@ export function initials(assignee?: string): string {
   return letters.toUpperCase()
 }
 
-/** "b6n.8" for "ldb-b6n.8": the project prefix adds nothing inside one project. */
+/** "b6n.8" for "demo-b6n.8": the project prefix adds nothing inside one project. */
 export function shortId(id: string): string {
   return id.replace(/^[^-]+-/, '')
 }

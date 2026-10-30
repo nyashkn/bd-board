@@ -1,13 +1,13 @@
-r"""Generates bd-board-rum.json, an org-kn dashboard for bd-board's OpenObserve RUM data.
+r"""Generates bd-board-rum.json, an org dashboard for bd-board's OpenObserve RUM data.
 
   python3 scripts/o2/gen_bd_board_rum_dashboard.py     # writes scripts/o2/bd-board-rum.json
   # create (folder `bd-board`: one folder per project; create it once in the UI or with `o2`)
   curl -u USER:PASS -X POST -H 'Content-Type: application/json' \
-       "$O2/api/kn/dashboards?folder=bd-board" -d @scripts/o2/bd-board-rum.json
+       "$O2/api/<org>/dashboards?folder=bd-board" -d @scripts/o2/bd-board-rum.json
   # update: read the current top-level `hash`, then PUT with `dashboardId` in the body
-  HASH=$(curl -s -u USER:PASS "$O2/api/kn/dashboards/<id>?folder=bd-board" | jq -r .hash)
+  HASH=$(curl -s -u USER:PASS "$O2/api/<org>/dashboards/<id>?folder=bd-board" | jq -r .hash)
   curl -u USER:PASS -X PUT -H 'Content-Type: application/json' \
-       "$O2/api/kn/dashboards/<id>?folder=bd-board&hash=$HASH" -d @bd-board-rum.json
+       "$O2/api/<org>/dashboards/<id>?folder=bd-board&hash=$HASH" -d @bd-board-rum.json
 
 The owner posts it; nothing here calls an API. Every panel is custom SQL over `_rumdata`, so
 each can be tried in the Logs search first. Same layout conventions as gen_mac_dashboard.py
