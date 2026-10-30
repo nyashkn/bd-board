@@ -19,6 +19,8 @@ export const config: WebdriverIO.Config = {
   onPrepare: async (...args) => {
     ingest = await startIngest(
       path.join(mkdtempSync(path.join(tmpdir(), 'bdb-rum-')), 'ingest.jsonl'),
+      // the origin the test page runs on, like the real intake's allow-list
+      [`http://localhost:${process.env.E2E_FIXTURE_PORT ?? '3061'}`],
     )
     process.env.E2E_RUM_PORT = String(ingest.port)
     process.env.E2E_RUM_LOG = ingest.logPath

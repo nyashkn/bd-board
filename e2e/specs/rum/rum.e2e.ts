@@ -12,6 +12,7 @@ interface Hit {
   method: string
   url: string
   origin: string
+  allowed: boolean
   body: string
 }
 
@@ -148,6 +149,8 @@ describe('RUM against a fake intake', () => {
     expect(text).toContain('"type":"action"')
     // every request went to the fake intake, with the token and org in the URL
     for (const h of all) expect(h.url).toContain('/rum/v1/kn')
+    // the page's origin is on the intake's allow-list: no CORS refusals
+    expect(all.filter((h) => !h.allowed)).toEqual([])
     const origins = await browser.execute(() =>
       performance
         .getEntriesByType('resource')
@@ -176,5 +179,23 @@ describe('RUM against a fake intake', () => {
     expect(text).not.toContain('q=needle')
     expect(text).not.toContain('e2e-author')
     expect(text).toContain('"type":"view"')
+  })
+
+  it('a CORS failure shows up: an origin off the allow-list is reported as not allowed', async () => {
+    const w = world()
+    const origins = `${logPath()}.origins`
+    const original = readFileSync(origins, 'utf8')
+    writeFileSync(origins, 'http://not-this-origin.invalid')
+    try {
+      writeConfig({ profile: 'standard' })
+      await openApp(`/p/${w.art.id}`)
+      await $(SEARCH).waitForDisplayed({ timeout: 30000 })
+      await waitForHits((all) => all.length > 0)
+      const all = hits()
+      expect(all.every((h) => !h.allowed)).toBe(true)
+      expect(all[0].origin).toBe(new URL(await browser.getUrl()).origin)
+    } finally {
+      writeFileSync(origins, original)
+    }
   })
 })

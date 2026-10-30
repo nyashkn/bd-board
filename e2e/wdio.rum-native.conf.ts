@@ -18,6 +18,7 @@ export const config: WebdriverIO.Config = {
   onPrepare: async (...args) => {
     ingest = await startIngest(
       path.join(mkdtempSync(path.join(tmpdir(), 'bdb-rum-')), 'ingest.jsonl'),
+      ['tauri://localhost'],
     )
     process.env.E2E_RUM_LOG = ingest.logPath
     await native.onPrepare?.(...args) // creates the world and points HOME at it

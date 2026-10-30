@@ -1,4 +1,4 @@
-import { appendFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 
@@ -12,14 +12,28 @@ export interface Ingest {
   close: () => Promise<void>
 }
 
-export function startIngest(logPath: string): Promise<Ingest> {
+/**
+ * Like the real intake, answers CORS only for an allow-list of origins (the comma-separated
+ * contents of `<log>.origins`, re-read per request so a spec can change it). Other origins
+ * get no Access-Control-* header and are logged with `allowed: false`.
+ */
+export function startIngest(
+  logPath: string,
+  allowedOrigins: string[],
+): Promise<Ingest> {
   writeFileSync(logPath, '')
+  writeFileSync(`${logPath}.origins`, allowedOrigins.join(','))
   const server: Server = createServer((req, res) => {
-    const origin = req.headers.origin ?? '*'
-    res.setHeader('Access-Control-Allow-Origin', origin)
-    res.setHeader('Access-Control-Allow-Headers', '*')
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-    res.setHeader('Access-Control-Max-Age', '60')
+    const origin = req.headers.origin ?? ''
+    const allowed = readFileSync(`${logPath}.origins`, 'utf8')
+      .split(',')
+      .includes(origin)
+    if (allowed) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      res.setHeader('Access-Control-Allow-Headers', '*')
+      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+      res.setHeader('Access-Control-Max-Age', '60')
+    }
     if (req.method === 'OPTIONS') {
       res.writeHead(204).end()
       return
@@ -32,7 +46,8 @@ export function startIngest(logPath: string): Promise<Ingest> {
         JSON.stringify({
           method: req.method,
           url: req.url,
-          origin: req.headers.origin ?? '',
+          origin,
+          allowed,
           body: Buffer.concat(chunks).toString('utf8'),
         }) + '\n',
       )
