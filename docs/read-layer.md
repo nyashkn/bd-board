@@ -173,13 +173,13 @@ It does not serve a phone or a web viewer.
 
 ### Automatic selection
 
-`connectorFor(project)` resolves once per project per session, caches the answer and re-resolves on error:
+`connectorFor(project)` is synchronous and returns a per-project router. On its first call the router builds an ordered candidate list, probes once per session, and uses the first candidate whose kind has a registered factory (`registerConnectorKind`). Today only bd-cli is registered; dolt-sql and http-snapshot are recognised and skipped until their beads land.
 
-1. **Explicit source.** If the registry entry has a `source` URL, its scheme decides: `bd:` → bd-cli, `mysql://host:port/db` → dolt-sql, `https://…/manifest.json` → http-snapshot.
-2. **Probe.** Run `bd dolt show --json` once, with a hard timeout of about 2 s. If it reports `embedded: false`, `connection_ok: true` and a known `schema_version`, use dolt-sql on desktop with the reported host, port and database. Otherwise use bd-cli.
-3. **Fallback chain.** A dolt-sql connection, query or schema error falls back to bd-cli for that session, with a RUM event. http-snapshot has no fallback; it shows its error.
+1. **Explicit `sources`.** An optional ordered list on the registry entry, tried first to last: `bd:` → bd-cli, `mysql://host:port/db` → dolt-sql, `https://…` → http-snapshot. Any other scheme fails registry load. bd is not probed at all.
+2. **Default order** (no `sources`): local embedded bd, then a Dolt sql-server, then bd-cli. The probe is `bd dolt show --json` with a hard 2 s timeout (`probeDoltMode` in TS, `probe_dolt_mode` in Rust). `embedded: true` → [bd-cli]; `embedded: false` with `connection_ok` → [dolt-sql at the reported host, port and database, bd-cli]; a probe error or timeout → [bd-cli].
+3. **Live fallback.** A connection-class error (refused, reset, unreachable; not a "not found" or validation error) marks that candidate unhealthy for the session, emits one `connector.fallback` RUM action (`from`, `to` kinds only), retries the call on the next candidate and stays there. Writes are never retried (they may have committed): the candidate is marked and the error is rethrown. A failed probe is retried once after 30 s. With no candidate left the original error is rethrown. The live feed picks a connector but does not fail over.
 
-bd-board never starts, stops or supervises a Dolt server, and never migrates a project between modes. In shared and proxied mode, bd itself autostarts the server.
+The probe reply also carries the entry's `sources`, so the client needs no extra read. Rust selection (`source_for`) is unchanged for now. bd-board never starts, stops or supervises a Dolt server, and never migrates a project between modes. In shared and proxied mode, bd itself autostarts the server.
 
 ## The original five-step plan
 
