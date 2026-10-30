@@ -43,7 +43,7 @@ import { useReadonly } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BeadLinkButton } from '@/components/bead-link'
-import { BeadMarkdown } from '@/components/bead-ref-chip'
+import { BeadMarkdown, CommentText } from '@/components/bead-ref-chip'
 import { InteractiveRow } from '@/components/ui/interactive-row'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -1355,12 +1355,12 @@ export function BeadDetailModal({
                                     }}
                                   />
                                 ) : (
-                                  <p
+                                  <CommentText
                                     key={n}
-                                    className="mt-1.5 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere]"
+                                    resolveBead={resolveBead}
                                   >
                                     {part.text}
-                                  </p>
+                                  </CommentText>
                                 ),
                               )}
                             </li>

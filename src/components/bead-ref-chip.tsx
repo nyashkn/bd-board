@@ -47,6 +47,37 @@ export function BeadMarkdown({
   )
 }
 
+/** A comment's plain-text part (comments are not markdown) with `:::bead` directives as chips. */
+export function CommentText({
+  children,
+  resolveBead,
+}: {
+  children: string
+  resolveBead: (id: string) => Bead | undefined
+}) {
+  const segments = useMemo(() => splitBeadRefs(children), [children])
+  return (
+    <>
+      {segments.map((s, i) =>
+        s.type === 'text' ? (
+          <p
+            key={i}
+            className="mt-1.5 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere]"
+          >
+            {s.text}
+          </p>
+        ) : (
+          <p key={i} className="mt-1.5 flex flex-wrap gap-1.5">
+            {s.ids.map((id, j) => (
+              <BeadRefChip key={`${id}:${j}`} id={id} bead={resolveBead(id)} />
+            ))}
+          </p>
+        ),
+      )}
+    </>
+  )
+}
+
 const chipClass =
   'inline-flex max-w-full items-center gap-1.5 rounded-md bg-muted px-1.5 py-0.5 text-xs no-underline ring-1 ring-inset ring-border hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring'
 

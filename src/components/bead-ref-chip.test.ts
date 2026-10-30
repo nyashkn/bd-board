@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { BeadMarkdown } from '@/components/bead-ref-chip'
+import { BeadMarkdown, CommentText } from '@/components/bead-ref-chip'
 import type { Bead } from '@/lib/types'
 
 // The router is not under test: BeadLink becomes a plain anchor.
@@ -78,5 +78,30 @@ describe('BeadMarkdown', () => {
     })
     act(() => void vi.advanceTimersByTime(500))
     expect(document.querySelector('[role="tooltip"]')).toBeNull()
+  })
+})
+
+describe('CommentText', () => {
+  afterEach(cleanup)
+
+  it('renders :::bead inside comment text as a chip, keeping surrounding text', () => {
+    const { container } = render(
+      createElement(CommentText, {
+        resolveBead: resolve,
+        children: 'see this\n:::bead demo-abc\nthanks',
+      }),
+    )
+    expect(container.querySelector('a[href="?bead=demo-abc"]')).not.toBeNull()
+    expect(container.textContent).toContain('see this')
+    expect(container.textContent).toContain('thanks')
+    expect(container.textContent).not.toContain(':::bead')
+  })
+
+  it('leaves plain text untouched', () => {
+    const { container } = render(
+      createElement(CommentText, { resolveBead: resolve, children: 'plain' }),
+    )
+    expect(container.querySelector('a')).toBeNull()
+    expect(container.textContent).toBe('plain')
   })
 })
