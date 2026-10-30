@@ -49,6 +49,8 @@ import {
   chipLabel,
   commitChips,
   isEmptyQuery,
+  ALL_SCOPE,
+  scopeCycle,
 } from '@/lib/palette-query'
 import { loadRecent, recordRecent } from '@/lib/palette-recent'
 import { docKey, searchDocs } from '@/lib/palette-search'
@@ -74,6 +76,23 @@ const TYPE_ICON: Record<string, LucideIcon> = {
   bug: Bug,
   feature: Sparkles,
   chore: Wrench,
+}
+
+const SCOPE_KEY = 'bd-board.palette-scope'
+// Last scope chosen this browser session ('all' or a project id); none means "this project".
+const readScope = (): string | null => {
+  try {
+    return sessionStorage.getItem(SCOPE_KEY)
+  } catch {
+    return null
+  }
+}
+const storeScope = (scope: string) => {
+  try {
+    sessionStorage.setItem(SCOPE_KEY, scope)
+  } catch {
+    // private mode: the choice just lasts until the palette closes
+  }
 }
 
 const modKey = () =>
@@ -200,10 +219,17 @@ export function CommandPalette() {
   const [selected, setSelected] = useState('')
   const [recent, setRecent] = useState<RecentEntry[]>([])
   const [copied, setCopied] = useState('')
+  const [scope, setScope] = useState<string>(ALL_SCOPE)
+  const [switcher, setSwitcher] = useState(false)
+  const [switcherAt, setSwitcherAt] = useState(0)
+  const [scopeNote, setScopeNote] = useState('')
   const previousFocus = useRef<HTMLElement | null>(null)
   const chose = useRef(false)
 
-  const { docs, comments, loading, indexing } = usePaletteData(open, current)
+  const { projects, docs, comments, loading, indexing } = usePaletteData(
+    open,
+    current,
+  )
   const deferredInput = useDeferredValue(input)
   const query = useMemo(
     () => buildQuery(chips, deferredInput),
@@ -219,8 +245,13 @@ export function CommandPalette() {
     }
   }, [open, current])
   const hits = useMemo(
-    () => searchDocs(docs, query, { comments, ...ctx }),
-    [docs, query, comments, ctx],
+    () =>
+      searchDocs(docs, query, {
+        comments,
+        ...ctx,
+        scope: scope === ALL_SCOPE ? undefined : scope,
+      }),
+    [docs, query, comments, ctx, scope],
   )
   const docsByKey = useMemo(() => new Map(docs.map((d) => [d.key, d])), [docs])
   const now = useMemo(() => Date.now(), [docs, open])
@@ -254,6 +285,9 @@ export function CommandPalette() {
       setInput('')
       setChips([])
       setCopied('')
+      setScope(readScope() ?? current ?? ALL_SCOPE)
+      setSwitcher(false)
+      setScopeNote('')
       setRecent(loadRecent())
       setOpen(true)
     }
@@ -269,6 +303,24 @@ export function CommandPalette() {
       search: { bead: id },
     })
     return window.location.origin + href
+  }
+
+  const nameOf = (id: string) =>
+    id === ALL_SCOPE
+      ? 'All projects'
+      : (projects.find((p) => p.id === id)?.name ?? id)
+
+  function chooseScope(next: string) {
+    setScope(next)
+    storeScope(next)
+    setScopeNote(`Searching ${nameOf(next)}`)
+    setSwitcher(false)
+  }
+
+  function openSwitcher() {
+    const options = [ALL_SCOPE, ...projects.map((p) => p.id)]
+    setSwitcherAt(Math.max(0, options.indexOf(scope)))
+    setSwitcher(true)
   }
 
   function finish() {
@@ -334,6 +386,32 @@ export function CommandPalette() {
     ),
   })
 
+  const projectRow = (id: string, name: string): Row => ({
+    value: `jump:project:${id}`,
+    run: (newTab) => {
+      const { href } = router.buildLocation({
+        to: '/p/$project',
+        params: { project: id },
+      })
+      if (newTab && !isDesktopApp())
+        window.open(window.location.origin + href, '_blank', 'noopener')
+      else void navigate({ to: '/p/$project', params: { project: id } })
+      finish()
+    },
+    content: (
+      <>
+        <FolderOpen
+          className="size-4 text-muted-foreground"
+          aria-hidden="true"
+        />
+        Open project {name}
+        {id === current && (
+          <span className="ml-auto text-xs text-muted-foreground">current</span>
+        )}
+      </>
+    ),
+  })
+
   const goRow = (
     value: string,
     label: string,
@@ -393,6 +471,7 @@ export function CommandPalette() {
               goRow('hierarchy', 'Hierarchy', ListTree, tab('hierarchy')),
             ]
           : []),
+        ...projects.map((p) => projectRow(p.id, p.name)),
         goRow(
           'projects',
           'Projects',
@@ -431,7 +510,39 @@ export function CommandPalette() {
 
   function onKeyDown(e: React.KeyboardEvent) {
     const mod = e.metaKey || e.ctrlKey
-    if (e.key === 'Enter' && mod) {
+    if (switcher) {
+      const options = [ALL_SCOPE, ...projects.map((p) => p.id)]
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const step = e.key === 'ArrowDown' ? 1 : -1
+        setSwitcherAt((i) => (i + step + options.length) % options.length)
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        const id = options[switcherAt]
+        chooseScope(id)
+        // Cmd/Ctrl+Enter also goes there.
+        if (mod && id !== ALL_SCOPE) {
+          void navigate({ to: '/p/$project', params: { project: id } })
+          finish()
+        }
+      } else if (e.key === 'Tab') {
+        setSwitcher(false)
+      }
+      return
+    }
+    if (mod && e.shiftKey && !e.altKey && e.code === 'Period') {
+      e.preventDefault()
+      chooseScope(
+        scopeCycle(
+          scope,
+          current,
+          projects.map((p) => p.id),
+        ),
+      )
+    } else if (mod && e.shiftKey && !e.altKey && e.code === 'KeyL') {
+      e.preventDefault()
+      openSwitcher()
+    } else if (e.key === 'Enter' && mod) {
       e.preventDefault()
       rowByValue.get(selected)?.run(true)
     } else if (e.key === 'Backspace' && input === '' && chips.length) {
@@ -454,13 +565,19 @@ export function CommandPalette() {
     }
   }
 
-  const countText = copied
-    ? copied
-    : empty
-      ? ''
-      : hits.length === 0
-        ? 'No matching beads'
-        : `${hits.length} ${hits.length === 1 ? 'result' : 'results'}`
+  const scopeLabel = nameOf(scope)
+  const scoped = scope !== ALL_SCOPE
+  const countText = [
+    copied ||
+      (empty
+        ? ''
+        : hits.length === 0
+          ? 'No matching beads'
+          : `${hits.length} ${hits.length === 1 ? 'result' : 'results'}`),
+    scopeNote,
+  ]
+    .filter(Boolean)
+    .join('. ')
   const mod = modKey()
 
   return (
@@ -468,6 +585,12 @@ export function CommandPalette() {
       <DialogContent
         data-slot="command-palette"
         showCloseButton={false}
+        onEscapeKeyDown={(e) => {
+          if (switcher) {
+            e.preventDefault()
+            setSwitcher(false)
+          }
+        }}
         className="top-[15vh] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-2xl"
         onCloseAutoFocus={(e) => {
           // Radix only refocuses a trigger; this dialog has none, so restore by hand
@@ -492,7 +615,7 @@ export function CommandPalette() {
           label="Search beads"
           className="flex min-w-0 flex-col"
         >
-          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+          <div className="relative flex items-center gap-2 border-b border-border px-3 py-2">
             <Search
               className="size-4 shrink-0 text-muted-foreground"
               aria-hidden="true"
@@ -515,6 +638,56 @@ export function CommandPalette() {
                   <X aria-hidden="true" />
                 </Button>
               ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                tabIndex={-1}
+                data-testid="palette-scope"
+                aria-label={`Search scope: ${scopeLabel}. Press ${mod}Shift+L to pick a project, ${mod}Shift+. for the next`}
+                aria-haspopup="listbox"
+                aria-expanded={switcher}
+                onClick={() => (switcher ? setSwitcher(false) : openSwitcher())}
+                className="max-w-40 shrink-0 truncate disabled:opacity-100"
+              >
+                {scopeLabel}
+              </Button>
+              {switcher && (
+                <ul
+                  role="listbox"
+                  aria-label="Search scope"
+                  className="absolute top-11 left-9 z-10 max-h-60 w-56 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-sm shadow-md"
+                >
+                  {[ALL_SCOPE, ...projects.map((p) => p.id)].map((id, i) => (
+                    <li
+                      key={id}
+                      role="option"
+                      aria-selected={id === scope}
+                      data-active={i === switcherAt}
+                      onMouseEnter={() => setSwitcherAt(i)}
+                      onClick={(e) => {
+                        chooseScope(id)
+                        if ((e.metaKey || e.ctrlKey) && id !== ALL_SCOPE) {
+                          void navigate({
+                            to: '/p/$project',
+                            params: { project: id },
+                          })
+                          finish()
+                        }
+                      }}
+                      className="flex cursor-default items-center gap-2 rounded-md px-2 py-1 data-[active=true]:bg-muted"
+                    >
+                      <span className="truncate">{nameOf(id)}</span>
+                      {id === current && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          current
+                        </span>
+                      )}
+                      {id === scope && <span aria-hidden="true">✓</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <CommandPrimitive.Input
                 autoFocus
                 value={input}
@@ -523,7 +696,7 @@ export function CommandPalette() {
                 placeholder={
                   chips.length
                     ? 'Search…'
-                    : 'Search all projects, or filter: status: type: label: epic: project: @name'
+                    : `Search ${scoped ? scopeLabel : 'all projects'}, or filter: status: type: label: epic: project: @name`
                 }
                 className="min-w-40 flex-1 bg-transparent py-1 text-sm text-foreground outline-hidden placeholder:text-muted-foreground"
               />
@@ -562,7 +735,8 @@ export function CommandPalette() {
 
           <div className="flex h-9 items-center justify-between gap-3 border-t border-border px-3 text-xs text-muted-foreground">
             <span className="truncate">
-              ↑↓ move · ↵ open · {mod}↵ new tab · {mod}C copy id · Esc close
+              ↑↓ move · ↵ open · {mod}↵ new tab · {mod}C copy id · {mod}⇧L
+              project ·{mod}⇧. next scope · Esc close
             </span>
             <span className={cn('shrink-0', !indexing && 'invisible')}>
               indexing comments…

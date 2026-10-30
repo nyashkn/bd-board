@@ -12,6 +12,8 @@ const COMMENT_CONCURRENCY = 2
 const COMMENT_START_DELAY_MS = 250
 
 export interface PaletteData {
+  /** Registered projects the palette can search, current first. */
+  projects: { id: string; name: string }[]
   docs: PaletteDoc[]
   comments: Map<string, IndexedText[]>
   /** Beads still loading for at least one project. */
@@ -113,5 +115,11 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
     }
   }, [open, loading, projectKey, queryClient])
 
-  return { docs, comments, loading, indexing }
+  return {
+    projects: projects.map((p) => ({ id: p.id, name: p.name })),
+    docs,
+    comments,
+    loading,
+    indexing,
+  }
 }

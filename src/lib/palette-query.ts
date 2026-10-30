@@ -23,6 +23,17 @@ export interface PaletteQuery {
   words: string[]
 }
 
+/**
+ * Lower-case and strip accents, one UTF-16 unit in, one out, so highlight ranges stay valid.
+ * behaviour decision: "cafe" finds "Café" and "resume" finds "Résumé" (ClickUp folds accents).
+ */
+export function fold(s: string): string {
+  return s.toLowerCase().replace(/[^\x20-\x7e]/g, (c) => {
+    const d = c.normalize('NFD')
+    return d.length === 2 && /\p{M}/u.test(d[1]) ? d[0] : c
+  })
+}
+
 export const MAX_QUERY_CHARS = 200
 export const MAX_WORDS = 8
 
@@ -85,11 +96,33 @@ export function buildQuery(chips: Chip[], input: string): PaletteQuery {
   for (const token of tokens) {
     const chip = chipOf(token)
     if (chip) all.push(chip)
-    else if (words.length < MAX_WORDS) words.push(token.toLowerCase())
+    else if (words.length < MAX_WORDS) words.push(fold(token))
   }
   return { chips: all, words }
 }
 
 export function isEmptyQuery(q: PaletteQuery): boolean {
   return q.chips.length === 0 && q.words.length === 0
+}
+
+/** A search scope: `'all'` or one project id. */
+export type Scope = string
+export const ALL_SCOPE = 'all'
+
+/**
+ * Order the scope shortcut cycles through: the current project, All projects, then the others.
+ * A scope that is not in the list (a project that vanished) cycles to the first entry.
+ */
+export function scopeCycle(
+  scope: Scope,
+  current: string | undefined,
+  ids: string[],
+): Scope {
+  const order = [
+    ...(current && ids.includes(current) ? [current] : []),
+    ALL_SCOPE,
+    ...ids.filter((id) => id !== current),
+  ]
+  const i = order.indexOf(scope)
+  return order[(i + 1) % order.length]
 }
