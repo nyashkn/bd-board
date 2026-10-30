@@ -11,13 +11,9 @@ import { useValidateProjectsOnMount } from '@/lib/useValidateProjectsOnMount'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  getProjects,
-  pickProjectDirectory,
-  addProject,
-  initProject,
-} from '@/lib/server'
+import { pickProjectDirectory, addProject, initProject } from '@/lib/server'
 import { rumMarkCold } from '@/lib/rum'
+import { projectsQueryOptions } from '@/lib/query-options'
 import { toErrorMessage } from '@/lib/utils'
 import { confirm } from '@tauri-apps/plugin-dialog'
 import { toast } from 'sonner'
@@ -107,12 +103,9 @@ function useProjectActions() {
 }
 
 function Home() {
-  const { data, isPending, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => getProjects(),
-    refetchInterval: 15000,
-    staleTime: 5000,
-  })
+  const { data, isPending, isError, error, refetch, isFetching } = useQuery(
+    projectsQueryOptions(),
+  )
 
   useEffect(() => {
     rumMarkCold(isPending ? 'cold.skeleton' : 'cold.projects', {

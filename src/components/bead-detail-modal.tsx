@@ -75,6 +75,7 @@ import {
   KNOWLEDGE_TYPE_TEXT_CLASS as K_TEXT_CLASS,
 } from '@/lib/knowledge'
 import { connectorFor } from '@/lib/core'
+import { projectKnowledgeQueryOptions } from '@/lib/query-options'
 
 import type { LucideIcon } from 'lucide-react'
 import type { FormEvent, ReactNode } from 'react'
@@ -886,11 +887,8 @@ export function BeadDetailModal({
   })
 
   const knowledgeQuery = useQuery({
-    queryKey: ['project-knowledge', project],
-    queryFn: () =>
-      connectorFor(project).projectKnowledge({ data: { project } }),
+    ...projectKnowledgeQueryOptions(project),
     enabled: open && !!bead,
-    staleTime: 4000,
   })
   const beadKnowledge = useMemo(
     () =>

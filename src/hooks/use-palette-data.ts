@@ -2,7 +2,10 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 
 import { connectorFor } from '@/lib/core'
-import { getProjects } from '@/lib/server'
+import {
+  projectKnowledgeQueryOptions,
+  projectsQueryOptions,
+} from '@/lib/query-options'
 import { askingBeads } from '@/lib/bead-questions'
 import { buildDocs, indexComments, replaceAsking } from '@/lib/palette-search'
 import { rumDuration, rumNow } from '@/lib/rum'
@@ -35,9 +38,7 @@ export interface PaletteData {
 export function usePaletteData(open: boolean, current?: string): PaletteData {
   const queryClient = useQueryClient()
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => getProjects(),
-    staleTime: 5000,
+    ...projectsQueryOptions(),
     enabled: open,
   })
 
@@ -94,12 +95,9 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
       for (let id = queue.shift(); id && !stopped(); id = queue.shift()) {
         try {
           const project = id
-          const knowledge = await queryClient.fetchQuery({
-            queryKey: ['project-knowledge', project],
-            queryFn: () =>
-              connectorFor(project).projectKnowledge({ data: { project } }),
-            staleTime: 60_000,
-          })
+          const knowledge = await queryClient.fetchQuery(
+            projectKnowledgeQueryOptions(project),
+          )
           if (stopped()) return
           const t0 = rumNow()
           const index = indexComments(project, knowledge.comments)
