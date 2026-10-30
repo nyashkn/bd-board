@@ -37,7 +37,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { buildQuery, fold } from './palette-query'
+import { buildQuery, fold, scopeCycle } from './palette-query'
 import {
   buildDocs,
   DEFAULT_LIMIT,
@@ -592,6 +592,31 @@ describe('F scope toggle (engine option behind the pill)', () => {
   })
   it('F5 scope applies to chip-only queries too', () => {
     expect(ids('label:billing', { scope: 'beta' })).toEqual(['b-1'])
+  })
+})
+
+describe('F scope switcher', () => {
+  it('F7 scope can be a project other than the current one', () => {
+    expect(ids('zebra stripes', { scope: 'beta' })).toEqual(['b-1'])
+  })
+  it('F8 cycle order: current, All, then the others, wrapping', () => {
+    const all = ['a', 'b', 'c']
+    expect(scopeCycle('b', 'b', all)).toBe('all')
+    expect(scopeCycle('all', 'b', all)).toBe('a')
+    expect(scopeCycle('a', 'b', all)).toBe('c')
+    expect(scopeCycle('c', 'b', all)).toBe('b')
+  })
+  it('F8 cycle with no current project (dashboard) starts at All', () => {
+    expect(scopeCycle('all', undefined, ['a', 'b'])).toBe('a')
+    expect(scopeCycle('b', undefined, ['a', 'b'])).toBe('all')
+  })
+  it('F8 a vanished scope cycles to the first entry, no throw', () => {
+    expect(scopeCycle('gone', 'a', ['a', 'b'])).toBe('a')
+  })
+  it('F6 project: chip overrides a non-current scope too', () => {
+    expect(ids('zebra stripes project:alpha', { scope: 'beta' })).toEqual([
+      'a-3',
+    ])
   })
 })
 

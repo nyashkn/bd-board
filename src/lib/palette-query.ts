@@ -104,3 +104,25 @@ export function buildQuery(chips: Chip[], input: string): PaletteQuery {
 export function isEmptyQuery(q: PaletteQuery): boolean {
   return q.chips.length === 0 && q.words.length === 0
 }
+
+/** A search scope: `'all'` or one project id. */
+export type Scope = string
+export const ALL_SCOPE = 'all'
+
+/**
+ * Order the scope shortcut cycles through: the current project, All projects, then the others.
+ * A scope that is not in the list (a project that vanished) cycles to the first entry.
+ */
+export function scopeCycle(
+  scope: Scope,
+  current: string | undefined,
+  ids: string[],
+): Scope {
+  const order = [
+    ...(current && ids.includes(current) ? [current] : []),
+    ALL_SCOPE,
+    ...ids.filter((id) => id !== current),
+  ]
+  const i = order.indexOf(scope)
+  return order[(i + 1) % order.length]
+}
