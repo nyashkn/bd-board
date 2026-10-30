@@ -18,7 +18,7 @@ import { toErrorMessage } from './utils.ts'
 
 import type { ArtifactFile } from './artifacts.ts'
 import type { BdStatus } from './bd-errors.ts'
-import type { ProbeReply } from './connector-select.ts'
+import type { ProbeReply } from './connectors/select.ts'
 import type { CommentAuthor } from './comment-author.ts'
 import type {
   AddProjectOutcome,

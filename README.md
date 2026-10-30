@@ -281,8 +281,12 @@ scripts/
 src-tauri/
   tauri.conf.json
   src/
-    desktop.rs
     lib.rs
+    commands.rs          thin #[tauri::command] drivers
+    app.rs               connector selection
+    ports.rs             BeadSource, BeadSink, ProjectAdmin
+    domain/              types and pure logic
+    adapters/bd_cli/     everything that spawns bd
 ```
 
 The app does not store its own database. It shells out to `bd` with `node:child_process` and parses JSON output.

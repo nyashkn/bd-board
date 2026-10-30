@@ -1,40 +1,53 @@
-use serde::Serialize;
+//! `bd where` (registry probe) and `bd dolt show` (connector selection probe).
+
+use super::exec::{bd_error_message, exec_bd_with, run_bd};
+use crate::domain::{BeadsLocation, DoltProbe};
+use crate::registry;
 use serde_json::Value;
+use std::path::Path;
 
-/// What `bd dolt show --json` says about a project (mirrors `ProbeReply` in
-/// src/lib/connector-select.ts): either the mode fields or `error`, plus the registry `sources`.
-#[derive(Serialize, Debug, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct DoltProbe {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub embedded: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub host: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub port: Option<u16>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub database: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub connection_ok: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub schema_version: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    pub sources: Vec<String>,
-}
+pub(crate) fn probe_beads_location(dir: &Path) -> Result<BeadsLocation, String> {
+    let raw = run_bd(dir, &["where", "--json"])?;
+    let value: Value = serde_json::from_str(&raw)
+        .map_err(|err| format!("failed to parse bd where output: {err}"))?;
 
-impl DoltProbe {
-    pub fn error(message: impl Into<String>, sources: Vec<String>) -> Self {
-        DoltProbe {
-            error: Some(message.into()),
-            sources,
-            ..Default::default()
-        }
-    }
+    let beads_path = value
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "bd where returned no beads path".to_string())?
+        .to_string();
+
+    let database_path = value
+        .get("database_path")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+
+    let prefix = value
+        .get("prefix")
+        .and_then(Value::as_str)
+        .map(|s| s.to_string());
+
+    // Determine if beads is external (outside the project folder)
+    let expected_beads_path = dir.join(".beads");
+    let external = match (
+        std::fs::canonicalize(&beads_path),
+        std::fs::canonicalize(&expected_beads_path),
+    ) {
+        (Ok(canonical_beads), Ok(canonical_expected)) => canonical_beads != canonical_expected,
+        _ => beads_path != expected_beads_path.to_string_lossy(),
+    };
+
+    Ok(BeadsLocation {
+        beads_path,
+        database_path,
+        prefix,
+        external,
+    })
 }
 
 /// Parses `bd dolt show --json` defensively: anything unexpected is an error, never a guess.
-pub fn parse_dolt_show(stdout: &str, sources: Vec<String>) -> DoltProbe {
+pub(crate) fn parse_dolt_show(stdout: &str, sources: Vec<String>) -> DoltProbe {
     let Ok(Value::Object(o)) = serde_json::from_str::<Value>(stdout) else {
         return DoltProbe::error("bd dolt show did not print a JSON object", sources);
     };
@@ -54,6 +67,33 @@ pub fn parse_dolt_show(stdout: &str, sources: Vec<String>) -> DoltProbe {
         schema_version: o.get("schema_version").and_then(Value::as_i64),
         error: None,
         sources,
+    }
+}
+pub(crate) const DOLT_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Which Dolt mode is this project in (`bd dolt show --json`), plus its registry `sources`.
+/// Never fails: an error or a 2 s timeout (queued like any bd call, and the process is killed)
+/// comes back in `error`. Not `probe_location` (the registry probe).
+pub(crate) fn probe_dolt_mode(project_id: &str) -> DoltProbe {
+    let entry = match registry::find(project_id) {
+        Ok(entry) => entry,
+        Err(err) => return DoltProbe::error(err, vec![]),
+    };
+    let sources = entry.sources.clone();
+    if !sources.is_empty() {
+        return DoltProbe::error("not probed: explicit sources", sources);
+    }
+    match exec_bd_with(
+        Path::new(&entry.path),
+        &["dolt", "show", "--json"],
+        DOLT_PROBE_TIMEOUT,
+    ) {
+        Ok(cap) if cap.status.success() => parse_dolt_show(&cap.stdout, sources),
+        Ok(cap) => DoltProbe::error(
+            bd_error_message(&cap.stdout, &cap.stderr, &cap.status),
+            sources,
+        ),
+        Err(err) => DoltProbe::error(err, sources),
     }
 }
 
