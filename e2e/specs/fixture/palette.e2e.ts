@@ -94,7 +94,7 @@ describe('command palette (real server, real bd)', () => {
     await expect($(SCOPE)).not.toHaveText(w.ro.id)
     await expect($('[role="listbox"][aria-label="Search scope"]')).not.toExist()
     // End on All projects for the rest of the session.
-    for (let i = 0; i < 4 && (await $(SCOPE).getText()) !== 'All projects'; i++)
+    for (let i = 0; i < 5 && (await $(SCOPE).getText()) !== 'All projects'; i++)
       await browser.keys([CTRL, SHIFT, '.'])
     await expect($(SCOPE)).toHaveText('All projects')
   })

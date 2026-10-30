@@ -21,7 +21,8 @@ import {
 } from '@/components/ui/popover'
 import { useBdStatus } from '@/hooks/use-bd-status'
 import { cn } from '@/lib/utils'
-import { getBeads, getProjects } from '@/lib/server'
+import { connectorFor } from '@/lib/core'
+import { getProjects } from '@/lib/server'
 
 import { getStoredIdentity, setStoredIdentity } from '@/lib/identity'
 import {
@@ -226,7 +227,8 @@ export function ProjectRail() {
 
   const beadsQuery = useQuery({
     queryKey: ['beads', project],
-    queryFn: () => getBeads({ data: { project: project! } }),
+    queryFn: () =>
+      connectorFor(project!).listBeads({ data: { project: project! } }),
     enabled: Boolean(project),
     staleTime: 3000,
   })
@@ -360,7 +362,8 @@ export function ProjectRail() {
                 onMouseEnter={() =>
                   queryClient.prefetchQuery({
                     queryKey: ['beads', p.id],
-                    queryFn: () => getBeads({ data: { project: p.id } }),
+                    queryFn: () =>
+                      connectorFor(p.id).listBeads({ data: { project: p.id } }),
                     staleTime: 3000,
                   })
                 }

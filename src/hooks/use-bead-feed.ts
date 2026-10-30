@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { rumAction } from '@/lib/rum'
-import { enableEventsJournalFn, subscribeBeadFeed } from '@/lib/server'
+import { connectorFor } from '@/lib/core'
 import { toErrorMessage } from '@/lib/utils'
 
 import type { BeadFeedMessage, BeadFeedStatus } from '@/lib/types'
@@ -101,7 +101,8 @@ export function useBeadFeed(
             break
           }
           enableTried.current.add(project)
-          enableEventsJournalFn({ data: { project } })
+          connectorFor(project)
+            .enableEventsJournal({ data: { project } })
             .then(() => {
               if (!cancelled) {
                 toast.success('Live updates enabled for this project')
@@ -130,7 +131,11 @@ export function useBeadFeed(
       }
     }
 
-    const unsubscribe = subscribeBeadFeed(project, loadSeq(project), handle)
+    const unsubscribe = connectorFor(project).subscribeFeed(
+      project,
+      loadSeq(project),
+      handle,
+    )
     return () => {
       cancelled = true
       unsubscribe()

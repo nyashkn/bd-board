@@ -19,10 +19,16 @@ Visual kanban board and multi-project dashboard for [`bd` (beads)](https://githu
 - Closed recency window (`closed` URL param: `1d`, `7d` default, `30d`, `90d`, `all`; last choice also kept in `localStorage`, URL wins). Closed beads older than the window are hidden on the board (status, epic, priority views), in Hierarchy and in lists; the Closed column reads "34 of 265" with an "N older hidden, show all" link. Closed time is `closed_at`, falling back to `updated_at`. Sidebar and dashboard counts are unchanged.
 - Completed epics (all descendants closed, or a closed epic with none) follow the same window by their latest closed time; when shown they get a "Done · took 5d" badge (created to last close).
 - Compact ages on cards, the Hierarchy and the bead modal: "created 12d ago · updated 3h ago" (minutes < 1h, hours < 48h, days < 90d, then months, then years), full timestamp on hover.
+- Command palette (Cmd/Ctrl+K, from anywhere): instant search across every project by id, title, description, labels and assignee, with comments and artifact paths indexed lazily in a separate group. Small typos still find the bead, ranked below exact matches. Filter chips: `status:` `type:` `label:` `epic:` `project:` `@name` `is:mine|ready|blocked|since`. Enter opens, Cmd/Ctrl+Enter opens in a new tab, Cmd/Ctrl+C copies the id. A scope pill switches the project (Ctrl/Cmd+Shift+L lists projects, Ctrl/Cmd+Shift+. cycles them). Recent beads and Jump to show when the query is empty. Read-only projects work the same.
+- Every bead card and row is a real link (`?bead=<id>`), so open-in-new-tab, copy-link and middle-click work. Search and filters carry across tabs and projects; lane collapse and scroll are remembered; closing the bead modal returns to where you were and restores focus.
+- Bead references: a `:::bead demo-abc demo-def` line in a bead's description or acceptance criteria renders each id as a link chip (id and title) that opens the bead; hovering or keyboard-focusing a chip shows a small preview card (status, priority, assignee, parent, labels, first lines of the description), Esc closes it. Ids are resolved against the open project's beads; unknown ids stay plain links. Fenced code and inline code spans (also across lines) are left alone. Known limits: a link reference definition in a different part of the text than its use renders literally, and a directive indented 2-3 spaces inside a list item splits the list.
+- Counts come from one derivation, and an empty board says why (filtered out, closed window, nothing yet) and offers the fix.
+- The modal has copy buttons for the bead id, the `bd show` command and an agent-deck nudge, also in read-only projects.
 - Bead detail modal with markdown description, acceptance criteria, comments, parent and child navigation.
 - Artifacts in the bead detail modal: a bead's `spec_id` (shown as "Spec"), its `artifacts` metadata and, for epics, its children's artifacts open inline (markdown rendered, HTML in a sandboxed iframe, images, json/txt). The `external_ref` shows as a link (http/https) or plain "Ref" text. How to attach one: see For agents.
 - "Since you last looked" band on the Board and Hierarchy: new, closed, commented and otherwise updated beads since you last had the project open (kept per project in `localStorage`, `bd-board:last-seen:<project>`), with a dot on each changed card or row. Comments do not bump a bead's `updated_at`, so the band, the card age line and the Hierarchy age also count the newest comment. The comment times come from the same `bd export` read the Knowledge tab uses (one extra call per 30 s, shared cache), so the cost is one full export per refresh on large projects; if it fails the band falls back to `updated_at` only.
 - Comments: the modal says plainly that an agent sees a comment only when it next reads the bead (`bd show` / `bd comments`), offers a copyable `agent-deck session send` nudge, shows the author `bd` will record, and on a closed bead offers "Comment and reopen" next to "Comment".
+- Ask and answer: an agent comment holding a `:::question id=q1 stopped` block (question text, `- [ ] option` lines, optional `Recommended: <option>` and `Holds up: <bead ids>`, closed by `:::`) shows in the modal as a card with radio buttons. "Answer" posts an ordinary `ANSWER: q1 <option>` comment (no new backend; hidden in read-only projects) and greys the card. The choice must match an option (case-insensitively); a repeated `id=` becomes `q1-2`, and a missing one `q<n>`. `ANSWER:` comments are not author-checked: any comment starting with `ANSWER:` closes a question. Unanswered `stopped` questions show a "Needs you" badge on cards and Hierarchy rows (when the shared project-export cache is loaded) and match `is:asking` in Cmd+K; both see only the newest 250 comments project-wide, so an old question can be missed.
 - Keyboard: `j`/`k` or the arrow keys step through beads, Enter opens the focused bead, Esc closes the modal, `/` focuses search and `?` lists the shortcuts. Nothing fires while typing or with a dialog or menu open.
 - Drag-and-drop status updates with mouse and keyboard sensors.
 - Create beads, add comments, edit fields, and delete beads, enabled by default.
@@ -106,7 +112,7 @@ On macOS, the release build writes:
 
 ```text
 src-tauri/target/release/bundle/macos/bd board.app
-src-tauri/target/release/bundle/dmg/bd board_0.1.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/bd board_<version>_aarch64.dmg
 ```
 
 Windows packaging is part of the Tauri roadmap for this project, but the current
@@ -182,8 +188,8 @@ Off by default. bd board sends nothing anywhere unless a config enables it **and
 ```json
 {
   "enabled": true,
-  "site": "o2-rum.nl.ds.ke",
-  "organizationIdentifier": "kn",
+  "site": "rum.example.com",
+  "organizationIdentifier": "my-org",
   "applicationName": "bd-board",
   "clientToken": "<write-only RUM client token>",
   "env": "production",
@@ -209,18 +215,18 @@ Off by default. bd board sends nothing anywhere unless a config enables it **and
 **One-liner** (writes `~/.config/bd-board/rum.json` with mode 600, refuses to overwrite without `--force`, prints only `written (token length N)`; the web server reads the same file):
 
 ```bash
-~/.claude/bin/infisical-dokploy-shared-services --path=/openobserve bash scripts/rum-setup.sh
+RUM_SITE=rum.example.com RUM_ORG=my-org RUM_CLIENT_TOKEN=<token> bash scripts/rum-setup.sh
 ```
 
-It expects the key `OPENOBSERVE_KN_RUM_TOKEN` from that Infisical path in the environment. Optional `RUM_SITE`, `RUM_ORG`, `RUM_ENV`, `RUM_PROFILE`.
+It reads the token from `RUM_CLIENT_TOKEN` in the environment (never from an argument). `RUM_SITE` and `RUM_ORG` are required; optional `RUM_ENV`, `RUM_PROFILE`.
 
-**Setup**: the RUM client token is per user per org, not per app (org `kn` already has one, stored in Infisical as `OPENOBSERVE_KN_RUM_TOKEN`); the app name is only the `applicationId` value we send. Put the token in `rum.json` with the one-liner above, and have the operator add the app origin to the intake's CORS allow-list (`ZO_CORS_ALLOWED_ORIGINS` in the Dokploy env, then redeploy) (`http://localhost:3009` for the dev web app and `tauri://localhost` for the desktop app; the native e2e confirmed the desktop webview sends `Origin: tauri://localhost`).
+**Setup**: the RUM client token is per user per org, not per app (one token per org serves every app); the app name is only the `applicationId` value we send. Put the token in `rum.json` with the one-liner above, and have the operator add the app origin to the intake's CORS allow-list (`ZO_CORS_ALLOWED_ORIGINS` in the intake's environment, then redeploy) (`http://localhost:3009` for the dev web app and `tauri://localhost` for the desktop app; the native e2e confirmed the desktop webview sends `Origin: tauri://localhost`).
 
-**Dashboard**: `python3 scripts/o2/gen_bd_board_rum_dashboard.py` writes `scripts/o2/bd-board-rum.json`; post it into the `bd-board` folder (`POST /api/kn/dashboards?folder=bd-board`). To update: `GET /api/kn/dashboards/<id>?folder=bd-board`, read the top-level `hash`, then `PUT /api/kn/dashboards/<id>?folder=bd-board&hash=<hash>` with `dashboardId` in the body (details in the generator's docstring). Column names it assumes are listed at the top of the script.
+**Dashboard**: `python3 scripts/o2/gen_bd_board_rum_dashboard.py` writes `scripts/o2/bd-board-rum.json`; post it into the `bd-board` folder (`POST /api/<org>/dashboards?folder=bd-board`). To update: `GET /api/<org>/dashboards/<id>?folder=bd-board`, read the top-level `hash`, then `PUT /api/<org>/dashboards/<id>?folder=bd-board&hash=<hash>` with `dashboardId` in the body (details in the generator's docstring). Column names it assumes are listed at the top of the script.
 
-**Source maps**: `O2_RUM_SOURCEMAPS=1 pnpm build` emits hidden maps, then `bash scripts/upload-sourcemaps.sh --service bd-board-web --env production` (dry run; add `--send` with `O2_SM_URL=https://openobserve.lan.ds.ke`, `O2_SM_ORG`, and `O2_SM_USER` / `O2_SM_PASSWORD` of an org admin over HTTP Basic: RBAC is not initialised, so service accounts get 401). Service, env and version must match what the SDK reports. The source-map endpoint is not in the owner's docs, so try the dry run first.
+**Source maps**: `O2_RUM_SOURCEMAPS=1 pnpm build` emits hidden maps, then `bash scripts/upload-sourcemaps.sh --service bd-board-web --env production` (dry run; add `--send` with `O2_SM_URL=https://openobserve.example.com`, `O2_SM_ORG`, and `O2_SM_USER` / `O2_SM_PASSWORD` of an org admin over HTTP Basic: RBAC is not initialised, so service accounts get 401). Service, env and version must match what the SDK reports. The source-map endpoint is not in the owner's docs, so try the dry run first.
 
-**Data and retention**: events land in `_rumdata`, shared by every RUM app in org `kn`; filter by `service`. **Never delete the `_rumdata` stream**: deletion blocks writes to that name for up to an hour, and the retention job's timer resets on every redeploy. Default retention is 90 days (a per-stream override changes it for all apps, and `full` replays keep bead text for that long), and the instance stops searching above 50 GB/day.
+**Data and retention**: events land in `_rumdata`, shared by every RUM app in the org; filter by `service`. **Never delete the `_rumdata` stream**: deletion blocks writes to that name for up to an hour, and the retention job's timer resets on every redeploy. Default retention is 90 days (a per-stream override changes it for all apps, and `full` replays keep bead text for that long), and the instance stops searching above 50 GB/day.
 
 **Tests**: `pnpm test` covers the config validator, the profile scrubber, the call wrapper and the off-path overhead; `pnpm e2e:rum` runs the browser against a fake local intake.
 
@@ -309,6 +315,16 @@ IPC mocking only works in the browser suite: Tauri defines `window.__TAURI_INTER
 The fixture suite (`e2e/world.ts`) builds a temp root with a fake HOME registry and three projects (artifacts, read-only, read-only with `filterLabel`), starts and stops its own Vite server, and removes everything afterwards. The native suite does the same: its app runs with the fake HOME, so `e2e/specs/native/artifacts.e2e.ts` exercises the real `read_artifact` bridge. Rust integration tests against a real `bd init` fixture: `cargo test --test real_bd` in `src-tauri` (skipped with a message when `bd` is missing). Needs `bd` on PATH and Chrome; chromedriver is downloaded on first run.
 
 The native suite pins the embedded WebDriver port (`e2e/wdio.conf.ts`); the default 4445 is shared with any other Tauri app running its own suite, and a session will silently attach to the wrong app.
+
+## Releasing
+
+Releases follow [Semantic Versioning](https://semver.org/) and every change is listed in [CHANGELOG.md](CHANGELOG.md).
+
+1. Commit with [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, ...).
+2. Each push to `main` updates a Release PR that bumps `package.json`, `src-tauri/Cargo.toml` and `Cargo.lock` together and writes the changelog section. Claude rewrites it using [.github/release-notes-guide.md](.github/release-notes-guide.md).
+3. Merging that PR tags `vX.Y.Z`; the Release workflow builds the macOS and Windows installers and publishes the release with the changelog section as its notes.
+
+`main` only takes changes through a pull request. `pnpm version:set <x.y.z>` is the manual fallback.
 
 ## Safety Model
 

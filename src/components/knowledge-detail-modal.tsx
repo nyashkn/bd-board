@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { BeadLinkButton } from '@/components/bead-link'
 import { InteractiveRow } from '@/components/ui/interactive-row'
-import { getProjectKnowledgeFn } from '@/lib/server'
+import { connectorFor } from '@/lib/core'
 import {
   KNOWLEDGE_TYPES,
   KNOWLEDGE_TYPE_BG_CLASS as K_BG_CLASS,
@@ -122,7 +122,8 @@ export function KnowledgeDetailModal({
 }: KnowledgeDetailModalProps) {
   const query = useQuery({
     queryKey: ['project-knowledge', project],
-    queryFn: () => getProjectKnowledgeFn({ data: { project } }),
+    queryFn: () =>
+      connectorFor(project).projectKnowledge({ data: { project } }),
     staleTime: 4000,
   })
 
