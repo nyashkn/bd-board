@@ -3,6 +3,7 @@ use std::env;
 use std::process::Command;
 
 // pub so tests/ can drive the real commands against a `bd init` fixture.
+pub mod bd_queue;
 pub mod desktop;
 pub mod registry;
 pub mod rum;

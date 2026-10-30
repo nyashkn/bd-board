@@ -21,6 +21,14 @@ import type {
 import { summarizeBeads } from './counts.ts'
 import { parseKnowledgeCommentText } from './knowledge.ts'
 import { loadRegistry } from './registry.ts'
+import {
+  BdBufferError,
+  BdTimeoutError,
+  execFileGroup,
+  isReadCall,
+  queued,
+  timeoutFromEnv,
+} from './bd-queue.ts'
 import { bdNotFoundMessage, classifyBdVersion } from './bd-errors.ts'
 import type { BdStatus } from './bd-errors.ts'
 import {
@@ -184,25 +192,31 @@ export function bdErrorMessage(
   return `bd exited with status ${exitCode}`
 }
 
-export async function bdExec(
-  dir: string,
-  args: string[],
-): Promise<{
+type BdResult = {
   bin: string
   env: NodeJS.ProcessEnv
   code: number
   stdout: string
   stderr: string
-}> {
+}
+
+/** One bd process per project at a time; identical in-flight reads share a process. */
+export function bdExec(dir: string, args: string[]): Promise<BdResult> {
+  return queued(dir, args, () => spawnBd(dir, args))
+}
+
+async function spawnBd(dir: string, args: string[]): Promise<BdResult> {
+  const timeout = timeoutFromEnv(process.env)
   const { candidates, env: extra } = await launchFor(dir)
   const env = { ...process.env, ...extra }
 
   for (const candidate of candidates) {
     try {
-      const { stdout, stderr } = await execFileAsync(candidate, args, {
+      const { stdout, stderr } = await execFileGroup(candidate, args, {
         cwd: dir,
         env,
         maxBuffer: MAX_BUFFER,
+        timeout,
       })
       return { bin: candidate, env, code: 0, stdout, stderr }
     } catch (err: unknown) {
@@ -212,6 +226,17 @@ export async function bdExec(
         stderr?: string
       }
 
+      if (err instanceof BdTimeoutError) {
+        throw new Error(
+          `bd ${args[0] ?? ''} timed out after ${timeout / 1000}s and was stopped` +
+            (isReadCall(args)
+              ? ''
+              : '; the command may have been applied, so check before retrying'),
+        )
+      }
+      if (err instanceof BdBufferError) {
+        throw new Error('bd output exceeded buffer')
+      }
       if (error.code === 'ENOENT') {
         continue
       }
@@ -735,15 +760,23 @@ async function getBeadDetail(
 ): Promise<BeadDetail> {
   const dir = await resolveDir(projectId)
 
-  const [rawArr, rawComments] = await Promise.all([
-    bdJson<Record<string, unknown>[]>(dir, ['show', id, '--json']),
-    bdJson<Record<string, unknown>[]>(dir, ['comments', id, '--json']).catch(
-      () => [] as Record<string, unknown>[],
-    ),
+  // show first: its comment_count says whether `bd comments` is worth a process. The
+  // per-project queue runs one bd at a time anyway, so overlapping them gains nothing.
+  const rawArr = await bdJson<Record<string, unknown>[]>(dir, [
+    'show',
+    id,
+    '--json',
   ])
-
   const raw = rawArr[0] ?? {}
   const bead = mapRawBead(raw)
+  const rawComments =
+    bead.comment_count === 0
+      ? []
+      : await bdJson<Record<string, unknown>[]>(dir, [
+          'comments',
+          id,
+          '--json',
+        ]).catch(() => [] as Record<string, unknown>[])
 
   const rawDeps = Array.isArray(raw['dependencies'])
     ? (raw['dependencies'] as Record<string, unknown>[])

@@ -8,6 +8,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
+fn block<F: std::future::Future>(f: F) -> F::Output {
+    tauri::async_runtime::block_on(f)
+}
+
 struct World {
     root: PathBuf,
     p: PathBuf,
@@ -216,7 +220,7 @@ fn registry_roundtrips_readonly_and_filter_label() {
     let p = reg.projects.iter().find(|e| e.id == "p").unwrap();
     assert!(!p.readonly && p.effective_filter_label().is_none());
 
-    let projects = desktop::list_projects().unwrap();
+    let projects = block(desktop::list_projects()).unwrap();
     let ro = projects.iter().find(|p| p.id == "ro").unwrap();
     assert!(ro.readonly);
     assert_eq!(ro.filter_label.as_deref(), Some("wo"));
@@ -225,7 +229,7 @@ fn registry_roundtrips_readonly_and_filter_label() {
 
 fn readonly_launch_runs_the_shim_with_real_bd_and_the_filter(w: &World) {
     // list goes through plan_launch -> shim (REAL_BD, BD_FILTER_LABEL=wo): only the labelled bead.
-    let beads = desktop::list_beads("ro".into()).unwrap();
+    let beads = block(desktop::list_beads("ro".into())).unwrap();
     let ids: Vec<_> = beads.iter().map(|b| b.id.clone()).collect();
     assert!(ids.contains(&w.x), "{ids:?}");
     assert!(
@@ -233,7 +237,7 @@ fn readonly_launch_runs_the_shim_with_real_bd_and_the_filter(w: &World) {
         "filter must hide the other bead: {ids:?}"
     );
     // the unfiltered project shows everything
-    assert_eq!(desktop::list_beads("p".into()).unwrap().len(), 3);
+    assert_eq!(block(desktop::list_beads("p".into())).unwrap().len(), 3);
 }
 
 fn write_guard_refuses_readonly_and_changes_nothing(w: &World) {
@@ -242,45 +246,60 @@ fn write_guard_refuses_readonly_and_changes_nothing(w: &World) {
         let e = r.unwrap_err();
         assert!(e.contains("read-only"), "{e}");
     };
-    refused(desktop::update_bead_status(
+    refused(block(desktop::update_bead_status(
         "ro".into(),
         w.x.clone(),
         "closed".into(),
-    ));
-    refused(desktop::update_bead(
+    )));
+    refused(block(desktop::update_bead(
         "ro".into(),
         w.x.clone(),
         desktop::BeadUpdateInput {
             title: Some("hacked".into()),
             ..Default::default()
         },
-    ));
-    refused(desktop::delete_bead("ro".into(), w.x.clone()));
-    refused(desktop::add_comment("ro".into(), w.x.clone(), "hi".into()));
+    )));
+    refused(block(desktop::delete_bead("ro".into(), w.x.clone())));
+    refused(block(desktop::add_comment(
+        "ro".into(),
+        w.x.clone(),
+        "hi".into(),
+    )));
+    assert!(block(desktop::create_bead(
+        "ro".into(),
+        "new".into(),
+        None,
+        None,
+        None
+    ))
+    .unwrap_err()
+    .contains("read-only"));
     assert!(
-        desktop::create_bead("ro".into(), "new".into(), None, None, None)
+        block(desktop::preview_delete_bead("ro".into(), w.x.clone()))
             .unwrap_err()
             .contains("read-only")
     );
-    assert!(desktop::preview_delete_bead("ro".into(), w.x.clone())
-        .unwrap_err()
-        .contains("read-only"));
     assert_eq!(before, bd(&w.ro, &["list", "--all", "--json"]));
 
     // and a normal project still writes
-    desktop::add_comment("p".into(), w.c.clone(), "a note".into()).unwrap();
-    let detail = desktop::get_bead_detail("p".into(), w.c.clone()).unwrap();
+    block(desktop::add_comment(
+        "p".into(),
+        w.c.clone(),
+        "a note".into(),
+    ))
+    .unwrap();
+    let detail = block(desktop::get_bead_detail("p".into(), w.c.clone())).unwrap();
     assert!(detail.comments.iter().any(|c| c.text == "a note"));
 }
 
 fn comment_author_follows_the_fixture_actor() {
-    let a = desktop::comment_author("p".into()).unwrap();
+    let a = block(desktop::comment_author("p".into())).unwrap();
     assert_eq!(a.name, "fixture-actor");
     assert_eq!(a.source.as_deref(), Some("bd config actor"));
 }
 
 fn blocked_and_ready_map_from_real_bd_output(w: &World) {
-    let beads = desktop::list_beads("p".into()).unwrap();
+    let beads = block(desktop::list_beads("p".into())).unwrap();
     let get = |id: &str| beads.iter().find(|b| b.id == id).unwrap();
     assert_eq!(get(&w.b).waiting_on.as_deref(), Some(&[w.a.clone()][..]));
     assert_eq!(get(&w.b).ready, Some(false));
@@ -288,7 +307,7 @@ fn blocked_and_ready_map_from_real_bd_output(w: &World) {
     assert_eq!(get(&w.c).ready, Some(true));
     assert!(get(&w.a).waiting_on.as_ref().map_or(true, |v| v.is_empty()));
 
-    let p = desktop::list_projects()
+    let p = block(desktop::list_projects())
         .unwrap()
         .into_iter()
         .find(|p| p.id == "p")

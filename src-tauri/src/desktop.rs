@@ -1,3 +1,6 @@
+use crate::bd_queue::{
+    is_read_call, output_with_timeout, queue_for, timeout_from_env, Queues, TIMEOUT_GRACE,
+};
 use crate::registry::{self, RegistryEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -7,7 +10,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 const BD_FALLBACK: &str = "/opt/homebrew/bin/bd";
 const MAX_BUFFER: usize = 64 * 1024 * 1024;
@@ -408,6 +411,7 @@ fn bd_error_message(stdout: &str, stderr: &str, status: &std::process::ExitStatu
     format!("bd exited with status {}", status)
 }
 
+#[derive(Clone)]
 struct BdCapture {
     bin: String,
     stdout: String,
@@ -416,14 +420,36 @@ struct BdCapture {
 }
 
 fn exec_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
+    static QUEUES: OnceLock<Queues<BdCapture>> = OnceLock::new();
+    let queue = queue_for(&QUEUES, &dir.to_string_lossy());
+    // Reads with the same args share a process; mutations always run.
+    let key = is_read_call(args).then(|| format!("{:?}", args));
+    queue.run(key.as_deref(), || spawn_bd(dir, args))
+}
+
+fn timeout_message(args: &[&str], timeout: std::time::Duration) -> String {
+    let mut msg = format!(
+        "bd {} timed out after {}s and was stopped",
+        args.first().unwrap_or(&""),
+        timeout.as_secs()
+    );
+    if !is_read_call(args) {
+        msg.push_str("; the command may have been applied, so check before retrying");
+    }
+    msg
+}
+
+fn spawn_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
     let BdLaunch { candidates, env } = launch_for(dir)?;
+    let timeout = timeout_from_env();
 
     for candidate in &candidates {
         let mut cmd = Command::new(candidate);
         cmd.current_dir(dir).args(args).envs(env.iter().cloned());
 
-        match cmd.output() {
-            Ok(output) => {
+        match output_with_timeout(&mut cmd, timeout, TIMEOUT_GRACE) {
+            Ok(Err(())) => return Err(timeout_message(args, timeout)),
+            Ok(Ok(output)) => {
                 if output.stdout.len() > MAX_BUFFER {
                     return Err("bd output exceeded buffer".to_string());
                 }
@@ -820,12 +846,24 @@ pub fn unwatch_bead_feed(watch_id: u32, watches: tauri::State<'_, FeedWatches>) 
 }
 
 #[tauri::command]
-pub fn enable_events_journal(project_id: String) -> Result<(), String> {
-    run_bd(
-        &resolve_writable_dir(&project_id)?,
-        &["config", "set", "events-journal", "true"],
-    )
-    .map(|_| ())
+pub async fn enable_events_journal(project_id: String) -> Result<(), String> {
+    blocking(move || {
+        run_bd(
+            &resolve_writable_dir(&project_id)?,
+            &["config", "set", "events-journal", "true"],
+        )
+        .map(|_| ())
+    })
+    .await
+}
+
+/// Run a bd-spawning command off the main thread; the per-project queue paces the spawns.
+async fn blocking<T: Send + 'static>(
+    f: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 fn bd_json(dir: &Path, args: &[&str]) -> Result<Value, String> {
@@ -1309,14 +1347,19 @@ pub(crate) fn list_beads_inner(project_id: &str) -> Result<Vec<Bead>, String> {
 pub(crate) fn get_bead_detail_inner(project_id: &str, id: &str) -> Result<BeadDetail, String> {
     let dir = resolve_dir(project_id)?;
     let raw_arr = bd_json(&dir, &["show", id, "--json"])?;
-    let raw_comments = bd_json(&dir, &["comments", id, "--json"]).ok();
-
     let raw = raw_arr
         .as_array()
         .and_then(|arr| arr.first())
         .cloned()
         .unwrap_or(Value::Object(Default::default()));
     let bead = map_bead(&raw);
+    // show first: its comment_count says whether `bd comments` is worth a process. The
+    // per-project queue runs one bd at a time anyway, so overlapping them gains nothing.
+    let raw_comments = if bead.comment_count == Some(0) {
+        None
+    } else {
+        bd_json(&dir, &["comments", id, "--json"]).ok()
+    };
     let raw_deps = raw
         .get("dependencies")
         .and_then(Value::as_array)
@@ -1611,23 +1654,23 @@ fn comment_author_inner(project_id: &str) -> Result<CommentAuthor, String> {
 }
 
 #[tauri::command]
-pub fn comment_author(project_id: String) -> Result<CommentAuthor, String> {
-    comment_author_inner(&project_id)
+pub async fn comment_author(project_id: String) -> Result<CommentAuthor, String> {
+    blocking(move || comment_author_inner(&project_id)).await
 }
 
 #[tauri::command]
-pub fn list_projects() -> Result<Vec<Project>, String> {
-    discover_projects_inner()
+pub async fn list_projects() -> Result<Vec<Project>, String> {
+    blocking(discover_projects_inner).await
 }
 
 #[tauri::command]
-pub fn list_beads(project_id: String) -> Result<Vec<Bead>, String> {
-    crate::source::source_for(&project_id).list_beads(&project_id)
+pub async fn list_beads(project_id: String) -> Result<Vec<Bead>, String> {
+    blocking(move || crate::source::source_for(&project_id).list_beads(&project_id)).await
 }
 
 #[tauri::command]
-pub fn get_bead_detail(project_id: String, id: String) -> Result<BeadDetail, String> {
-    crate::source::source_for(&project_id).bead_detail(&project_id, &id)
+pub async fn get_bead_detail(project_id: String, id: String) -> Result<BeadDetail, String> {
+    blocking(move || crate::source::source_for(&project_id).bead_detail(&project_id, &id)).await
 }
 
 const ARTIFACT_MAX_BYTES: u64 = 2 * 1024 * 1024;
@@ -1726,56 +1769,70 @@ pub fn read_artifact(project_id: String, path: String) -> Result<ArtifactFile, S
 }
 
 #[tauri::command]
-pub fn get_project_knowledge(project_id: String) -> Result<ProjectKnowledge, String> {
-    crate::source::source_for(&project_id).project_knowledge(&project_id)
+pub async fn get_project_knowledge(project_id: String) -> Result<ProjectKnowledge, String> {
+    blocking(move || crate::source::source_for(&project_id).project_knowledge(&project_id)).await
 }
 
 #[tauri::command]
-pub fn update_bead_status(project_id: String, id: String, status: String) -> Result<(), String> {
-    update_bead_status_inner(&project_id, &id, &status)
+pub async fn update_bead_status(
+    project_id: String,
+    id: String,
+    status: String,
+) -> Result<(), String> {
+    blocking(move || update_bead_status_inner(&project_id, &id, &status)).await
 }
 
 #[tauri::command]
-pub fn update_bead(project_id: String, id: String, update: BeadUpdateInput) -> Result<(), String> {
-    update_bead_inner(&project_id, &id, update)
+pub async fn update_bead(
+    project_id: String,
+    id: String,
+    update: BeadUpdateInput,
+) -> Result<(), String> {
+    blocking(move || update_bead_inner(&project_id, &id, update)).await
 }
 
 #[tauri::command]
-pub fn preview_delete_bead(project_id: String, id: String) -> Result<String, String> {
-    preview_delete_bead_inner(&project_id, &id)
+pub async fn preview_delete_bead(project_id: String, id: String) -> Result<String, String> {
+    blocking(move || preview_delete_bead_inner(&project_id, &id)).await
 }
 
 #[tauri::command]
-pub fn delete_bead(project_id: String, id: String) -> Result<(), String> {
-    delete_bead_inner(&project_id, &id)
+pub async fn delete_bead(project_id: String, id: String) -> Result<(), String> {
+    blocking(move || delete_bead_inner(&project_id, &id)).await
 }
 
 #[tauri::command]
-pub fn create_bead(
+pub async fn create_bead(
     project_id: String,
     title: String,
     description: Option<String>,
     r#type: Option<String>,
     parent: Option<String>,
 ) -> Result<String, String> {
-    create_bead_inner(
-        &project_id,
-        &title,
-        description.as_deref(),
-        r#type.as_deref(),
-        parent.as_deref(),
-    )
+    blocking(move || {
+        create_bead_inner(
+            &project_id,
+            &title,
+            description.as_deref(),
+            r#type.as_deref(),
+            parent.as_deref(),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn add_comment(project_id: String, id: String, text: String) -> Result<(), String> {
-    add_comment_inner(&project_id, &id, &text)
+pub async fn add_comment(project_id: String, id: String, text: String) -> Result<(), String> {
+    blocking(move || add_comment_inner(&project_id, &id, &text)).await
 }
 
 #[tauri::command]
-pub fn probe_project(path: String) -> Result<BeadsLocation, String> {
-    let dir_path = PathBuf::from(path);
-    probe_beads_location(&dir_path)
+pub async fn probe_project(path: String) -> Result<BeadsLocation, String> {
+    blocking(move || {
+        let dir_path = PathBuf::from(path);
+        probe_beads_location(&dir_path)
+    })
+    .await
 }
 fn is_missing_workspace_error(message: &str) -> bool {
     let lower = message.to_lowercase();
@@ -1800,30 +1857,36 @@ pub enum PathStatus {
 }
 
 #[tauri::command]
-pub fn check_project_path(path: String) -> PathStatus {
-    let dir_path = PathBuf::from(&path);
+pub async fn check_project_path(path: String) -> PathStatus {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir_path = PathBuf::from(&path);
 
-    if !dir_path.exists() {
-        return PathStatus::Invalid {
-            reason: "Path does not exist".to_string(),
-        };
-    }
-
-    match probe_beads_location(&dir_path) {
-        Ok(location) => PathStatus::Valid {
-            prefix: location.prefix,
-            external: location.external,
-        },
-        Err(err) if is_missing_workspace_error(&err) => {
-            let suggested_prefix = dir_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("project")
-                .to_string();
-            PathStatus::NeedsInit { suggested_prefix }
+        if !dir_path.exists() {
+            return PathStatus::Invalid {
+                reason: "Path does not exist".to_string(),
+            };
         }
-        Err(reason) => PathStatus::Invalid { reason },
-    }
+
+        match probe_beads_location(&dir_path) {
+            Ok(location) => PathStatus::Valid {
+                prefix: location.prefix,
+                external: location.external,
+            },
+            Err(err) if is_missing_workspace_error(&err) => {
+                let suggested_prefix = dir_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("project")
+                    .to_string();
+                PathStatus::NeedsInit { suggested_prefix }
+            }
+            Err(reason) => PathStatus::Invalid { reason },
+        }
+    })
+    .await
+    .unwrap_or_else(|e| PathStatus::Invalid {
+        reason: e.to_string(),
+    })
 }
 
 #[derive(Serialize)]
@@ -1843,50 +1906,53 @@ pub enum AddProjectOutcome {
 }
 
 #[tauri::command]
-pub fn add_project(path: String, name: Option<String>) -> Result<AddProjectOutcome, String> {
-    let dir_path = PathBuf::from(&path);
+pub async fn add_project(path: String, name: Option<String>) -> Result<AddProjectOutcome, String> {
+    blocking(move || {
+        let dir_path = PathBuf::from(&path);
 
-    match probe_beads_location(&dir_path) {
-        Ok(location) => {
-            // Register in the registry
-            let entry = registry::add(&dir_path, name)?;
+        match probe_beads_location(&dir_path) {
+            Ok(location) => {
+                // Register in the registry
+                let entry = registry::add(&dir_path, name)?;
 
-            // Get the counts
-            let counts = project_counts(&dir_path);
+                // Get the counts
+                let counts = project_counts(&dir_path);
 
-            Ok(AddProjectOutcome::Registered {
-                project: Project {
-                    id: entry.id.clone(),
-                    name: entry.label.clone(),
-                    dir: entry.path.clone(),
-                    beads_path: location.beads_path,
-                    prefix: location.prefix,
-                    external: location.external,
-                    missing: false,
-                    error: None,
-                    counts,
-                    readonly: entry.readonly,
-                    filter_label: entry.effective_filter_label(),
-                },
-            })
+                Ok(AddProjectOutcome::Registered {
+                    project: Project {
+                        id: entry.id.clone(),
+                        name: entry.label.clone(),
+                        dir: entry.path.clone(),
+                        beads_path: location.beads_path,
+                        prefix: location.prefix,
+                        external: location.external,
+                        missing: false,
+                        error: None,
+                        counts,
+                        readonly: entry.readonly,
+                        filter_label: entry.effective_filter_label(),
+                    },
+                })
+            }
+            Err(err) if is_missing_workspace_error(&err) => {
+                let canonical_path = std::fs::canonicalize(&dir_path)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| path.clone());
+                let suggested_prefix = dir_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("project")
+                    .to_string();
+
+                Ok(AddProjectOutcome::NeedsInit {
+                    path: canonical_path,
+                    suggested_prefix,
+                })
+            }
+            Err(err) => Err(err),
         }
-        Err(err) if is_missing_workspace_error(&err) => {
-            let canonical_path = std::fs::canonicalize(&dir_path)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| path.clone());
-            let suggested_prefix = dir_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("project")
-                .to_string();
-
-            Ok(AddProjectOutcome::NeedsInit {
-                path: canonical_path,
-                suggested_prefix,
-            })
-        }
-        Err(err) => Err(err),
-    }
+    })
+    .await
 }
 
 #[tauri::command]
@@ -1905,73 +1971,76 @@ fn build_init_args(prefix: &str) -> Vec<String> {
 }
 
 #[tauri::command]
-pub fn init_project(
+pub async fn init_project(
     path: String,
     prefix: Option<String>,
     name: Option<String>,
 ) -> Result<Project, String> {
-    let dir_path = PathBuf::from(&path);
+    blocking(move || {
+        let dir_path = PathBuf::from(&path);
 
-    // Try to probe first to see if it already has beads
-    let probe_result = probe_beads_location(&dir_path);
+        // Try to probe first to see if it already has beads
+        let probe_result = probe_beads_location(&dir_path);
 
-    if let Ok(location) = probe_result {
-        // Already a beads project
-        if !location.external {
-            // Beads is in the expected location, just register it
-            let entry = registry::add(&dir_path, name.clone())?;
-            let counts = project_counts(&dir_path);
-            return Ok(Project {
-                id: entry.id.clone(),
-                name: entry.label.clone(),
-                dir: entry.path.clone(),
-                beads_path: location.beads_path,
-                prefix: location.prefix,
-                external: location.external,
-                missing: false,
-                error: None,
-                counts,
-                readonly: entry.readonly,
-                filter_label: entry.effective_filter_label(),
-            });
+        if let Ok(location) = probe_result {
+            // Already a beads project
+            if !location.external {
+                // Beads is in the expected location, just register it
+                let entry = registry::add(&dir_path, name.clone())?;
+                let counts = project_counts(&dir_path);
+                return Ok(Project {
+                    id: entry.id.clone(),
+                    name: entry.label.clone(),
+                    dir: entry.path.clone(),
+                    beads_path: location.beads_path,
+                    prefix: location.prefix,
+                    external: location.external,
+                    missing: false,
+                    error: None,
+                    counts,
+                    readonly: entry.readonly,
+                    filter_label: entry.effective_filter_label(),
+                });
+            }
         }
-    }
 
-    // Initialize beads with the specified prefix
-    let folder_name = dir_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("project")
-        .to_string();
+        // Initialize beads with the specified prefix
+        let folder_name = dir_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("project")
+            .to_string();
 
-    let final_prefix = prefix.unwrap_or(folder_name);
+        let final_prefix = prefix.unwrap_or(folder_name);
 
-    // Build and run bd init with proper args (no -C flag)
-    let init_args = build_init_args(&final_prefix);
-    run_bd_mut(&dir_path, &init_args)?;
+        // Build and run bd init with proper args (no -C flag)
+        let init_args = build_init_args(&final_prefix);
+        run_bd_mut(&dir_path, &init_args)?;
 
-    // Probe again to get the location
-    let location = probe_beads_location(&dir_path)?;
+        // Probe again to get the location
+        let location = probe_beads_location(&dir_path)?;
 
-    // Register in the registry
-    let entry = registry::add(&dir_path, name)?;
+        // Register in the registry
+        let entry = registry::add(&dir_path, name)?;
 
-    // Get the counts
-    let counts = project_counts(&dir_path);
+        // Get the counts
+        let counts = project_counts(&dir_path);
 
-    Ok(Project {
-        id: entry.id.clone(),
-        name: entry.label.clone(),
-        dir: entry.path.clone(),
-        beads_path: location.beads_path,
-        prefix: location.prefix,
-        external: location.external,
-        missing: false,
-        error: None,
-        counts,
-        readonly: entry.readonly,
-        filter_label: entry.effective_filter_label(),
+        Ok(Project {
+            id: entry.id.clone(),
+            name: entry.label.clone(),
+            dir: entry.path.clone(),
+            beads_path: location.beads_path,
+            prefix: location.prefix,
+            external: location.external,
+            missing: false,
+            error: None,
+            counts,
+            readonly: entry.readonly,
+            filter_label: entry.effective_filter_label(),
+        })
     })
+    .await
 }
 
 #[tauri::command]
@@ -1986,6 +2055,12 @@ pub fn relocate_project(id: String, path: String) -> Result<RegistryEntry, Strin
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn timeout_message_warns_only_for_writes() {
+        let t = std::time::Duration::from_secs(60);
+        assert!(!super::timeout_message(&["show", "x"], t).contains("may have been applied"));
+        assert!(super::timeout_message(&["update", "x"], t).contains("may have been applied"));
+    }
 
     #[test]
     fn artifact_reads_and_confines() {
