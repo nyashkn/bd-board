@@ -17,6 +17,8 @@ export interface World {
   art: { id: string; dir: string; bead: string }
   ro: { id: string; dir: string; bead: string; described: string }
   rof: { id: string; dir: string; wo: string; child: string; other: string }
+  /** Created but NOT in the registry: a spec registers it itself, so project and bead counts elsewhere hold. */
+  ask: { id: string; dir: string; bead: string }
 }
 
 export const OUTSIDE_SECRET = 'OUTSIDE-SECRET-DO-NOT-RENDER'
@@ -151,6 +153,14 @@ export function createWorld(): World {
     '--silent',
   ])
 
+  const ask = initProject(root, home, 'ask')
+  const askBead = bd(ask, home, [
+    'create',
+    '--title',
+    'Question demo',
+    '--silent',
+  ])
+
   writeFileSync(
     path.join(home, '.config', 'bd-board', 'projects.json'),
     JSON.stringify({
@@ -176,6 +186,7 @@ export function createWorld(): World {
     art: { id: 'art', dir: art, bead: artBead },
     ro: { id: 'ro', dir: ro, bead: roBead, described },
     rof: { id: 'rof', dir: rof, wo, child, other },
+    ask: { id: 'ask', dir: ask, bead: askBead },
   }
 }
 

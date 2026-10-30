@@ -16,6 +16,7 @@ import {
 
 import { EmptyBoard } from '@/components/empty-board'
 import { EpicProgress } from '@/components/epic-progress'
+import { NeedsYou } from '@/components/bead-question-card'
 import { ChangedDot, useSince } from '@/components/since-band'
 import { Button } from '@/components/ui/button'
 import { ClosedHiddenNote } from '@/components/status-column-header'
@@ -161,6 +162,7 @@ function TreeNode({
             {bead.id}
           </span>
           <ChangedDot id={bead.id} />
+          <NeedsYou id={bead.id} />
           <span
             className={cn(
               'shrink-0 rounded-[4px] px-1 py-px font-mono text-[10px] font-semibold tabular-nums ring-1 ring-inset ring-current',

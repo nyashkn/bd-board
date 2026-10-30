@@ -8,6 +8,7 @@ import {
   makeSnippet,
   matchText,
   mergeRanges,
+  replaceAsking,
   searchDocs,
 } from './palette-search'
 
@@ -329,5 +330,18 @@ describe('pinning, late group, is:/project: chips', () => {
     expect(run('is:since')).toEqual([])
     expect(run('project:proj')).toHaveLength(4)
     expect(run('project:zzz')).toEqual([])
+  })
+})
+
+describe('replaceAsking', () => {
+  it('replaces one project’s keys, including with an empty set, and keeps the others', () => {
+    const prev = new Set(['a:d-1', 'a:d-2', 'b:d-1'])
+    expect([...replaceAsking(prev, 'a', ['d-2', 'd-3'])].sort()).toEqual([
+      'a:d-2',
+      'a:d-3',
+      'b:d-1',
+    ])
+    expect([...replaceAsking(prev, 'a', [])]).toEqual(['b:d-1'])
+    expect(prev.size).toBe(3)
   })
 })
