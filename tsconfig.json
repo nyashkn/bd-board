@@ -6,7 +6,7 @@
     "prettier.config.js",
     "vite.config.js"
   ],
-  "exclude": ["e2e"],
+  "exclude": ["e2e", "workers"],
 
   "compilerOptions": {
     "target": "ES2022",

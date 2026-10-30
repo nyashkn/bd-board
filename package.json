@@ -45,6 +45,7 @@
     "test:watch": "vitest",
     "test:readonly": "bash scripts/readonly/test-readonly.sh",
     "test:feed-smoke": "node --experimental-strip-types --no-warnings scripts/feed-smoke.ts",
+    "test:snapshot-worker": "pnpm --dir workers/snapshot run typecheck && pnpm --dir workers/snapshot run test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint",
     "format": "prettier --write . && eslint --fix",
