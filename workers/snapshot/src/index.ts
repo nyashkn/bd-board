@@ -9,7 +9,7 @@ export interface Env {
 }
 
 const MANIFEST_KEY = 'manifest.json'
-const SNAP_KEY = /^snap-([0-9a-f]{8,64})\.jsonl\.gz$/
+const SNAP_KEY = /^snap-([0-9a-f]{16,64})\.jsonl\.gz$/
 const SHA256 = /^[0-9a-f]{64}$/
 const MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 const MAX_MANIFEST_BYTES = 4 * 1024
@@ -30,9 +30,9 @@ const bytesToHex = (buf: ArrayBuffer) =>
 // Compare SHA-256 digests so the comparison is constant time and length does not leak.
 async function tokenMatches(req: Request, secret: string | undefined) {
   // Fail closed: an unset or empty secret must never match (not even "Bearer undefined").
-  if (!secret) return false
+  if (!secret?.trim()) return false
   const given =
-    /^Bearer (.+)$/.exec(req.headers.get('authorization') ?? '')?.[1] ?? ''
+    /^Bearer +(.+)$/i.exec(req.headers.get('authorization') ?? '')?.[1] ?? ''
   const enc = new TextEncoder()
   const [a, b] = await Promise.all([
     crypto.subtle.digest('SHA-256', enc.encode(given)),
@@ -81,13 +81,20 @@ async function serve(
   })
 }
 
+// Require a numeric Content-Length so the size caps always apply (a chunked body would skip them).
+const declaredLength = (req: Request) => {
+  const v = req.headers.get('content-length')
+  return v !== null && /^\d+$/.test(v) ? Number(v) : null
+}
+
 async function putSnapshot(
   req: Request,
   env: Env,
   key: string,
   hexLen: number,
 ) {
-  const declared = Number(req.headers.get('content-length') ?? 0)
+  const declared = declaredLength(req)
+  if (declared === null) return json({ error: 'content-length required' }, 411)
   if (declared > MAX_SNAPSHOT_BYTES) return json({ error: 'too large' }, 413)
   const bytes = await req.arrayBuffer()
   if (bytes.byteLength > MAX_SNAPSHOT_BYTES)
@@ -102,6 +109,7 @@ async function putSnapshot(
   const stored = await env.SNAP.put(key, bytes, {
     onlyIf: { etagDoesNotMatch: '*' },
     httpMetadata: { contentType: 'application/gzip' },
+    customMetadata: { sha256 },
   })
   return stored
     ? json({ key, created: true }, 201, { etag: stored.httpEtag })
@@ -178,7 +186,8 @@ async function putManifest(req: Request, env: Env) {
   if (ifMatch !== null && (!expected || expected === '*'))
     return json({ error: 'If-Match must be an etag' }, 400)
 
-  const declared = Number(req.headers.get('content-length') ?? 0)
+  const declared = declaredLength(req)
+  if (declared === null) return json({ error: 'content-length required' }, 411)
   if (declared > MAX_MANIFEST_BYTES) return json({ error: 'too large' }, 413)
   const text = await req.text()
   if (text.length > MAX_MANIFEST_BYTES) return json({ error: 'too large' }, 413)
@@ -187,6 +196,9 @@ async function putManifest(req: Request, env: Env) {
 
   const snapshot = await env.SNAP.head(manifest.key)
   if (!snapshot) return json({ error: 'snapshot key does not exist' }, 422)
+  // The sha256 recorded when the snapshot was accepted ties the manifest to verified content.
+  if (snapshot.customMetadata?.['sha256'] !== manifest.sha256)
+    return json({ error: 'sha256 does not match the stored snapshot' }, 422)
   if (snapshot.size !== manifest.size)
     return json({ error: 'size does not match the stored snapshot' }, 422)
 
@@ -206,7 +218,7 @@ export default {
 
     if (method === 'GET' && pathname === '/manifest') {
       if (!(await canRead(req, env))) return unauthorized()
-      return serve(req, env, MANIFEST_KEY, 'no-cache', 'application/json')
+      return serve(req, env, MANIFEST_KEY, 'private, no-cache', 'application/json')
     }
 
     const snap = pathname.startsWith('/snap/')

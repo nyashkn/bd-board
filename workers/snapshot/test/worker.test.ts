@@ -11,11 +11,23 @@ const call = (
   path: string,
   init: RequestInit = {},
   secrets: Partial<Env> = { READ_TOKEN: READ, WRITE_TOKEN: WRITE },
-) =>
-  worker.fetch(new Request(`https://example.com${path}`, init), {
-    SNAP: env.SNAP,
-    ...secrets,
-  })
+): Promise<Response> => {
+  // A real client sends Content-Length for a sized body; `new Request` does not add it.
+  const headers = new Headers(init.headers)
+  const { body } = init
+  if (
+    !headers.has('content-length') &&
+    (typeof body === 'string' || body instanceof Uint8Array)
+  ) {
+    const size =
+      typeof body === 'string' ? new TextEncoder().encode(body).length : body.length
+    headers.set('content-length', String(size))
+  }
+  return worker.fetch(
+    new Request(`https://example.com${path}`, { ...init, headers }),
+    { SNAP: env.SNAP, ...secrets },
+  )
+}
 
 async function sha256Hex(bytes: Uint8Array) {
   const d = await crypto.subtle.digest('SHA-256', bytes)
@@ -89,6 +101,17 @@ describe('auth', () => {
     }
   })
 
+  it('accepts a case-insensitive Bearer scheme and extra spaces', async () => {
+    for (const authorization of [`bearer ${READ}`, `BEARER   ${READ}`]) {
+      const res = await call('/manifest', { headers: { authorization } })
+      expect(res.status, authorization).toBe(404) // authorized, no manifest yet
+    }
+    const wrong = await call('/manifest', {
+      headers: { authorization: `Basic ${READ}` },
+    })
+    expect(wrong.status).toBe(401)
+  })
+
   it('does not let the read token write', async () => {
     const s = await makeSnapshot()
     expect((await putSnap(s, READ)).status).toBe(401)
@@ -101,7 +124,11 @@ describe('auth', () => {
 
   it('fails closed when a secret is unset or empty', async () => {
     const s = await makeSnapshot()
-    for (const secrets of [{}, { READ_TOKEN: '', WRITE_TOKEN: '' }]) {
+    for (const secrets of [
+      {},
+      { READ_TOKEN: '', WRITE_TOKEN: '' },
+      { READ_TOKEN: '  ', WRITE_TOKEN: ' ' },
+    ]) {
       for (const token of ['undefined', '', 'null']) {
         const headers = bearer(token)
         expect((await call('/manifest', { headers }, secrets)).status).toBe(401)
@@ -172,6 +199,7 @@ describe('snapshots', () => {
 
   it.each([
     'snap-abc.jsonl.gz', // too short
+    `snap-${'a'.repeat(15)}.jsonl.gz`, // below the 16-char minimum
     `snap-${'a'.repeat(65)}.jsonl.gz`, // too long
     'snap-ABCDEF01.jsonl.gz', // uppercase
     'snap-abcdef01.jsonl', // wrong suffix
@@ -214,6 +242,24 @@ describe('snapshots', () => {
     expect(res.status).toBe(400)
   })
 
+  it('requires a Content-Length so the size cap cannot be skipped', async () => {
+    const s = await makeSnapshot()
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(s.bytes)
+        c.close()
+      },
+    })
+    const res = await call(`/snap/${s.key}`, {
+      method: 'PUT',
+      body,
+      headers: bearer(WRITE),
+      duplex: 'half',
+    } as RequestInit)
+    expect(res.status).toBe(411)
+    expect(await env.SNAP.head(s.key)).toBeNull()
+  })
+
   it('treats a duplicate PUT as a no-op that keeps the stored object', async () => {
     const s = await makeSnapshot()
     expect((await putSnap(s)).status).toBe(201)
@@ -245,7 +291,7 @@ describe('manifest', () => {
 
     const first = await call('/manifest', { headers: bearer(READ) })
     expect(first.status).toBe(200)
-    expect(first.headers.get('cache-control')).toBe('no-cache')
+    expect(first.headers.get('cache-control')).toBe('private, no-cache')
     const etag = first.headers.get('etag')!
     expect((await first.json<{ key: string }>()).key).toBe(s1.key)
 
@@ -254,7 +300,7 @@ describe('manifest', () => {
     })
     expect(cached.status).toBe(304)
     expect(cached.headers.get('etag')).toBe(etag)
-    expect(cached.headers.get('cache-control')).toBe('no-cache')
+    expect(cached.headers.get('cache-control')).toBe('private, no-cache')
     expect(await cached.text()).toBe('')
 
     const weak = await call('/manifest', {
@@ -281,6 +327,29 @@ describe('manifest', () => {
   })
 
   describe('compare-and-swap', () => {
+    it('lets exactly one of two concurrent writers win', async () => {
+      const s1 = await makeSnapshot('1')
+      const s2 = await makeSnapshot('2')
+      const s3 = await makeSnapshot('3')
+      for (const s of [s1, s2, s3]) await putSnap(s)
+      const base = await putManifest(manifestFor(s1), { 'if-none-match': '*' })
+      const etag = base.headers.get('etag')!
+      const results = await Promise.all([
+        putManifest(manifestFor(s2), { 'if-match': etag }),
+        putManifest(manifestFor(s3), { 'if-match': etag }),
+      ])
+      expect(results.map((r) => r.status).sort()).toEqual([200, 412])
+      const winner = results.findIndex((r) => r.status === 200) === 0 ? s2 : s3
+      expect((await getManifest())['key']).toBe(winner.key)
+    })
+
+    it('rejects a manifest for a snapshot stored without verified sha256 metadata', async () => {
+      const s = await makeSnapshot()
+      await env.SNAP.put(s.key, s.bytes) // bypasses the Worker, so no customMetadata
+      const res = await putManifest(manifestFor(s), { 'if-none-match': '*' })
+      expect(res.status).toBe(422)
+    })
+
     it('requires a precondition', async () => {
       const s = await makeSnapshot()
       await putSnap(s)

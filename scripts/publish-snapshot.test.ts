@@ -61,6 +61,12 @@ describe('buildManifest', () => {
     expect(a.sha256).toBe(b.sha256)
   })
 
+  it('pins the gzip OS header byte so the hash is portable', () => {
+    const { gz } = buildManifest({ jsonl: EXPORT, now: NOW })
+    expect(gz[9]).toBe(0xff)
+    expect(gunzipSync(gz)).toEqual(EXPORT)
+  })
+
   it('falls back to the sha256 when there is no usable head', () => {
     for (const head of [undefined, '', 'has space', 'x'.repeat(200)]) {
       const { manifest } = buildManifest({ jsonl: EXPORT, head, now: NOW })

@@ -67,6 +67,7 @@ export function buildManifest(input: {
 }): { manifest: Manifest; gz: Buffer } {
   // Node's gzip writes no mtime, so the same export always gives the same bytes and key.
   const gz = gzipSync(input.jsonl, { level: 9 })
+  gz[9] = 0xff // header OS byte differs per platform (zlib stamps the host OS); pin it so the sha256 is portable
   const sha256 = createHash('sha256').update(gz).digest('hex')
   return {
     gz,
@@ -116,7 +117,10 @@ export async function publish(input: PublishInput): Promise<PublishResult> {
     now: (input.now ?? (() => new Date()))(),
   })
 
-  const cur = await doFetch(url('manifest'), { headers: auth })
+  const cur = await doFetch(url('manifest'), {
+    headers: auth,
+    redirect: 'error',
+  })
   if (cur.status !== 200 && cur.status !== 404) {
     throw await failure('GET manifest', cur)
   }
@@ -142,6 +146,7 @@ export async function publish(input: PublishInput): Promise<PublishResult> {
   // The Worker stores the snapshot only if absent, so a retry after a failed manifest PUT is harmless.
   const snap = await doFetch(url(`snap/${manifest.key}`), {
     method: 'PUT',
+    redirect: 'error',
     headers: { ...auth, 'content-type': 'application/gzip' },
     body: new Uint8Array(gz),
   })
@@ -152,6 +157,7 @@ export async function publish(input: PublishInput): Promise<PublishResult> {
 
   const put = await doFetch(url('manifest'), {
     method: 'PUT',
+    redirect: 'error',
     headers: {
       ...auth,
       'content-type': 'application/json',
@@ -175,6 +181,7 @@ function readHead(bd: string, cwd: string) {
       cwd,
       encoding: 'utf8',
       timeout: 30_000,
+      env: { ...process.env, SNAPSHOT_WRITE_TOKEN: undefined },
     })
     return (JSON.parse(out) as { commit?: string }).commit
   } catch {
