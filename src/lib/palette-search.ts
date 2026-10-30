@@ -12,7 +12,7 @@ export interface Range {
   end: number
 }
 
-export type MatchKind = 'prefix' | 'word' | 'sub' | 'fuzzy'
+export type MatchKind = 'prefix' | 'word' | 'sub' | 'fuzzy' | 'typo'
 
 export interface TextMatch {
   kind: MatchKind
@@ -24,6 +24,7 @@ const KIND_RANK: Record<MatchKind, number> = {
   word: 2,
   sub: 1,
   fuzzy: 0,
+  typo: -1,
 }
 
 /** Rank order: exact id > title prefix > title > labels/assignee > description > comments > artifacts. */
@@ -39,6 +40,10 @@ export const WEIGHT = {
   metaPrefix: 420,
   description: 300,
   descriptionWord: 310,
+  // Typo matches (edit distance) sit below every real match in the main group.
+  titleTypo: 290,
+  metaTypo: 280,
+  descriptionTypo: 270,
   comment: 200,
   artifact: 180,
 } as const
@@ -97,6 +102,95 @@ export function matchText(
     } else break
     start = hay.indexOf(word[0], start + 1)
   }
+  return null
+}
+
+export interface Token {
+  text: string
+  start: number
+}
+
+const MAX_TYPO_TOKENS = 200
+
+/** Letter/digit runs of already-folded text with their offsets, for typo matching. */
+export function tokenize(lower: string): Token[] {
+  const out: Token[] = []
+  const seen = new Set<string>()
+  for (const m of lower.matchAll(/[\p{L}\p{N}]+/gu)) {
+    if (seen.has(m[0])) continue
+    seen.add(m[0])
+    out.push({ text: m[0], start: m.index })
+    if (out.length >= MAX_TYPO_TOKENS) break
+  }
+  return out
+}
+
+/** Edits a word of this length may be off by: 5+ letters 1, 8+ letters 2, shorter none. */
+export function typoBudget(word: string): number {
+  if (!/^\p{L}+$/u.test(word)) return 0
+  return word.length >= 8 ? 2 : word.length >= 5 ? 1 : 0
+}
+
+function tailEq(a: string, i: number, b: string, j: number): boolean {
+  if (a.length - i !== b.length - j) return false
+  for (; i < a.length; i++, j++) if (a[i] !== b[j]) return false
+  return true
+}
+
+/** Within one edit (incl. adjacent swap), allocation-free: the hot path of every keystroke. */
+function withinOne(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false
+  let i = 0
+  const n = Math.min(a.length, b.length)
+  while (i < n && a[i] === b[i]) i++
+  if (i === n) return true // equal, or one is the other plus one char
+  return (
+    tailEq(a, i + 1, b, i + 1) || // substitution
+    tailEq(a, i + 1, b, i) || // a has an extra char
+    tailEq(a, i, b, i + 1) || // b has an extra char
+    (a[i] === b[i + 1] && a[i + 1] === b[i] && tailEq(a, i + 2, b, i + 2))
+  )
+}
+
+/** Optimal-string-alignment distance (insert, delete, substitute, adjacent swap); > max once it exceeds max. */
+export function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1
+  let prev2: number[] = []
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i]
+    let low = i
+    for (let j = 1; j <= b.length; j++) {
+      let d = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      )
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+        d = Math.min(d, prev2[j - 2] + 1)
+      cur[j] = d
+      low = Math.min(low, d)
+    }
+    if (low > max) return max + 1
+    prev2 = prev
+    prev = cur
+  }
+  return prev[b.length]
+}
+
+/** The first token within the word's typo budget (never an exact token: those match elsewhere). */
+export function typoMatch(tokens: Token[], word: string): TextMatch | null {
+  const k = typoBudget(word)
+  if (!k) return null
+  for (const t of tokens)
+    if (
+      t.text !== word &&
+      (k === 1 ? withinOne(t.text, word) : editDistance(t.text, word, k) <= k)
+    )
+      return {
+        kind: 'typo',
+        ranges: [{ start: t.start, end: t.start + t.text.length }],
+      }
   return null
 }
 
@@ -159,11 +253,13 @@ const collapse = (s: string) => s.replace(/\s+/g, ' ').trim()
 export interface IndexedText {
   text: string
   lower: string
+  tokens: Token[]
 }
 
 const indexed = (s: string): IndexedText => {
   const text = collapse(s)
-  return { text, lower: fold(text) }
+  const lower = fold(text)
+  return { text, lower, tokens: tokenize(lower) }
 }
 
 export interface PaletteDoc {
@@ -173,6 +269,7 @@ export interface PaletteDoc {
   bead: Bead
   idL: string
   titleL: string
+  titleTokens: Token[]
   labels: IndexedText[]
   assignee?: IndexedText
   description?: IndexedText
@@ -211,6 +308,7 @@ export function buildDocs(
       bead,
       idL: fold(bead.id),
       titleL: fold(bead.title),
+      titleTokens: tokenize(fold(bead.title)),
       labels: (bead.labels ?? []).map(indexed),
       assignee: bead.assignee ? indexed(bead.assignee) : undefined,
       description: bead.description ? indexed(bead.description) : undefined,
@@ -334,6 +432,31 @@ function bestForWord(
     consider(WEIGHT.comment, 'comment', matchText(c.lower, word), c.text)
   for (const a of doc.artifacts)
     consider(WEIGHT.artifact, 'artifact', matchText(a.lower, word), a.text)
+  // Typos only when nothing better matched; never on ids.
+  if (((best as WordHit | null)?.score ?? -1) < WEIGHT.titleTypo) {
+    consider(WEIGHT.titleTypo, 'title', typoMatch(doc.titleTokens, word))
+    for (const label of doc.labels)
+      consider(
+        WEIGHT.metaTypo,
+        'label',
+        typoMatch(label.tokens, word),
+        label.text,
+      )
+    if (doc.assignee)
+      consider(
+        WEIGHT.metaTypo,
+        'assignee',
+        typoMatch(doc.assignee.tokens, word),
+        doc.assignee.text,
+      )
+    if (doc.description)
+      consider(
+        WEIGHT.descriptionTypo,
+        'description',
+        typoMatch(doc.description.tokens, word),
+        doc.description.text,
+      )
+  }
   return best
 }
 
@@ -397,6 +520,8 @@ export function passesChip(
 }
 
 export interface SearchOptions extends ChipContext {
+  /** Search only this project; a `project:` chip in the query overrides it. */
+  scope?: string
   comments?: Map<string, IndexedText[]>
   limit?: number
 }
@@ -424,7 +549,9 @@ export function searchDocs(
   const { words, chips } = query
   if (!words.length && !chips.length) return []
   const hits: PaletteHit[] = []
+  const scope = chips.some((c) => c.kind === 'project') ? undefined : opts.scope
   for (const doc of docs) {
+    if (scope && doc.project !== scope) continue
     if (!chips.every((c) => passesChip(doc, c, opts))) continue
     if (!words.length) {
       hits.push({
@@ -448,7 +575,12 @@ export function searchDocs(
       }
       if (!weakest || hit.score < weakest.score) weakest = hit
       idRanges.push(...(matchText(doc.idL, word)?.ranges ?? []))
-      titleRanges.push(...(matchText(doc.titleL, word, true)?.ranges ?? []))
+      titleRanges.push(
+        ...((
+          matchText(doc.titleL, word, true) ??
+          (hit.field === 'title' ? hit.match : null)
+        )?.ranges ?? []),
+      )
     }
     if (!weakest) continue
     const out: PaletteHit = {

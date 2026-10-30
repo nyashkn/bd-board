@@ -70,5 +70,9 @@ export const SHORTCUTS: { keys: string; does: string }[] = [
   { keys: 'Esc', does: 'Close the bead or this list' },
   { keys: '/', does: 'Search' },
   { keys: '⌘K  /  Ctrl+K', does: 'Search all beads, anywhere' },
+  {
+    keys: '⌘⇧.  /  Ctrl+Shift+.',
+    does: 'In search: toggle this project / all projects',
+  },
   { keys: '?', does: 'Show this list' },
 ]

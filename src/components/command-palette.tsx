@@ -76,6 +76,23 @@ const TYPE_ICON: Record<string, LucideIcon> = {
   chore: Wrench,
 }
 
+const SCOPE_KEY = 'bd-board.palette-scope'
+// Last choice for this browser session; no entry means "this project" (or all, on the dashboard).
+const readScopeAll = () => {
+  try {
+    return sessionStorage.getItem(SCOPE_KEY) === 'all'
+  } catch {
+    return false
+  }
+}
+const storeScopeAll = (all: boolean) => {
+  try {
+    sessionStorage.setItem(SCOPE_KEY, all ? 'all' : 'current')
+  } catch {
+    // private mode: the choice just lasts until the palette closes
+  }
+}
+
 const modKey = () =>
   typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
     ? '⌘'
@@ -200,6 +217,8 @@ export function CommandPalette() {
   const [selected, setSelected] = useState('')
   const [recent, setRecent] = useState<RecentEntry[]>([])
   const [copied, setCopied] = useState('')
+  const [scopeAll, setScopeAll] = useState(false)
+  const [scopeNote, setScopeNote] = useState('')
   const previousFocus = useRef<HTMLElement | null>(null)
   const chose = useRef(false)
 
@@ -219,8 +238,13 @@ export function CommandPalette() {
     }
   }, [open, current])
   const hits = useMemo(
-    () => searchDocs(docs, query, { comments, ...ctx }),
-    [docs, query, comments, ctx],
+    () =>
+      searchDocs(docs, query, {
+        comments,
+        ...ctx,
+        scope: current && !scopeAll ? current : undefined,
+      }),
+    [docs, query, comments, ctx, current, scopeAll],
   )
   const docsByKey = useMemo(() => new Map(docs.map((d) => [d.key, d])), [docs])
   const now = useMemo(() => Date.now(), [docs, open])
@@ -254,6 +278,8 @@ export function CommandPalette() {
       setInput('')
       setChips([])
       setCopied('')
+      setScopeAll(readScopeAll())
+      setScopeNote('')
       setRecent(loadRecent())
       setOpen(true)
     }
@@ -269,6 +295,16 @@ export function CommandPalette() {
       search: { bead: id },
     })
     return window.location.origin + href
+  }
+
+  function toggleScope() {
+    if (!current) return
+    const next = !scopeAll
+    setScopeAll(next)
+    storeScopeAll(next)
+    setScopeNote(
+      `Searching ${next ? 'All projects' : (docs.find((d) => d.project === current)?.projectName ?? current)}`,
+    )
   }
 
   function finish() {
@@ -431,7 +467,10 @@ export function CommandPalette() {
 
   function onKeyDown(e: React.KeyboardEvent) {
     const mod = e.metaKey || e.ctrlKey
-    if (e.key === 'Enter' && mod) {
+    if (mod && e.shiftKey && !e.altKey && e.code === 'Period') {
+      e.preventDefault()
+      toggleScope()
+    } else if (e.key === 'Enter' && mod) {
       e.preventDefault()
       rowByValue.get(selected)?.run(true)
     } else if (e.key === 'Backspace' && input === '' && chips.length) {
@@ -454,13 +493,22 @@ export function CommandPalette() {
     }
   }
 
-  const countText = copied
-    ? copied
-    : empty
-      ? ''
-      : hits.length === 0
-        ? 'No matching beads'
-        : `${hits.length} ${hits.length === 1 ? 'result' : 'results'}`
+  const scopeLabel =
+    current && !scopeAll
+      ? (docs.find((d) => d.project === current)?.projectName ?? current)
+      : 'All projects'
+  const scoped = Boolean(current) && !scopeAll
+  const countText = [
+    copied ||
+      (empty
+        ? ''
+        : hits.length === 0
+          ? 'No matching beads'
+          : `${hits.length} ${hits.length === 1 ? 'result' : 'results'}`),
+    scopeNote,
+  ]
+    .filter(Boolean)
+    .join('. ')
   const mod = modKey()
 
   return (
@@ -515,6 +563,19 @@ export function CommandPalette() {
                   <X aria-hidden="true" />
                 </Button>
               ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                tabIndex={-1}
+                data-testid="palette-scope"
+                aria-label={`Search scope: ${scopeLabel}. Press ${mod}Shift+. to change`}
+                disabled={!current}
+                onClick={toggleScope}
+                className="max-w-40 shrink-0 truncate disabled:opacity-100"
+              >
+                {scopeLabel}
+              </Button>
               <CommandPrimitive.Input
                 autoFocus
                 value={input}
@@ -523,7 +584,7 @@ export function CommandPalette() {
                 placeholder={
                   chips.length
                     ? 'Search…'
-                    : 'Search all projects, or filter: status: type: label: epic: project: @name'
+                    : `Search ${scoped ? scopeLabel : 'all projects'}, or filter: status: type: label: epic: project: @name`
                 }
                 className="min-w-40 flex-1 bg-transparent py-1 text-sm text-foreground outline-hidden placeholder:text-muted-foreground"
               />
@@ -562,7 +623,8 @@ export function CommandPalette() {
 
           <div className="flex h-9 items-center justify-between gap-3 border-t border-border px-3 text-xs text-muted-foreground">
             <span className="truncate">
-              ↑↓ move · ↵ open · {mod}↵ new tab · {mod}C copy id · Esc close
+              ↑↓ move · ↵ open · {mod}↵ new tab · {mod}C copy id · {mod}⇧. scope
+              · Esc close
             </span>
             <span className={cn('shrink-0', !indexing && 'invisible')}>
               indexing comments…

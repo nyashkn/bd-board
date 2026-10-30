@@ -28,12 +28,10 @@ export interface PaletteQuery {
  * behaviour decision: "cafe" finds "Café" and "resume" finds "Résumé" (ClickUp folds accents).
  */
 export function fold(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^\x20-\x7e]/g, (c) => {
-      const d = c.normalize('NFD')
-      return d.length === 2 && /\p{M}/u.test(d[1]) ? d[0] : c
-    })
+  return s.toLowerCase().replace(/[^\x20-\x7e]/g, (c) => {
+    const d = c.normalize('NFD')
+    return d.length === 2 && /\p{M}/u.test(d[1]) ? d[0] : c
+  })
 }
 
 export const MAX_QUERY_CHARS = 200
