@@ -8,23 +8,39 @@
       "include-component-in-tag": false,
       "bump-minor-pre-major": true,
       "changelog-sections": [
-        { "type": "feat", "section": "What's New" },
-        { "type": "fix", "section": "Fixes" },
-        { "type": "perf", "section": "Fixes" },
-        { "type": "docs", "section": "Docs", "hidden": true },
-        { "type": "test", "section": "Tests", "hidden": true },
-        { "type": "chore", "section": "Chores", "hidden": true }
+        {
+          "type": "feat",
+          "section": "What's New"
+        },
+        {
+          "type": "fix",
+          "section": "Fixes"
+        },
+        {
+          "type": "perf",
+          "section": "Fixes"
+        },
+        {
+          "type": "docs",
+          "section": "Docs",
+          "hidden": true
+        },
+        {
+          "type": "test",
+          "section": "Tests",
+          "hidden": true
+        },
+        {
+          "type": "chore",
+          "section": "Chores",
+          "hidden": true
+        }
       ],
       "extra-files": [
         {
           "type": "toml",
           "path": "src-tauri/Cargo.toml",
           "jsonpath": "$.package.version"
-        },
-        {
-          "type": "toml",
-          "path": "src-tauri/Cargo.lock",
-          "jsonpath": "$.package[?(@.name=='bd-board-desktop')].version"
         }
       ]
     }

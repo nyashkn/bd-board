@@ -86,14 +86,21 @@ jobs:
             ${{ steps.load.outputs.text }}
             </text>
 
-      # A human still merges the Release PR. Push only if CHANGELOG.md alone changed.
+      # release-please cannot edit the Cargo.lock entry, so set all three version files
+      # from package.json (which it did bump). Runs even when Claude changed nothing.
+      - name: sync Cargo.lock version
+        if: env.HAS_KEY == 'true'
+        run: node scripts/set-version.mjs "$(node -p "require('./package.json').version")"
+
+      # A human still merges the Release PR. Push only CHANGELOG.md and Cargo.lock.
       - name: commit rewrite
         if: env.HAS_KEY == 'true'
         run: |
           set -euo pipefail
           [ -z "$(git status --porcelain)" ] && exit 0
-          [ "$(git diff --name-only)" = "CHANGELOG.md" ] || { echo "::error::unexpected files changed"; exit 1; }
+          extra=$(git diff --name-only | grep -vxE 'CHANGELOG.md|src-tauri/Cargo.lock' || true)
+          [ -z "$extra" ] || { echo "::error::unexpected files changed: $extra"; exit 1; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "docs: release notes in the house layout" CHANGELOG.md
+          git commit -m "docs: release notes in the house layout" CHANGELOG.md src-tauri/Cargo.lock
           git push
