@@ -22,6 +22,7 @@ import { summarizeBeads } from './counts.ts'
 import { parseKnowledgeCommentText } from './knowledge.ts'
 import { loadRegistry } from './registry.ts'
 import {
+  BdBufferError,
   BdTimeoutError,
   execFileGroup,
   isReadCall,
@@ -227,13 +228,13 @@ async function spawnBd(dir: string, args: string[]): Promise<BdResult> {
 
       if (err instanceof BdTimeoutError) {
         throw new Error(
-          `bd ${args[0] ?? ''} timed out after ${Math.round(timeout / 1000)}s and was stopped` +
+          `bd ${args[0] ?? ''} timed out after ${timeout / 1000}s and was stopped` +
             (isReadCall(args)
               ? ''
               : '; the command may have been applied, so check before retrying'),
         )
       }
-      if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+      if (err instanceof BdBufferError) {
         throw new Error('bd output exceeded buffer')
       }
       if (error.code === 'ENOENT') {

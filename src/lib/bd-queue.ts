@@ -5,8 +5,7 @@
  * that is still queued shares that call's result (single-flight).
  */
 
-import { execFile } from 'node:child_process'
-import type { ExecFileOptionsWithStringEncoding } from 'node:child_process'
+import { spawn } from 'node:child_process'
 
 export const DEFAULT_CONCURRENCY = 1
 export const DEFAULT_TIMEOUT_MS = 60_000
@@ -111,54 +110,123 @@ export function queued<T>(
 /** Time between SIGTERM and SIGKILL when a call times out. */
 export const KILL_GRACE_MS = 2000
 
-function signalGroup(
-  child: { pid?: number; kill: (s: NodeJS.Signals) => boolean },
-  sig: NodeJS.Signals,
-): void {
-  try {
-    // The child leads its own process group (detached), so this also reaches what the
-    // read-only shim spawns, which would otherwise keep the pipes and the Dolt lock.
-    if (child.pid && process.platform !== 'win32') process.kill(-child.pid, sig)
-    else child.kill(sig)
-  } catch {
-    // already gone
-  }
-}
-
 export class BdTimeoutError extends Error {
   readonly timedOut = true
 }
 
+export class BdBufferError extends Error {
+  readonly code = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+}
+
+type Child = ReturnType<typeof spawn>
+
+const groupAlive = (pgid: number): boolean => {
+  try {
+    process.kill(-pgid, 0)
+    return true
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
 /**
- * execFile with a timeout that stops the whole process group (SIGTERM, SIGKILL after a
- * grace) and rejects at once instead of waiting for pipes a survivor may hold open.
+ * SIGTERM the child's process group (it leads its own, via detached), which also reaches
+ * what the read-only shim spawns and would otherwise keep the pipes and the Dolt lock; then
+ * SIGKILL whatever is left once the group is gone or the grace is up. Windows has no
+ * process groups here: only the direct child is killed.
+ */
+function stopGroup(child: Child): void {
+  const pid = child.pid
+  if (!pid) return
+  if (process.platform === 'win32') {
+    child.kill()
+    return
+  }
+  const signal = (sig: NodeJS.Signals) => {
+    try {
+      process.kill(-pid, sig)
+    } catch {
+      // already gone
+    }
+  }
+  signal('SIGTERM')
+  const until = Date.now() + KILL_GRACE_MS
+  const poll = setInterval(() => {
+    if (!groupAlive(pid) || Date.now() >= until) {
+      clearInterval(poll)
+      signal('SIGKILL')
+    }
+  }, 20)
+  poll.unref()
+}
+
+/**
+ * Run a command, collecting its output, with a timeout that stops the whole process group
+ * and rejects at once instead of waiting for pipes a survivor may hold open. Errors from a
+ * non-zero exit carry numeric `code`, `stdout` and `stderr`, like execFile's.
  */
 export function execFileGroup(
   file: string,
   args: string[],
-  opts: Omit<ExecFileOptionsWithStringEncoding, 'encoding' | 'timeout'> & {
+  opts: {
+    cwd?: string
+    env?: NodeJS.ProcessEnv
+    maxBuffer: number
     timeout: number
   },
 ): Promise<{ stdout: string; stderr: string }> {
-  const { timeout, ...rest } = opts
-  const options = {
-    ...rest,
-    detached: process.platform !== 'win32',
-    encoding: 'utf8' as const,
-  }
   return new Promise((resolve, reject) => {
-    let timedOut = false
-    const child = execFile(file, args, options, (err, stdout, stderr) => {
-      clearTimeout(timer)
-      if (timedOut) return
-      if (err) reject(Object.assign(err, { stdout, stderr }))
-      else resolve({ stdout, stderr })
+    const child = spawn(file, args, {
+      cwd: opts.cwd,
+      env: opts.env,
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
+    const out: Buffer[] = []
+    const err: Buffer[] = []
+    let size = 0
+    let settled = false
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      child.stdout.destroy()
+      child.stderr.destroy()
+      fn()
+    }
+    const text = () => ({
+      stdout: Buffer.concat(out).toString('utf8'),
+      stderr: Buffer.concat(err).toString('utf8'),
+    })
+    const collect = (into: Buffer[]) => (chunk: Buffer) => {
+      size += chunk.length
+      if (size > opts.maxBuffer) {
+        stopGroup(child)
+        finish(() => reject(new BdBufferError('maxBuffer exceeded')))
+        return
+      }
+      into.push(chunk)
+    }
+    child.stdout.on('data', collect(out))
+    child.stderr.on('data', collect(err))
+    child.stdout.on('error', () => {})
+    child.stderr.on('error', () => {})
+    child.on('error', (e) => finish(() => reject(e)))
+    child.on('close', (code) =>
+      finish(() => {
+        if (code === 0) resolve(text())
+        else
+          reject(
+            Object.assign(new Error(`exit ${code}`), {
+              code: code ?? 1,
+              ...text(),
+            }),
+          )
+      }),
+    )
     const timer = setTimeout(() => {
-      timedOut = true
-      signalGroup(child, 'SIGTERM')
-      setTimeout(() => signalGroup(child, 'SIGKILL'), KILL_GRACE_MS).unref()
-      reject(new BdTimeoutError('timed out'))
-    }, timeout)
+      stopGroup(child)
+      finish(() => reject(new BdTimeoutError('timed out')))
+    }, opts.timeout)
   })
 }

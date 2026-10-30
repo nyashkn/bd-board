@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::io::Read;
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Condvar, Mutex, OnceLock};
+use std::sync::{mpsc, Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -186,22 +186,48 @@ pub struct Captured {
 }
 
 #[cfg(unix)]
-fn signal_group(pid: u32, sig: i32) {
-    extern "C" {
-        fn killpg(pgrp: i32, sig: i32) -> i32;
-    }
-    // The child leads its own process group (see below), so this reaches the shim's real
-    // bd and filter too, which would otherwise keep the pipes and the Dolt lock.
-    unsafe {
-        killpg(pid as i32, sig);
-    }
+extern "C" {
+    fn killpg(pgrp: i32, sig: i32) -> i32;
+}
+
+/// Signal the child's whole process group (it leads its own, see below), which also reaches
+/// what the read-only shim spawns and would otherwise keep the pipes and the Dolt lock.
+#[cfg(unix)]
+fn signal_group(pgid: u32, sig: i32) -> bool {
+    // SAFETY: plain libc call with integer arguments.
+    unsafe { killpg(pgid as i32, sig) == 0 }
 }
 
 #[cfg(not(unix))]
-fn signal_group(_pid: u32, _sig: i32) {}
+fn signal_group(_pgid: u32, _sig: i32) -> bool {
+    false
+}
+
+/// SIGTERM the group, give it `grace` to disappear, then SIGKILL whatever is left.
+/// On non-unix only the direct child is killed.
+fn stop_group(child: &mut std::process::Child, grace: Duration) {
+    let pgid = child.id();
+    if !signal_group(pgid, 15) {
+        let _ = child.kill();
+    }
+    let until = Instant::now() + grace;
+    // try_wait reaps the leader, so a gone group really answers ESRCH.
+    while Instant::now() < until {
+        let leader_gone = child.try_wait().map(|s| s.is_some()).unwrap_or(true);
+        if leader_gone && !signal_group(pgid, 0) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    signal_group(pgid, 9);
+    let _ = child.kill();
+    let _ = child.wait();
+}
 
 /// Like `Command::output`, but on `timeout` stops the child's whole process group (SIGTERM,
 /// then SIGKILL after `grace`) and returns `Ok(Err(()))` without waiting on the pipes.
+/// After a normal exit the pipes get `grace` to close; a stray helper holding them open
+/// is killed and reported as an error so it cannot hold the queue slot.
 pub fn output_with_timeout(
     cmd: &mut Command,
     timeout: Duration,
@@ -217,42 +243,48 @@ pub fn output_with_timeout(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    fn drain(mut r: impl Read + Send + 'static) -> std::thread::JoinHandle<Vec<u8>> {
+    fn drain(mut r: impl Read + Send + 'static) -> mpsc::Receiver<Vec<u8>> {
+        let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let mut buf = Vec::new();
             let _ = r.read_to_end(&mut buf);
-            buf
-        })
+            let _ = tx.send(buf);
+        });
+        rx
     }
     let out = drain(child.stdout.take().expect("piped"));
     let err = drain(child.stderr.take().expect("piped"));
     let deadline = Instant::now() + timeout;
     let status = loop {
         if let Some(status) = child.try_wait()? {
-            break Some(status);
+            break status;
         }
         if Instant::now() >= deadline {
-            signal_group(child.id(), 15);
-            let kill_at = Instant::now() + grace;
-            while child.try_wait()?.is_none() && Instant::now() < kill_at {
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            signal_group(child.id(), 9);
-            let _ = child.kill();
-            let _ = child.wait();
-            break None;
+            stop_group(&mut child, grace);
+            // Do not wait on the readers: a survivor could hold the pipes open.
+            return Ok(Err(()));
         }
         std::thread::sleep(Duration::from_millis(5));
     };
-    let Some(status) = status else {
-        // Do not join the readers: a survivor could hold the pipes open indefinitely.
-        return Ok(Err(()));
+    let pipes_closed = Instant::now() + grace;
+    let take = |rx: &mpsc::Receiver<Vec<u8>>| {
+        rx.recv_timeout(pipes_closed.saturating_duration_since(Instant::now()))
+            .ok()
     };
-    Ok(Ok(Captured {
-        stdout: out.join().unwrap_or_default(),
-        stderr: err.join().unwrap_or_default(),
-        status,
-    }))
+    match (take(&out), take(&err)) {
+        (Some(stdout), Some(stderr)) => Ok(Ok(Captured {
+            stdout,
+            stderr,
+            status,
+        })),
+        _ => {
+            signal_group(child.id(), 9);
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "bd exited but a helper kept its output open and was stopped",
+            ))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -463,25 +495,88 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(3));
     }
 
-    /// Like the read-only shim's filter pipeline: a grandchild that outlives the shim and
-    /// ignores SIGTERM keeps the pipe (and in real life the Dolt lock) open.
+    #[cfg(unix)]
+    fn pid_alive(pid: i32) -> bool {
+        extern "C" {
+            fn kill(pid: i32, sig: i32) -> i32;
+        }
+        // SAFETY: signal 0 only checks existence.
+        unsafe { kill(pid, 0) == 0 }
+    }
+
+    #[cfg(unix)]
+    fn read_pid(path: &std::path::Path) -> i32 {
+        std::fs::read_to_string(path)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap()
+    }
+
+    #[cfg(unix)]
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("bdq-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// A TERM-ignoring grandchild holds the pipe, as the read-only shim's pipeline can.
     #[cfg(unix)]
     #[test]
-    fn timeout_stops_a_grandchild_that_holds_the_pipe() {
-        let marker = std::env::temp_dir().join(format!("bdq-gc-{}", std::process::id()));
+    fn timeout_leaves_neither_leader_nor_grandchild_alive() {
+        let d = scratch("gc");
         let script = format!(
-            "(trap '' TERM; sleep 30; touch {m}) & wait",
-            m = marker.display()
+            "echo $$ > {d}/leader; (trap '' TERM; sleep 30) & echo $! > {d}/gc; wait",
+            d = d.display()
         );
         let started = Instant::now();
-        let r = output_with_timeout(Command::new("sh").args(["-c", &script]), ms(100), ms(200));
+        let r = output_with_timeout(Command::new("sh").args(["-c", &script]), ms(300), ms(200));
         assert!(matches!(r, Ok(Err(()))));
         assert!(
             started.elapsed() < Duration::from_secs(3),
             "queue stayed blocked"
         );
-        // the group is gone: nothing is left to finish the sleep
-        assert!(!marker.exists());
+        std::thread::sleep(ms(300));
+        assert!(!pid_alive(read_pid(&d.join("leader"))));
+        assert!(!pid_alive(read_pid(&d.join("gc"))));
+    }
+
+    /// The leader dies on SIGTERM at once; the real bd under it needs the grace to exit
+    /// by itself before SIGKILL.
+    #[cfg(unix)]
+    #[test]
+    fn group_gets_the_grace_before_sigkill() {
+        let d = scratch("grace");
+        let script = format!(
+            "(trap 'touch {d}/term; exit 0' TERM; sleep 30 & wait) & echo $! > {d}/gc; wait",
+            d = d.display()
+        );
+        let r = output_with_timeout(Command::new("sh").args(["-c", &script]), ms(300), ms(1000));
+        assert!(matches!(r, Ok(Err(()))));
+        assert!(
+            d.join("term").exists(),
+            "helper never saw SIGTERM before it was killed"
+        );
+        std::thread::sleep(ms(200));
+        assert!(!pid_alive(read_pid(&d.join("gc"))));
+    }
+
+    /// Normal exit, but a helper keeps the pipe open: bounded wait, then kill and error.
+    #[cfg(unix)]
+    #[test]
+    fn a_helper_holding_the_pipe_after_exit_is_stopped() {
+        let d = scratch("stray");
+        let script = format!("sleep 30 & echo $! > {d}/gc; exit 0", d = d.display());
+        let started = Instant::now();
+        let r = output_with_timeout(Command::new("sh").args(["-c", &script]), ms(5000), ms(300));
+        assert_eq!(
+            r.err().map(|e| e.kind()),
+            Some(std::io::ErrorKind::TimedOut)
+        );
+        assert!(started.elapsed() < Duration::from_secs(3));
+        std::thread::sleep(ms(300));
+        assert!(!pid_alive(read_pid(&d.join("gc"))));
     }
 
     #[test]

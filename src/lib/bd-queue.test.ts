@@ -100,13 +100,14 @@ describe('BdQueue', () => {
   })
 })
 
-async function fakeBd(script: string) {
+async function fakeBd(script: string | ((dir: string) => string)) {
   const { mkdtempSync, writeFileSync, chmodSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
   const dir = mkdtempSync(join(tmpdir(), 'bdq-'))
   const fake = join(dir, 'bd')
-  writeFileSync(fake, `#!/bin/sh\n${script}\n`)
+  const body = typeof script === 'string' ? script : script(dir)
+  writeFileSync(fake, `#!/bin/sh\n${body}\n`)
   chmodSync(fake, 0o755)
   vi.stubEnv('BD_BIN', fake)
   return dir
@@ -124,18 +125,60 @@ describe('bdExec timeout', () => {
     }
   })
 
-  it('frees the call when a grandchild keeps the pipe open (read-only shim pipeline)', async () => {
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+  const pidOf = async (file: string) =>
+    Number((await import('node:fs')).readFileSync(file, 'utf8').trim())
+
+  it('leaves neither the leader nor a TERM-ignoring grandchild alive', async () => {
     const { bdExec } = await import('./bd.ts')
-    const dir = await fakeBd("(trap '' TERM; sleep 30) &\nwait")
-    vi.stubEnv('BD_BOARD_BD_TIMEOUT_MS', '150')
+    const dir = await fakeBd(
+      (d) =>
+        `echo $$ > ${d}/leader\n(trap '' TERM; sleep 30) &\necho $! > ${d}/gc\nwait`,
+    )
+    vi.stubEnv('BD_BOARD_BD_TIMEOUT_MS', '2000') // a fresh script can take a while to first start
     const started = Date.now()
     try {
       await expect(bdExec(dir, ['show', 'x'])).rejects.toThrow(/timed out/)
-      expect(Date.now() - started).toBeLessThan(2000)
+      expect(Date.now() - started).toBeLessThan(2800) // rejects at the timeout, not after the pipes close
+      const [leader, gc] = [
+        await pidOf(`${dir}/leader`),
+        await pidOf(`${dir}/gc`),
+      ]
+      await new Promise((r) => setTimeout(r, 3000)) // past the SIGKILL grace
+      expect(alive(leader)).toBe(false)
+      expect(alive(gc)).toBe(false)
     } finally {
       vi.unstubAllEnvs()
     }
-  })
+  }, 10_000)
+
+  it('leaves no pipeline member alive (shape of the read-only shim)', async () => {
+    const { bdExec } = await import('./bd.ts')
+    const dir = await fakeBd(
+      (d) =>
+        `echo $$ > ${d}/leader\nsleep 30 | python3 -c "import os,time;open('${d}/py','w').write(str(os.getpid()));time.sleep(30)"`,
+    )
+    vi.stubEnv('BD_BOARD_BD_TIMEOUT_MS', '2000')
+    try {
+      await expect(bdExec(dir, ['list'])).rejects.toThrow(/timed out/)
+      const [leader, py] = [
+        await pidOf(`${dir}/leader`),
+        await pidOf(`${dir}/py`),
+      ]
+      await new Promise((r) => setTimeout(r, 3000))
+      expect(alive(leader)).toBe(false)
+      expect(alive(py)).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  }, 10_000)
 
   it('tells the user a timed-out write may have been applied', async () => {
     const { bdExec } = await import('./bd.ts')
