@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { resetApp } from '../../helpers.js'
@@ -6,8 +7,7 @@ import type { World } from '../../world.js'
 
 const world = JSON.parse(process.env.E2E_WORLD ?? 'null') as World | null
 const SHOTS =
-  process.env.E2E_SHOTS ??
-  '/tmp/local-path'
+  process.env.E2E_SHOTS ?? path.join(tmpdir(), 'bd-board-native-e2e-screenshots')
 mkdirSync(SHOTS, { recursive: true })
 
 // WebDriver key codes (webdriverio's Key is not importable from here).
