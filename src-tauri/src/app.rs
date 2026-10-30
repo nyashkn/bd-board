@@ -1,5 +1,5 @@
 //! Connector selection. Commands call in here; this picks the adapter behind each port.
-//! The snapshot store (bdb-84h.6) will live here too.
+//! The snapshot store itself lives in the client; the adapter coalesces concurrent `snapshot` calls.
 //!
 //! Automatic selection (configured URL scheme, then a capability probe, then fallback to
 //! bd-cli) lands here.

@@ -75,7 +75,9 @@ import {
   KNOWLEDGE_TYPE_TEXT_CLASS as K_TEXT_CLASS,
 } from '@/lib/knowledge'
 import { connectorFor } from '@/lib/core'
-import { projectKnowledgeQueryOptions } from '@/lib/query-options'
+import { addComment, patchBead, removeBead } from '@/lib/snapshot'
+import { patchSnapshot, settleWrite } from '@/lib/snapshot-store'
+import { useBeadDetail, useKnowledge } from '@/hooks/use-snapshot'
 
 import type { LucideIcon } from 'lucide-react'
 import type { FormEvent, ReactNode } from 'react'
@@ -452,10 +454,22 @@ function BeadEditDialog({
           },
         },
       }),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(`Bead ${bead.id} updated`)
-      queryClient.invalidateQueries({ queryKey: ['beads', project] })
-      queryClient.invalidateQueries({ queryKey: ['bead', project, bead.id] })
+      await patchSnapshot(queryClient, project, (s) =>
+        patchBead(s, bead.id, {
+          title,
+          description,
+          acceptance_criteria: acceptance,
+          design,
+          notes,
+          priority: Number(priority),
+          issue_type: issueType,
+          assignee,
+          labels: labelsFromText(labels),
+        }),
+      )
+      settleWrite(queryClient, project)
       onOpenChange(false)
     },
     onError: (error) => {
@@ -672,11 +686,11 @@ function BeadDeleteDialog({
   const mutation = useMutation({
     mutationFn: () =>
       connectorFor(project).deleteBead({ data: { project, id: bead.id } }),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(`Bead ${bead.id} deleted`)
-      queryClient.invalidateQueries({ queryKey: ['beads', project] })
+      await patchSnapshot(queryClient, project, (s) => removeBead(s, bead.id))
+      settleWrite(queryClient, project)
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      queryClient.removeQueries({ queryKey: ['bead', project, bead.id] })
       queryClient.removeQueries({
         queryKey: ['delete-preview', project, bead.id],
       })
@@ -856,13 +870,8 @@ export function BeadDetailModal({
   openRef.current = open
   if (bead) lastId.current = bead.id
 
-  const detailQuery = useQuery({
-    queryKey: ['bead', project, bead?.id],
-    queryFn: () =>
-      connectorFor(project).beadDetail({ data: { project, id: bead!.id } }),
-    enabled: open && !!bead,
-    staleTime: 3000,
-  })
+  // From the project snapshot: opening or switching a bead makes no bd call.
+  const detailQuery = useBeadDetail(project, open ? bead?.id : undefined)
 
   // Opening a bead to its detail being on screen.
   const openedAt = useRef(0)
@@ -886,10 +895,7 @@ export function BeadDetailModal({
     retry: false,
   })
 
-  const knowledgeQuery = useQuery({
-    ...projectKnowledgeQueryOptions(project),
-    enabled: open && !!bead,
-  })
+  const knowledgeQuery = useKnowledge(project, open && !!bead)
   const beadKnowledge = useMemo(
     () =>
       (knowledgeQuery.data?.knowledge ?? []).filter(
@@ -921,11 +927,26 @@ export function BeadDetailModal({
       connectorFor(project).updateStatus({
         data: { project, id: bead!.id, status },
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['beads', project] })
-      queryClient.invalidateQueries({ queryKey: ['bead', project, bead?.id] })
-    },
+    onMutate: (status) =>
+      patchSnapshot(queryClient, project, (s) =>
+        patchBead(s, bead!.id, { status }),
+      ),
+    onError: (_error, _status, rollback) => rollback?.(),
+    onSettled: () => settleWrite(queryClient, project),
   })
+
+  // The pending comment shows at once; the feed (or the fallback refetch) replaces it.
+  const patchComment = (text: string, reopen?: boolean) =>
+    patchSnapshot(queryClient, project, (s) => {
+      const pending = {
+        id: `pending-${Date.now()}`,
+        author: authorQuery.data?.name,
+        text,
+        created_at: new Date().toISOString(),
+      }
+      const next = addComment(s, bead!.id, pending)
+      return reopen ? patchBead(next, bead!.id, { status: 'open' }) : next
+    })
 
   const commentMutation = useMutation({
     mutationFn: async ({
@@ -943,14 +964,10 @@ export function BeadDetailModal({
         data: { project, id: bead!.id, text },
       })
     },
-    onSuccess: () => {
-      setComment('')
-      queryClient.invalidateQueries({ queryKey: ['bead', project, bead?.id] })
-      queryClient.invalidateQueries({ queryKey: ['beads', project] })
-      queryClient.invalidateQueries({
-        queryKey: ['project-knowledge', project],
-      })
-    },
+    onMutate: ({ text, reopen }) => patchComment(text, reopen),
+    onSuccess: () => setComment(''),
+    onError: (_error, _vars, rollback) => rollback?.(),
+    onSettled: () => settleWrite(queryClient, project),
   })
 
   // Own mutation: answering must not clear the comment draft or share its pending state.
@@ -959,12 +976,9 @@ export function BeadDetailModal({
       connectorFor(project).addComment({
         data: { project, id: bead!.id, text },
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bead', project, bead?.id] })
-      queryClient.invalidateQueries({
-        queryKey: ['project-knowledge', project],
-      })
-    },
+    onMutate: ({ text }) => patchComment(text),
+    onError: (_error, _vars, rollback) => rollback?.(),
+    onSettled: () => settleWrite(queryClient, project),
   })
 
   const parentBead = bead?.parent ? resolveBead(bead.parent) : undefined

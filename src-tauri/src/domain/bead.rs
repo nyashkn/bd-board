@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Comment {
     pub id: String,
     pub author: Option<String>,

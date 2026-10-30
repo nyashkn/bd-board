@@ -13,8 +13,8 @@ export const projectsQueryOptions = () =>
     staleTime: PROJECTS_POLL_MS,
   })
 
-// `bd export` is the costliest read. It never goes stale on its own: the bead feed, a user
-// write or a panel's refetchInterval refreshes it, so opening or switching beads is free.
+// The palette's cross-project comment index, for projects whose snapshot is not cached. The open
+// project reads comments from its snapshot instead (src/lib/snapshot.ts).
 export const projectKnowledgeQueryOptions = (project: string) =>
   queryOptions({
     queryKey: ['project-knowledge', project],

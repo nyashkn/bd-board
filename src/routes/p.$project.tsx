@@ -27,10 +27,9 @@ import { ReadonlyContext } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { SinceBand, SinceContext } from '@/components/since-band'
 import { connectorFor } from '@/lib/core'
-import {
-  projectKnowledgeQueryOptions,
-  projectsQueryOptions,
-} from '@/lib/query-options'
+import { projectsQueryOptions } from '@/lib/query-options'
+import { patchBead } from '@/lib/snapshot'
+import { patchSnapshot, settleWrite } from '@/lib/snapshot-store'
 import { diffSince, latestCommentByBead } from '@/lib/activity'
 import { askingBeads } from '@/lib/bead-questions'
 import { COLUMNS, beadColumn, isEpic } from '@/lib/types'
@@ -53,6 +52,7 @@ import { buildChildrenMap } from '@/lib/tree'
 import { closeSteps, historyIndex } from '@/lib/nav-context'
 import { toErrorMessage } from '@/lib/utils'
 import { useBeadFeed } from '@/hooks/use-bead-feed'
+import { useBoardBeads, useKnowledge } from '@/hooks/use-snapshot'
 import { useSinceLastSeen } from '@/hooks/use-since-last-seen'
 
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
@@ -211,12 +211,13 @@ function BoardPage() {
 
   const feed = useBeadFeed(project, readonly)
 
-  const beadsQuery = useQuery({
-    queryKey: ['beads', project],
-    queryFn: () => connectorFor(project).listBeads({ data: { project } }),
-    refetchInterval: feed.status === 'live' ? 60_000 : 8_000,
+  // The one place that revalidates on entering a project; the feed keeps it fresh, and the
+  // old poll stays as the fallback while the feed is not live.
+  const beadsQuery = useBoardBeads(project, {
+    refetchInterval: feed.status === 'live' ? false : 8_000,
     staleTime: 3000,
-    retry: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: feed.status !== 'live',
   })
 
   const beads = beadsQuery.data ?? []
@@ -226,16 +227,9 @@ function BoardPage() {
     if (firstBeads) rumMarkCold('cold.beads', { beads: beadCount }, { project })
   }, [firstBeads, beadCount, project])
 
-  // Comments are not in `bd list` and do not bump updated_at, so activity needs the same
-  // `bd export` read the Knowledge tab uses (one extra call, shared cache key, refreshed at most every 30 s).
+  // Comments do not bump updated_at, so activity reads them from the same snapshot.
   const { since, dismiss: dismissSince } = useSinceLastSeen(project)
-  const commentsQuery = useQuery({
-    ...projectKnowledgeQueryOptions(project),
-    enabled: since !== null,
-    // Fallback when the feed is not live; a live feed invalidates this key itself.
-    refetchInterval: feed.status === 'live' ? false : 30_000,
-    retry: false,
-  })
+  const commentsQuery = useKnowledge(project, since !== null)
   const latestComment = useMemo(
     () => latestCommentByBead(commentsQuery.data?.comments ?? []),
     [commentsQuery.data],
@@ -365,26 +359,23 @@ function BoardPage() {
 
   async function applyDrop(activeId: string, toColumn: BeadColumn) {
     if (readonly) return
-    const previous = queryClient.getQueryData<Bead[]>(['beads', project])
-    const bead = (previous ?? beads).find((b) => b.id === activeId)
+    const bead = beads.find((b) => b.id === activeId)
     if (!bead || beadColumn(bead) === toColumn) return
 
-    queryClient.setQueryData<Bead[]>(['beads', project], (old) =>
-      (old ?? []).map((b) =>
-        b.id === activeId ? { ...b, status: toColumn } : b,
-      ),
+    const rollback = await patchSnapshot(queryClient, project, (s) =>
+      patchBead(s, activeId, { status: toColumn }),
     )
     try {
       await connectorFor(project).updateStatus({
         data: { project, id: activeId, status: toColumn },
       })
     } catch (error) {
-      queryClient.setQueryData(['beads', project], previous)
+      rollback()
       toast.error(
         error instanceof Error ? error.message : 'Failed to move bead',
       )
     } finally {
-      queryClient.invalidateQueries({ queryKey: ['beads', project] })
+      settleWrite(queryClient, project)
     }
   }
 
@@ -478,7 +469,6 @@ function BoardPage() {
               project={project}
               beadsById={beadsById}
               onOpenKnowledge={openKnowledge}
-              refetchInterval={feed.status === 'live' ? 60_000 : 12_000}
             />
           ) : tab === 'hierarchy' ? (
             <HierarchyView

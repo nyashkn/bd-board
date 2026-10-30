@@ -5,8 +5,10 @@ import type {
   BeadDetail,
   BeadFeedMessage,
   BeadUpdate,
+  Comment,
   ProjectKnowledge,
 } from '../types.ts'
+import type { ProjectSnapshot } from '../snapshot.ts'
 import type { ConnectorKind } from './select.ts'
 
 /** The per-project bead operations the UI needs from a data source. */
@@ -19,6 +21,12 @@ export interface Connector {
   projectKnowledge: (args: {
     data: { project: string }
   }) => Promise<ProjectKnowledge>
+  /** Everything the UI reads, in one call: beads with comments and edges, ready, blocked, cursor. */
+  snapshot: (args: { data: { project: string } }) => Promise<ProjectSnapshot>
+  /** One bead's comments, to patch a snapshot after a comment-only change. */
+  beadComments: (args: {
+    data: { project: string; id: string }
+  }) => Promise<Comment[]>
   readArtifact: (args: {
     data: { project: string; path: string }
   }) => Promise<ArtifactFile>

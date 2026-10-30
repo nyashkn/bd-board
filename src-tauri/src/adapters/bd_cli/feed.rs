@@ -16,8 +16,14 @@ const TRUNCATED_CODE: &str = "events_journal_truncated";
 
 #[derive(Debug, PartialEq)]
 enum FeedLine {
-    Record { seq: i64, issue_ids: Vec<String> },
-    Truncated { head: i64 },
+    Record {
+        seq: i64,
+        op: String,
+        issue_ids: Vec<String>,
+    },
+    Truncated {
+        head: i64,
+    },
 }
 
 fn parse_feed_line(line: &str) -> Option<FeedLine> {
@@ -35,7 +41,7 @@ fn parse_feed_line(line: &str) -> Option<FeedLine> {
     }
 
     let seq = obj.get("seq").and_then(Value::as_i64)?;
-    obj.get("op").and_then(Value::as_str)?;
+    let op = obj.get("op").and_then(Value::as_str)?.to_string();
 
     let mut issue_ids = Vec::new();
     let issue_id = obj
@@ -55,7 +61,7 @@ fn parse_feed_line(line: &str) -> Option<FeedLine> {
             issue_ids.push(t.to_string());
         }
     }
-    Some(FeedLine::Record { seq, issue_ids })
+    Some(FeedLine::Record { seq, op, issue_ids })
 }
 
 fn tail_args(since: i64, limit: Option<usize>, follow: bool) -> Vec<String> {
@@ -271,9 +277,13 @@ fn run_feed(dir: &Path, since: i64, watch: &FeedWatch, send: &dyn Fn(BeadFeedMes
             }
             let Ok(line) = line else { break };
             match parse_feed_line(&line) {
-                Some(FeedLine::Record { seq, issue_ids }) => {
+                Some(FeedLine::Record { seq, op, issue_ids }) => {
                     cur = seq;
-                    if !emit(BeadFeedMessage::Change { seq, issue_ids }) {
+                    if !emit(BeadFeedMessage::Change {
+                        seq,
+                        issue_ids,
+                        ops: vec![op],
+                    }) {
                         break;
                     }
                 }
@@ -283,6 +293,7 @@ fn run_feed(dir: &Path, since: i64, watch: &FeedWatch, send: &dyn Fn(BeadFeedMes
                     if !emit(BeadFeedMessage::Change {
                         seq: head,
                         issue_ids: Vec::new(),
+                        ops: Vec::new(),
                     }) {
                         break;
                     }
@@ -366,6 +377,7 @@ mod tests {
             result,
             Some(FeedLine::Record {
                 seq: 7,
+                op: "dep_add".to_string(),
                 issue_ids: vec!["a".to_string(), "b".to_string()]
             })
         );

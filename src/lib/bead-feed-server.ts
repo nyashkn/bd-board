@@ -28,7 +28,7 @@ export function tailArgs(
 export function parseFeedLine(
   line: string,
 ):
-  | { kind: 'record'; seq: number; issueIds: string[] }
+  | { kind: 'record'; seq: number; op: string; issueIds: string[] }
   | { kind: 'truncated'; head: number }
   | null {
   const trimmed = line.trim()
@@ -63,7 +63,7 @@ export function parseFeedLine(
         }
       }
 
-      return { kind: 'record', seq: obj.seq, issueIds }
+      return { kind: 'record', seq: obj.seq, op: obj.op, issueIds }
     }
 
     return null
@@ -260,13 +260,14 @@ export function startBeadFeed(
                 type: 'change',
                 seq: parsed.seq,
                 issueIds: parsed.issueIds,
+                ops: [parsed.op],
               })
             }
           } else if (parsed.kind === 'truncated') {
             cur = parsed.head
             truncated = true
             if (!stopped) {
-              emit({ type: 'change', seq: parsed.head, issueIds: [] })
+              emit({ type: 'change', seq: parsed.head, issueIds: [], ops: [] })
             }
           }
         })

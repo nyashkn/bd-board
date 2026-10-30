@@ -149,6 +149,7 @@ fn real_bd_fixture() {
     registry_roundtrips_readonly_and_filter_label();
     readonly_launch_runs_the_shim_with_real_bd_and_the_filter(w);
     blocked_and_ready_map_from_real_bd_output(w);
+    snapshot_agrees_with_real_bd(w);
     comment_author_follows_the_fixture_actor();
     write_guard_refuses_readonly_and_changes_nothing(w);
 }
@@ -296,6 +297,29 @@ fn comment_author_follows_the_fixture_actor() {
     let a = block(desktop::comment_author("p".into())).unwrap();
     assert_eq!(a.name, "fixture-actor");
     assert_eq!(a.source.as_deref(), Some("bd config actor"));
+}
+
+/// One snapshot call carries what `list`, `blocked` and `ready` report, and `bd comments` agrees.
+fn snapshot_agrees_with_real_bd(w: &World) {
+    let snap = block(desktop::get_project_snapshot("p".into())).unwrap();
+    let ids: Vec<&str> = snap.beads.iter().map(|b| b.bead.id.as_str()).collect();
+    for id in [&w.a, &w.b, &w.c] {
+        assert!(ids.contains(&id.as_str()), "{id} missing from {ids:?}");
+    }
+    let blocked = snap.blocked.as_ref().expect("bd blocked answered");
+    assert_eq!(
+        blocked
+            .iter()
+            .find(|r| r.id == w.b)
+            .map(|r| r.blocked_by.clone()),
+        Some(vec![w.a.clone()])
+    );
+    let ready = snap.ready.as_ref().expect("bd ready answered");
+    assert!(ready.contains(&w.a) && !ready.contains(&w.b));
+    assert!(!snap.cursor.is_empty());
+    let first = block(desktop::get_bead_comments("p".into(), w.a.clone())).unwrap();
+    let in_snapshot = snap.beads.iter().find(|b| b.bead.id == w.a).unwrap();
+    assert_eq!(first.len(), in_snapshot.comments.len());
 }
 
 fn blocked_and_ready_map_from_real_bd_output(w: &World) {

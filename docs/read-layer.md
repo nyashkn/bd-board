@@ -140,6 +140,7 @@ The snapshot cache lives in the client's query cache (the browser or WebView sid
    - **Pacing:** refreshes are single-flight (one running plus one trailing) and debounced 300 ms. The next refresh may start no sooner than the last one took, which keeps the lock under 50% busy during agent bursts.
    - **TanStack Query details:** use `cancelRefetch: false` so an in-flight `bd` process is never duplicated, and `cancelQueries` before optimistic patches.
    - **While the feed is not live** (disabled, error or unsupported): keep today's fallback poll.
+   - **As built (bdb-84h.6):** the snapshot `cursor` is a hash of the three `bd` outputs, because the feed seq would cost another `bd` call. The feed's `change` message gained `ops` (the journal ops behind it, additive); empty or absent means unknown and runs a full snapshot. Both backends coalesce `snapshot` calls per project as one running call plus one trailing call: a caller never receives a result that began before its call, because a write may have landed in between.
 4. **Selectors.** These are pure functions over the snapshot: the board list, bead detail, knowledge entries and `:::question` state (already parsed client-side in `bead-questions.ts`).
    - **Board list:** filtered like `list`, so export-only types such as `gate` stay hidden.
    - **Bead detail:** `parent` comes from the parent-child edge, and edge targets get their title, status and type joined by id.

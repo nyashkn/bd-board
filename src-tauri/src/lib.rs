@@ -62,6 +62,8 @@ pub fn run() {
             commands::init_project,
             commands::list_beads,
             commands::get_bead_detail,
+            commands::get_project_snapshot,
+            commands::get_bead_comments,
             commands::read_artifact,
             commands::get_project_knowledge,
             commands::update_bead_status,

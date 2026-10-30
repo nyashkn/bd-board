@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import {
@@ -23,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { projectKnowledgeQueryOptions } from '@/lib/query-options'
+import { useKnowledge } from '@/hooks/use-snapshot'
 import {
   KNOWLEDGE_TYPE_DOT_CLASS,
   KNOWLEDGE_TYPE_HINT,
@@ -47,7 +46,6 @@ interface ProjectKnowledgePanelProps {
   project: string
   beadsById: Map<string, Bead>
   onOpenKnowledge: (id: string) => void
-  refetchInterval: number
 }
 
 const TYPE_BADGE: Record<KnowledgeType, string> = {
@@ -120,15 +118,11 @@ export function ProjectKnowledgePanel({
   project,
   beadsById,
   onOpenKnowledge,
-  refetchInterval,
 }: ProjectKnowledgePanelProps) {
   const [search, setSearch] = useState('')
   const [type, setType] = useState<TypeFilter>('all')
 
-  const query = useQuery({
-    ...projectKnowledgeQueryOptions(project),
-    refetchInterval,
-  })
+  const query = useKnowledge(project)
 
   const knowledge = query.data?.knowledge ?? []
   const comments = query.data?.comments ?? []

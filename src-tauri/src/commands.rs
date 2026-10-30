@@ -4,8 +4,8 @@
 use crate::app::{self, FeedWatches};
 use crate::artifacts::{self, ArtifactFile};
 use crate::domain::{
-    AddProjectOutcome, Bead, BeadDetail, BeadFeedMessage, BeadsLocation, CommentAuthor, DoltProbe,
-    PathStatus, Project, ProjectKnowledge,
+    AddProjectOutcome, Bead, BeadDetail, BeadFeedMessage, BeadsLocation, Comment, CommentAuthor,
+    DoltProbe, PathStatus, Project, ProjectKnowledge, ProjectSnapshot,
 };
 use crate::registry::{self, resolve_dir, RegistryEntry};
 
@@ -60,6 +60,16 @@ pub async fn list_beads(project_id: String) -> Result<Vec<Bead>, String> {
 #[tauri::command]
 pub async fn get_bead_detail(project_id: String, id: String) -> Result<BeadDetail, String> {
     blocking(move || app::source_for(&project_id).bead_detail(&project_id, &id)).await
+}
+
+#[tauri::command]
+pub async fn get_project_snapshot(project_id: String) -> Result<ProjectSnapshot, String> {
+    blocking(move || app::source_for(&project_id).snapshot(&project_id)).await
+}
+
+#[tauri::command]
+pub async fn get_bead_comments(project_id: String, id: String) -> Result<Vec<Comment>, String> {
+    blocking(move || app::source_for(&project_id).bead_comments(&project_id, &id)).await
 }
 
 #[tauri::command]

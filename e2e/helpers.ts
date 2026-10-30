@@ -108,6 +108,23 @@ export async function waitForProjectRows(expected: string[]): Promise<void> {
   )
 }
 
+/** The `get_project_snapshot` reply: beads need only id, title and status; the rest is filled in. */
+export function fakeSnapshot(beads: Record<string, unknown>[] = []) {
+  return {
+    beads: beads.map((b) => ({
+      priority: 2,
+      issue_type: 'task',
+      labels: [],
+      comments: [],
+      edges: [],
+      ...b,
+    })),
+    ready: null,
+    blocked: null,
+    cursor: 'fixture',
+  }
+}
+
 export function fakeProject(id: string, name: string) {
   return {
     id,
