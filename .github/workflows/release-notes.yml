@@ -86,11 +86,14 @@ jobs:
             ${{ steps.load.outputs.text }}
             </text>
 
-      # release-please cannot edit the Cargo.lock entry, so set all three version files
-      # from package.json (which it did bump). Runs even when Claude changed nothing.
+      # release-please cannot edit the Cargo.lock entry, so set it from package.json
+      # (which it did bump). Runs even when Claude changed nothing.
       - name: sync Cargo.lock version
         if: env.HAS_KEY == 'true'
-        run: node scripts/set-version.mjs "$(node -p "require('./package.json').version")"
+        run: |
+          set -euo pipefail
+          V=$(node -p "require('./package.json').version") perl -0pi -e 's/(name = "bd-board-desktop"\nversion = ")[^"]+(")/$1$ENV{V}$2/' src-tauri/Cargo.lock
+          node scripts/check-release-version.mjs
 
       # A human still merges the Release PR. Push only CHANGELOG.md and Cargo.lock.
       - name: commit rewrite
