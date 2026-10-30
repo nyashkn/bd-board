@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, FolderOpen, Plus } from 'lucide-react'
@@ -17,6 +17,7 @@ import {
   addProject,
   initProject,
 } from '@/lib/server'
+import { rumMarkCold } from '@/lib/rum'
 import { toErrorMessage } from '@/lib/utils'
 import { confirm } from '@tauri-apps/plugin-dialog'
 import { toast } from 'sonner'
@@ -112,6 +113,12 @@ function Home() {
     refetchInterval: 15000,
     staleTime: 5000,
   })
+
+  useEffect(() => {
+    rumMarkCold(isPending ? 'cold.skeleton' : 'cold.projects', {
+      projects: data?.length ?? 0,
+    })
+  }, [isPending, data])
 
   const { currentBrokenProject, closeBrokenModal } =
     useValidateProjectsOnMount(data)

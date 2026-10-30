@@ -53,6 +53,7 @@ import {
   scopeCycle,
 } from '@/lib/palette-query'
 import { loadRecent, recordRecent } from '@/lib/palette-recent'
+import { rumAction, rumDuration, rumKeystroke, rumNow } from '@/lib/rum'
 import { docKey, searchDocs } from '@/lib/palette-search'
 import { beadColumn } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -224,6 +225,7 @@ export function CommandPalette() {
   const [switcherAt, setSwitcherAt] = useState(0)
   const [scopeNote, setScopeNote] = useState('')
   const previousFocus = useRef<HTMLElement | null>(null)
+  const openedAt = useRef(0)
   const chose = useRef(false)
 
   const { projects, docs, comments, loading, indexing } = usePaletteData(
@@ -244,15 +246,16 @@ export function CommandPalette() {
       since: current && at ? { project: current, at } : undefined,
     }
   }, [open, current])
-  const hits = useMemo(
-    () =>
-      searchDocs(docs, query, {
-        comments,
-        ...ctx,
-        scope: scope === ALL_SCOPE ? undefined : scope,
-      }),
-    [docs, query, comments, ctx, scope],
-  )
+  const hits = useMemo(() => {
+    const t0 = rumNow()
+    const found = searchDocs(docs, query, {
+      comments,
+      ...ctx,
+      scope: scope === ALL_SCOPE ? undefined : scope,
+    })
+    rumKeystroke(rumNow() - t0)
+    return found
+  }, [docs, query, comments, ctx, scope])
   const docsByKey = useMemo(() => new Map(docs.map((d) => [d.key, d])), [docs])
   const now = useMemo(() => Date.now(), [docs, open])
   const empty = isEmptyQuery(query)
@@ -262,6 +265,14 @@ export function CommandPalette() {
     if (current && openBeadId)
       recordRecent({ project: current, id: openBeadId })
   }, [current, openBeadId])
+
+  // Shortcut press to the dialog being painted.
+  useEffect(() => {
+    if (!open || !openedAt.current) return
+    const t0 = openedAt.current
+    openedAt.current = 0
+    requestAnimationFrame(() => rumDuration('palette.open', t0))
+  }, [open])
 
   useEffect(() => {
     function onShortcut(e: KeyboardEvent) {
@@ -289,6 +300,7 @@ export function CommandPalette() {
       setSwitcher(false)
       setScopeNote('')
       setRecent(loadRecent())
+      openedAt.current = rumNow()
       setOpen(true)
     }
     document.addEventListener('keydown', onShortcut, true)
@@ -311,6 +323,7 @@ export function CommandPalette() {
       : (projects.find((p) => p.id === id)?.name ?? id)
 
   function chooseScope(next: string) {
+    rumAction('palette.scope', { all: next === ALL_SCOPE })
     setScope(next)
     storeScope(next)
     setScopeNote(`Searching ${nameOf(next)}`)
@@ -349,6 +362,7 @@ export function CommandPalette() {
   }
 
   function addChips(next: Chip[]) {
+    for (const c of next) rumAction('palette.chip', { kind: c.kind })
     setChips((prev) => [
       ...prev,
       ...next.filter(
@@ -498,6 +512,16 @@ export function CommandPalette() {
   const rows = sections.flatMap((sec) => sec.rows)
   const rowByValue = new Map(rows.map((r) => [r.value, r]))
   const firstValue = rows[0]?.value ?? ''
+  // Where in the list the chosen row sat: a ranking-quality signal.
+  function pick(row: Row | undefined, newTab: boolean) {
+    if (!row) return
+    rumAction('palette.pick', {
+      rank: rows.indexOf(row),
+      of: rows.length,
+      newTab,
+    })
+    row.run(newTab)
+  }
   useEffect(() => {
     if (open) setSelected(firstValue)
   }, [open, firstValue])
@@ -544,7 +568,7 @@ export function CommandPalette() {
       openSwitcher()
     } else if (e.key === 'Enter' && mod) {
       e.preventDefault()
-      rowByValue.get(selected)?.run(true)
+      pick(rowByValue.get(selected), true)
     } else if (e.key === 'Backspace' && input === '' && chips.length) {
       e.preventDefault()
       setChips((prev) => prev.slice(0, -1))
@@ -718,7 +742,7 @@ export function CommandPalette() {
                     <CommandPrimitive.Item
                       key={row.value}
                       value={row.value}
-                      onSelect={() => row.run(false)}
+                      onSelect={() => pick(row, false)}
                       className="flex cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-hidden select-none data-selected:bg-muted"
                     >
                       {row.content}

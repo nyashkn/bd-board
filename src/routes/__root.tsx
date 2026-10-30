@@ -10,6 +10,7 @@ import { ProjectTopbar } from '@/components/project-topbar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 import { THEME_INIT_SCRIPT } from '@/lib/theme'
+import { useRum } from '@/hooks/use-rum'
 
 import appCss from '../styles.css?url'
 
@@ -45,6 +46,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  useRum()
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

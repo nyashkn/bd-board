@@ -58,6 +58,8 @@ import { useSinceLastSeen } from '@/hooks/use-since-last-seen'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import type { BoardView, ProjectTab } from '@/components/board-header'
 import type { SortKey } from '@/lib/sort'
+import { rumMarkCold } from '@/lib/rum'
+
 import type { ClosedWindow } from '@/lib/closed-window'
 import type { Bead, BeadColumn } from '@/lib/types'
 
@@ -223,6 +225,11 @@ function BoardPage() {
   })
 
   const beads = beadsQuery.data ?? []
+  const firstBeads = beadsQuery.isSuccess
+  const beadCount = beads.length
+  useEffect(() => {
+    if (firstBeads) rumMarkCold('cold.beads', { beads: beadCount }, { project })
+  }, [firstBeads, beadCount, project])
 
   // Comments are not in `bd list` and do not bump updated_at, so activity needs the same
   // `bd export` read the Knowledge tab uses (one extra call, shared cache key, refreshed at most every 30 s).
@@ -564,6 +571,7 @@ function BoardPage() {
 }
 
 function BoardSkeleton() {
+  useEffect(() => rumMarkCold('cold.skeleton'), [])
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden md:grid-cols-2 xl:grid-cols-4">
       {COLUMNS.map((c) => (

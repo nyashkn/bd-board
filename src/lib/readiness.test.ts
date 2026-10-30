@@ -60,9 +60,7 @@ describe('readiness from bd blocked / bd ready', () => {
       { id: 'e.1', parent: 'e', status: 'open', waiting_on: ['e.2'] },
       { id: 'e.2', parent: 'e', status: 'open' },
       { id: 'e.3', parent: 'e', status: 'in_progress', waiting_on: ['e.2'] },
-    ].map(
-      (b) => ({ title: b.id, priority: 1, issue_type: 'task', ...b }),
-    )
+    ].map((b) => ({ title: b.id, priority: 1, issue_type: 'task', ...b }))
     const stats = descendantStats('e', buildChildrenMap(tree))
     expect([stats.open, stats.in_progress, stats.blocked]).toEqual([1, 0, 2])
   })

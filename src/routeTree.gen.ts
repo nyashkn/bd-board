@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiRumConfigRouteImport } from './routes/api/rum-config'
 import { Route as PProjectRouteImport } from './routes/p.$project'
 import { Route as ApiFeedProjectRouteImport } from './routes/api/feed.$project'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiRumConfigRoute = ApiRumConfigRouteImport.update({
+  id: '/api/rum-config',
+  path: '/api/rum-config',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PProjectRoute = PProjectRouteImport.update({
@@ -31,30 +37,35 @@ const ApiFeedProjectRoute = ApiFeedProjectRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/rum-config': typeof ApiRumConfigRoute
   '/p/$project': typeof PProjectRoute
   '/api/feed/$project': typeof ApiFeedProjectRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/rum-config': typeof ApiRumConfigRoute
   '/p/$project': typeof PProjectRoute
   '/api/feed/$project': typeof ApiFeedProjectRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/rum-config': typeof ApiRumConfigRoute
   '/p/$project': typeof PProjectRoute
   '/api/feed/$project': typeof ApiFeedProjectRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/p/$project' | '/api/feed/$project'
+  fullPaths: '/' | '/api/rum-config' | '/p/$project' | '/api/feed/$project'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/p/$project' | '/api/feed/$project'
-  id: '__root__' | '/' | '/p/$project' | '/api/feed/$project'
+  to: '/' | '/api/rum-config' | '/p/$project' | '/api/feed/$project'
+  id:
+    '__root__' | '/' | '/api/rum-config' | '/p/$project' | '/api/feed/$project'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiRumConfigRoute: typeof ApiRumConfigRoute
   PProjectRoute: typeof PProjectRoute
   ApiFeedProjectRoute: typeof ApiFeedProjectRoute
 }
@@ -66,6 +77,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/rum-config': {
+      id: '/api/rum-config'
+      path: '/api/rum-config'
+      fullPath: '/api/rum-config'
+      preLoaderRoute: typeof ApiRumConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/p/$project': {
@@ -87,6 +105,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiRumConfigRoute: ApiRumConfigRoute,
   PProjectRoute: PProjectRoute,
   ApiFeedProjectRoute: ApiFeedProjectRoute,
 }

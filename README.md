@@ -173,6 +173,57 @@ The project list comes only from the registry; the old `BD_ROOTS` variable is ig
 
 Reads and writes are both enabled by default: the app executes local `bd` mutations (create, edit, comment, status update, delete) with no separate opt-in.
 
+## Telemetry (OpenObserve RUM)
+
+Off by default. bd board sends nothing anywhere unless a config enables it **and** holds a client token; with either missing, RUM stays silent (an enabled-but-invalid config logs one `console.warn` and stays off). It only ever talks to the one `site` you configure; there is no built-in host.
+
+**Config** (`~/.config/bd-board/rum.json`, read by the desktop app and by the web server on every request, so no rebuild is needed; `O2_RUM_*` env vars on the server override it, and `VITE_O2_RUM_*` build-time vars are the fallback):
+
+```json
+{
+  "enabled": true,
+  "site": "o2-rum.nl.ds.ke",
+  "organizationIdentifier": "kn",
+  "applicationName": "bd-board",
+  "clientToken": "<write-only RUM client token>",
+  "env": "production",
+  "profile": "full",
+  "sampleRate": 100,
+  "replaySampleRate": 100,
+  "insecureHTTP": false
+}
+```
+
+`site` is `host[:port]` without a scheme. `applicationName` (default `bd-board`) is sent as the SDK's `applicationId`, since SDK 0.4.3 has no `applicationName` option; set `applicationId` to override it. If you copy a vault snippet that uses `applicationName`, note the SDK would ignore it and send nothing; here it is mapped for you. The API version is `v1`. `service` defaults to `bd-board-web` or `bd-board-desktop`; `version` comes from `package.json`. `userName` defaults to `BD_BOARD_AUTHOR`.
+
+**Privacy profile** (`profile`): **`full` = everything, and it is the default once RUM is enabled.** In every profile, including `full`, the RUM client token, environment variable values and `Authorization`/`Cookie` headers are never sent.
+
+| Profile    | Sent                                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `full`     | everything: session replay, full URLs including `?bead=` and `q=`, click targets, the author name (and a hash id), error text, project names on timings                  |
+| `standard` | no replay, input values masked (`mask-user-input`), query strings stripped, click targets masked, no user, error text capped at 200 chars, timings without project names |
+| `minimal`  | `standard` without click events: performance and errors only                                                                                                             |
+
+**What is measured**: web vitals and resources (SDK), views named `board`, `hierarchy`, `projects`, `knowledge`, `bead-modal`; cold-load phases; palette open, per-typing-burst search p50/p95, index and comment-index builds, scope/chip use and the rank of the picked result; every `bd` call (command name, duration, ok/error; never arguments or output outside `full`); modal open to content, route transitions, live-feed reconnects; errors.
+
+**One-liner** (writes `~/.config/bd-board/rum.json` with mode 600, refuses to overwrite without `--force`, prints only `written (token length N)`; the web server reads the same file):
+
+```bash
+~/.claude/bin/infisical-dokploy-shared-services --path=/openobserve bash scripts/rum-setup.sh
+```
+
+It expects the key `OPENOBSERVE_KN_RUM_TOKEN` from that Infisical path in the environment. Optional `RUM_SITE`, `RUM_ORG`, `RUM_ENV`, `RUM_PROFILE`.
+
+**Setup**: the RUM client token is per user per org, not per app (org `kn` already has one, stored in Infisical as `OPENOBSERVE_KN_RUM_TOKEN`); the app name is only the `applicationId` value we send. Put the token in `rum.json` with the one-liner above, and have the operator add the app origin to the intake's CORS allow-list (`ZO_CORS_ALLOWED_ORIGINS` in the Dokploy env, then redeploy) (`http://localhost:3009` for the dev web app and `tauri://localhost` for the desktop app; the native e2e confirmed the desktop webview sends `Origin: tauri://localhost`).
+
+**Dashboard**: `python3 scripts/o2/gen_bd_board_rum_dashboard.py` writes `scripts/o2/bd-board-rum.json`; post it into the `bd-board` folder (`POST /api/kn/dashboards?folder=bd-board`). To update: `GET /api/kn/dashboards/<id>?folder=bd-board`, read the top-level `hash`, then `PUT /api/kn/dashboards/<id>?folder=bd-board&hash=<hash>` with `dashboardId` in the body (details in the generator's docstring). Column names it assumes are listed at the top of the script.
+
+**Source maps**: `O2_RUM_SOURCEMAPS=1 pnpm build` emits hidden maps, then `bash scripts/upload-sourcemaps.sh --service bd-board-web --env production` (dry run; add `--send` with `O2_SM_URL=https://openobserve.lan.ds.ke`, `O2_SM_ORG`, and `O2_SM_USER` / `O2_SM_PASSWORD` of an org admin over HTTP Basic: RBAC is not initialised, so service accounts get 401). Service, env and version must match what the SDK reports. The source-map endpoint is not in the owner's docs, so try the dry run first.
+
+**Data and retention**: events land in `_rumdata`, shared by every RUM app in org `kn`; filter by `service`. **Never delete the `_rumdata` stream**: deletion blocks writes to that name for up to an hour, and the retention job's timer resets on every redeploy. Default retention is 90 days (a per-stream override changes it for all apps, and `full` replays keep bead text for that long), and the instance stops searching above 50 GB/day.
+
+**Tests**: `pnpm test` covers the config validator, the profile scrubber, the call wrapper and the off-path overhead; `pnpm e2e:rum` runs the browser against a fake local intake.
+
 ## For agents
 
 Three conventions the board understands. None needs the board running.
