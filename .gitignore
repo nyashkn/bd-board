@@ -15,7 +15,11 @@ src-tauri/target/
 src-tauri/gen/
 
 # Local tracker and agent state
-.beads/
+.beads/*
+!.beads/issues.jsonl
+!.beads/config.yaml
+!.beads/metadata.json
+!.beads/.gitignore
 .dolt/
 *.db
 .beads-credential-key
@@ -23,3 +27,4 @@ src-tauri/gen/
 .claude/
 .codex/
 logs/
+.beads.gate.lock
