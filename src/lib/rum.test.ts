@@ -78,7 +78,7 @@ describe('init config', () => {
     expect(c).toMatchObject({
       service: 'bd-board-desktop',
       sessionReplaySampleRate: 0,
-      defaultPrivacyLevel: 'mask',
+      defaultPrivacyLevel: 'mask-user-input',
       enablePrivacyForActionName: true,
       sessionPersistence: 'local-storage',
     })

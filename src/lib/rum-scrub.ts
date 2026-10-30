@@ -4,7 +4,11 @@ import type { RumProfile } from './rum-config.ts'
 export interface ScrubEvent {
   type?: string
   view?: { url?: string; referrer?: string; name?: string }
-  resource?: { url?: string }
+  resource?: {
+    url?: string
+    request?: { headers?: Record<string, unknown> }
+    response?: { headers?: Record<string, unknown> }
+  }
   error?: { message?: string; stack?: string }
   action?: { type?: string; target?: { name?: string } }
   usr?: unknown
@@ -21,13 +25,16 @@ export function stripQuery(url: string): string {
 
 /**
  * Applies a privacy profile to one event, in place. Returns false to drop it.
- *  full     everything: URLs with ?bead=/q=, click targets, user, error text.
+ *  full     pass-through: everything (URLs with ?bead=/q=, click targets, user, error text).
  *  standard query strings stripped, error text capped, no user, click targets masked.
  *  minimal  standard, plus no click events: performance and errors only.
  */
-export function scrubEvent(event: ScrubEvent, profile: RumProfile): boolean {
-  // Lets the dashboard split sessions by privacy profile.
-  event.context = { ...event.context, profile }
+export function scrubEvent(
+  event: ScrubEvent,
+  profile: RumProfile,
+  secrets: readonly string[] = [],
+): boolean {
+  dropSecrets(event, secrets)
   if (profile === 'full') return true
   if (event.view?.url) event.view.url = stripQuery(event.view.url)
   if (event.view?.referrer)
@@ -46,4 +53,27 @@ export function scrubEvent(event: ScrubEvent, profile: RumProfile): boolean {
     if (event.action.target) event.action.target.name = 'masked'
   }
   return true
+}
+
+const SECRET_HEADER = /^(authorization|proxy-authorization|cookie|set-cookie)$/i
+
+/** Every profile, `full` included: never a credential header, never our own client token. */
+function dropSecrets(event: ScrubEvent, secrets: readonly string[]): void {
+  for (const headers of [
+    event.resource?.request?.headers,
+    event.resource?.response?.headers,
+  ]) {
+    if (headers)
+      for (const key of Object.keys(headers))
+        if (SECRET_HEADER.test(key)) delete headers[key]
+  }
+  const live = secrets.filter(Boolean)
+  if (!live.length) return
+  const redact = (v: string) =>
+    live.reduce((t, x) => t.split(x).join('[redacted]'), v)
+  const { error, resource, view } = event
+  if (error?.message) error.message = redact(error.message)
+  if (error?.stack) error.stack = redact(error.stack)
+  if (resource?.url) resource.url = redact(resource.url)
+  if (view?.url) view.url = redact(view.url)
 }

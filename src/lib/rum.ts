@@ -26,6 +26,7 @@ export interface RumSdk {
     options: { startTime: number; duration: number; context?: object },
   ) => void
   setUser: (user: { id?: string; name?: string }) => void
+  setGlobalContextProperty?: (key: string, value: unknown) => void
 }
 
 type Op =
@@ -223,7 +224,12 @@ export function sdkInitConfig({
     version,
     sessionSampleRate: config.sampleRate,
     sessionReplaySampleRate: full ? config.replaySampleRate : 0,
-    defaultPrivacyLevel: full ? 'allow' : 'mask',
+    // full: nothing masked (typed drafts and input values show in replay); standard: inputs masked.
+    defaultPrivacyLevel: full
+      ? 'allow'
+      : config.profile === 'standard'
+        ? 'mask-user-input'
+        : 'mask',
     enablePrivacyForActionName: !full,
     trackResources: true,
     trackLongTasks: true,
@@ -231,7 +237,8 @@ export function sdkInitConfig({
     trackViewsManually: true,
     // Cookies are unreliable on tauri:// pages; see README.
     ...(desktop ? { sessionPersistence: 'local-storage' } : {}),
-    beforeSend: (event: ScrubEvent) => scrubEvent(event, config.profile),
+    beforeSend: (event: ScrubEvent) =>
+      scrubEvent(event, config.profile, [config.clientToken]),
   }
 }
 
@@ -241,6 +248,8 @@ export function activateRum(opts: ActivateOptions): void {
   sdk = opts.sdk
   sdk.init(sdkInitConfig(opts))
   mode = 'on'
+  // Lets the dashboard split sessions by profile without touching event payloads.
+  sdk.setGlobalContextProperty?.('profile', profile)
   if (profile === 'full' && opts.config.userName) {
     const name = opts.config.userName
     void hashId(name).then((id) => sdk?.setUser({ id, name }))

@@ -30,11 +30,44 @@ describe('stripQuery', () => {
 })
 
 describe('scrubEvent', () => {
-  it('tags every kept event with its profile, keeping existing context', () => {
-    const e: ScrubEvent = { type: 'vital', context: { ok: true } }
-    scrubEvent(e, 'standard')
-    expect(e.context).toEqual({ ok: true, profile: 'standard' })
+  it('full is a pass-through: output deep-equals input', () => {
+    const events: ScrubEvent[] = [
+      viewEvent(),
+      click(),
+      custom(),
+      { type: 'error', error: { message: 'x'.repeat(500), stack: 's' } },
+      {
+        type: 'resource',
+        resource: { url: '/_serverFn/x?payload=bead-9' },
+        context: { ok: true, project: 'demo' },
+      },
+      { type: 'vital', context: { ok: true } },
+    ]
+    for (const e of events) {
+      const before = structuredClone(e)
+      expect(scrubEvent(e, 'full')).toBe(true)
+      expect(e).toEqual(before)
+    }
   })
+
+  it.each(['full', 'standard', 'minimal'] as const)(
+    '%s never keeps credential headers or the client token',
+    (profile) => {
+      const e: ScrubEvent = {
+        type: 'resource',
+        resource: {
+          url: '/x?k=TOKEN123',
+          request: { headers: { Authorization: 'Bearer a', accept: 'x' } },
+          response: { headers: { 'Set-Cookie': 'a=b', 'content-type': 'y' } },
+        },
+        error: { message: 'bad TOKEN123', stack: 'at TOKEN123' },
+      }
+      scrubEvent(e, profile, ['TOKEN123'])
+      expect(e.resource?.request?.headers).toEqual({ accept: 'x' })
+      expect(e.resource?.response?.headers).toEqual({ 'content-type': 'y' })
+      expect(JSON.stringify(e)).not.toContain('TOKEN123')
+    },
+  )
 
   it('full keeps URL with query, click target and user', () => {
     const v = viewEvent()

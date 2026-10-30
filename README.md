@@ -196,13 +196,13 @@ Off by default. bd board sends nothing anywhere unless a config enables it **and
 
 `site` is `host[:port]` without a scheme. `service` defaults to `bd-board-web` or `bd-board-desktop`; `version` comes from `package.json`. `userName` defaults to `BD_BOARD_AUTHOR`.
 
-**Privacy profile** (`profile`, default `full` once enabled):
+**Privacy profile** (`profile`): **`full` = everything, and it is the default once RUM is enabled.** In every profile, including `full`, the RUM client token, environment variable values and `Authorization`/`Cookie` headers are never sent.
 
-| Profile    | Sent                                                                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `full`     | everything: session replay, full URLs including `?bead=` and `q=`, click targets, the author name (and a hash id), error text, project names on timings |
-| `standard` | no replay, query strings stripped, text and click targets masked, no user, error text capped at 200 chars, timings without project names                |
-| `minimal`  | `standard` without click events: performance and errors only                                                                                            |
+| Profile    | Sent                                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `full`     | everything: session replay, full URLs including `?bead=` and `q=`, click targets, the author name (and a hash id), error text, project names on timings                  |
+| `standard` | no replay, input values masked (`mask-user-input`), query strings stripped, click targets masked, no user, error text capped at 200 chars, timings without project names |
+| `minimal`  | `standard` without click events: performance and errors only                                                                                                             |
 
 **What is measured**: web vitals and resources (SDK), views named `board`, `hierarchy`, `projects`, `knowledge`, `bead-modal`; cold-load phases; palette open, per-typing-burst search p50/p95, index and comment-index builds, scope/chip use and the rank of the picked result; every `bd` call (command name, duration, ok/error; never arguments or output outside `full`); modal open to content, route transitions, live-feed reconnects; errors.
 
