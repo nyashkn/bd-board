@@ -4,7 +4,7 @@ import { BookOpen, Columns3, ListTree } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { carrySearch } from '@/lib/nav-context'
-import { getProjects } from '@/lib/server'
+import { projectsQueryOptions } from '@/lib/query-options'
 import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ReadonlyBadge } from '@/components/readonly-badge'
@@ -24,10 +24,7 @@ export function ProjectTopbar() {
   const tab = search.tab ?? 'board'
 
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => getProjects(),
-    refetchInterval: 15000,
-    staleTime: 5000,
+    ...projectsQueryOptions(),
     enabled: Boolean(project),
   })
   const current = projectsQuery.data?.find((p) => p.id === project)

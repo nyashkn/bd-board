@@ -22,7 +22,7 @@ import {
 import { useBdStatus } from '@/hooks/use-bd-status'
 import { cn } from '@/lib/utils'
 import { connectorFor } from '@/lib/core'
-import { getProjects } from '@/lib/server'
+import { PROJECTS_POLL_MS, projectsQueryOptions } from '@/lib/query-options'
 
 import { getStoredIdentity, setStoredIdentity } from '@/lib/identity'
 import {
@@ -218,10 +218,8 @@ export function ProjectRail() {
   )
 
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => getProjects(),
-    refetchInterval: 15000,
-    staleTime: 5000,
+    ...projectsQueryOptions(),
+    refetchInterval: PROJECTS_POLL_MS,
   })
   const projects = projectsQuery.data ?? []
 

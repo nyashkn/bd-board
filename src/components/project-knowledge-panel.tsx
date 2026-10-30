@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { connectorFor } from '@/lib/core'
+import { projectKnowledgeQueryOptions } from '@/lib/query-options'
 import {
   KNOWLEDGE_TYPE_DOT_CLASS,
   KNOWLEDGE_TYPE_HINT,
@@ -126,11 +126,8 @@ export function ProjectKnowledgePanel({
   const [type, setType] = useState<TypeFilter>('all')
 
   const query = useQuery({
-    queryKey: ['project-knowledge', project],
-    queryFn: () =>
-      connectorFor(project).projectKnowledge({ data: { project } }),
+    ...projectKnowledgeQueryOptions(project),
     refetchInterval,
-    staleTime: 4000,
   })
 
   const knowledge = query.data?.knowledge ?? []

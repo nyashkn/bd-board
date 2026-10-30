@@ -27,7 +27,10 @@ import { ReadonlyContext } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { SinceBand, SinceContext } from '@/components/since-band'
 import { connectorFor } from '@/lib/core'
-import { getProjects } from '@/lib/server'
+import {
+  projectKnowledgeQueryOptions,
+  projectsQueryOptions,
+} from '@/lib/query-options'
 import { diffSince, latestCommentByBead } from '@/lib/activity'
 import { askingBeads } from '@/lib/bead-questions'
 import { COLUMNS, beadColumn, isEpic } from '@/lib/types'
@@ -200,12 +203,7 @@ function BoardPage() {
     }),
   )
 
-  const projectsQuery = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => getProjects(),
-    refetchInterval: 15000,
-    staleTime: 5000,
-  })
+  const projectsQuery = useQuery(projectsQueryOptions())
   // Unknown (still loading) counts as read-only so write controls never flash up.
   const readonly = projectsQuery.data
     ? Boolean(projectsQuery.data.find((p) => p.id === project)?.readonly)
@@ -232,11 +230,10 @@ function BoardPage() {
   // `bd export` read the Knowledge tab uses (one extra call, shared cache key, refreshed at most every 30 s).
   const { since, dismiss: dismissSince } = useSinceLastSeen(project)
   const commentsQuery = useQuery({
-    queryKey: ['project-knowledge', project],
-    queryFn: () =>
-      connectorFor(project).projectKnowledge({ data: { project } }),
+    ...projectKnowledgeQueryOptions(project),
     enabled: since !== null,
-    staleTime: 30_000,
+    // Fallback when the feed is not live; a live feed invalidates this key itself.
+    refetchInterval: feed.status === 'live' ? false : 30_000,
     retry: false,
   })
   const latestComment = useMemo(
