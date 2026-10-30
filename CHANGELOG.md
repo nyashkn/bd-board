@@ -5,51 +5,98 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0](https://github.com/nyashkn/bd-board/compare/v0.1.1...v0.2.0) (2026-10-30)
 
-### Added
+This release adds a Cmd/Ctrl+K command palette, light and dark themes, read-only projects, bead artifacts and opt-in performance monitoring. Blocked and Ready now match what `bd` reports, and the layout no longer overflows on narrow windows. Most of the work landed as direct merges; the four pull requests, [#1](https://github.com/nyashkn/bd-board/pull/1), [#4](https://github.com/nyashkn/bd-board/pull/4), [#5](https://github.com/nyashkn/bd-board/pull/5) and [#6](https://github.com/nyashkn/bd-board/pull/6), are all release automation.
 
-- Command palette (Cmd/Ctrl+K, from anywhere): instant search over every bead of every project by id, title, description, labels and assignee, plus comments and artifact paths indexed lazily in a separate group. Filter chips `status:` `type:` `label:` `epic:` `project:` `@name` `is:mine|ready|blocked|since`; Enter opens the bead, Cmd/Ctrl+Enter a new tab, Cmd/Ctrl+C copies its id; Recent beads and Jump to when empty. Read-only projects work the same.
-- Tests that were only checked by hand: `pnpm e2e:fixture` (artifacts panel with a real sandboxed HTML file, escaping/missing/remote artifacts, read-only projects and the shim leaving the ledger unchanged, server functions refusing writes), `src-tauri/tests/real_bd.rs` (read_artifact limits and escapes, registry, shim launch, write guard, comment author, blocked/ready from real `bd` output) and a native `artifacts.e2e.ts`. The native suite now runs against a throwaway HOME.
-- `pnpm desktop:install` (`scripts/install-desktop.sh`): quits a running bd board gracefully, copies the built app with `ditto` to /Applications (or ~/Applications), opens it.
-- Desktop window minimum size 960x600 and `scripts/check-overflow.mjs`, a dependency-free (Chrome DevTools protocol) horizontal-overflow check at 720/1000/1280/1440px.
-- Compact relative ages ("created 12d ago", "updated 3h ago") on bead cards and in the bead modal sidebar, with the full timestamp as tooltip (`src/lib/age.ts`).
-- Closed recency window (`closed=1d|7d|30d|90d|all`, default 7d, remembered in `localStorage`, URL wins) for the Closed column, swimlanes, Hierarchy and lists, with "N of M" counts and a "show all" link. Completed epics are hidden or shown by the same window and show "Done · took 5d" when visible.
-- Epic progress bar, `closed/total`, percent and open/in progress/blocked breakdown in swimlane headers and on every epic row in Hierarchy; nested sub-epics counted once per descendant.
-- Hierarchy rows show state: a status glyph (shape and colour) and word, "waits on" the open blocker, comment count, assignee initials and age; closed and deferred rows are muted and closed titles struck through, in-progress rows carry a 2px tint.
-- Hierarchy starts collapsed, with children ordered in progress, open, deferred, closed (then priority, then id with numbers compared as numbers). The expanded set is remembered per project in `localStorage` (`bd-board:hierarchy-expanded:<project>`), with "Expand all" and "Collapse all". While a filter is active the matching paths are open and the stored set is left alone.
-- Hierarchy uses the Board's filter bar (search, priority, label chips, ready, assignee, closed window; same URL params). A match keeps its ancestor path, other siblings are hidden, and a "12 matches in 4 epics" line says what is shown.
-- Epics with no tasks yet appear on the Board's Epics view as a header-only lane ("no tasks yet", "waits on", "scoped 18d ago") and on Hierarchy rows. Column headers on the Epics view add "+N epics" because epics are lanes, not cards.
-- `Bead.waiting_on` and `Bead.ready`, filled from `bd blocked --json` and `bd ready --json -n 0` in both the TS adapter and the Rust desktop commands (the read-only shim already allowed both).
+### What's New
 
-- "Since you last looked" band on Board and Hierarchy (new, closed, commented, updated since the last visit, per project in `localStorage`), a dot on changed cards and rows, and comment-aware ages: a comment does not bump `updated_at`, so cards, Hierarchy rows and the modal also show the newest comment time (`src/lib/activity.ts`). Comment times come from the Knowledge tab's `bd export` read (one extra call, at most every 30 s).
-- Comment box: says an agent sees a comment only when it next reads the bead, a copyable agent-deck nudge, the author `bd` will record (`BD_BOARD_AUTHOR`, then `BD_ACTOR`, `BEADS_ACTOR`, `bd config actor`, git user.name, `$USER`), and "Comment and reopen" on closed beads. New desktop command `comment_author`.
-- Keyboard model: `j`/`k` and arrows through beads, Enter opens, `/` focuses search, `?` opens a shortcut list (button in the top bar); inactive while typing or with a dialog open.
-- Dashboard diagnostic card and rail footer for bd: a missing or too-old bd (minimum 1.3.0) now names the install command (`brew install beads`) and `BD_BIN`, in the web and the desktop paths (`src/lib/bd-errors.ts`, `desktop.rs`).
-- Knowledge tab with nothing recorded teaches the convention (the seven prefixes with hints, an example `bd comments add`) in one compact card and gives the width to Comments, which now show the bead title.
-- README "For agents" section (artifacts, knowledge prefixes, owner comments) and `BD_BOARD_AUTHOR`.
+#### Command palette
 
-### Changed
+Finding a bead meant scrolling or using the board search box. Press Cmd/Ctrl+K from anywhere to search every bead in every project by id, title, description, labels and assignee. Comments and artifact paths are searched too, in a separate group. Filter chips (`status:`, `type:`, `label:`, `epic:`, `project:`, `@name`, `is:mine|ready|blocked|since`) narrow the results. Enter opens the bead, Cmd/Ctrl+Enter opens it in a new tab, and Cmd/Ctrl+C copies its id. Search tolerates typos, and a scope pill (Ctrl/Cmd+Shift+.) limits it to the current project and doubles as a project switcher (Ctrl/Cmd+Shift+L).
 
-- Board toolbar: "Group" label on the group-by toggle, "Filter: priority" / "Priority: P0-P1" and "Sort: Priority" instead of three buttons called Priority; only the 8 most used label chips show (selected ones stay pinned), the rest sit behind "+N more".
-- Epic modal: open and in-progress subtasks first, closed ones folded under "N closed"; ids no longer wrap.
-- Below 768px the sidebar is always the icon strip; the theme toggle has a visible "Theme" label; "N older hidden, show all" is now a "Show 240 closed before Oct 21" button.
-- Comments written from the board pass `--actor` only when `BD_BOARD_AUTHOR` is set; otherwise bd records its own actor as before.
+#### Light and dark themes
 
-- Blocked and Ready now agree with `bd`. Blocked is every bead waiting on an open dependency (what `bd blocked` lists, any status except closed), no longer only `status=blocked`; the Blocked column, sidebar count, dashboard card and epic breakdown use it. Ready is `bd ready`: it no longer treats a closed blocker as still blocking and no longer counts deferred beads. On a real project the old Ready omitted 5 open beads whose blockers are all closed and counted 1 deferred bead (net 4 short of `bd ready`), and Blocked was 0 against 19. If bd cannot answer (old bd, failed call) the UI falls back to status only (the previous behaviour). The card's red blocked count now counts open blockers only.
+The app was dark only. A light/dark/system toggle with a visible "Theme" label now sits in the header. The choice is remembered and applied before first paint, so there is no flash. Markdown in the bead modal was nearly unreadable in light mode and now uses the foreground colour in both themes.
 
-### Fixed
+#### Blocked and Ready follow bd
 
-- README and `.env.example` drift: `BD_ROOTS` is gone from both, discovery is described as the explicit registry, the empty Safety Model heading has its paragraph.
-- Horizontal overflow: the project card is now a contained column (path ellipsised with a tooltip, donut and counts inside the card), the Projects header actions wrap, stat cards and project cards use responsive auto-fit grids, topbar tabs collapse to icons below 900px, and long words/URLs in markdown, bead titles and comments wrap while code blocks and tables scroll inside themselves.
-- Bead modal description, acceptance criteria and artifact markdown were nearly invisible in light mode (`prose-invert` on a light background); markdown body now uses the foreground token in both themes. Also removed alpha-faded muted text on empty-state and detail copy.
+Blocked meant only `status=blocked`, and Ready ignored that a closed blocker no longer blocks. Both now come from `bd blocked` and `bd ready`, in the web app and the desktop app. On one real project the old Ready view missed 5 open beads and counted 1 deferred bead, and Blocked showed 0 against 19. If `bd` cannot answer, the board falls back to status only. Totals, blocked, ready and mine counts now come from one place, so the sidebar, dashboard and epic breakdown agree.
 
-- Light and dark themes with a light/dark/system toggle in the header (persisted in `localStorage`, set before first paint); the light palette comes from the owner's patch. Fixed overlay colours now use theme tokens.
-- Optional registry fields `readonly` and `filterLabel` (validated in the TS and Rust loaders). A readonly project runs `scripts/readonly/bd-readonly` (REAL_BD, BD_FILTER_LABEL), shows a "Read-only" badge, hides write controls and refuses writes in the server functions and desktop commands. `filterLabel` is only honoured together with `readonly`. `pnpm test:readonly` exercises the shim.
-- Label filter chips on the board (multi-select, OR, `l` URL param) for every project; view filter only.
-- Bead detail modal: an Artifacts section showing `spec_id`, the `artifacts` metadata (JSON array of `{path, label, stage}`) and, for epics, children's artifacts, with an inline viewer (markdown, sandboxed HTML, images, json/txt) that refreshes on live-feed changes. `external_ref` is shown as an http(s) link or plain "Ref" text.
-- Artifact `path` may be an `http(s)://` URL: rendered as a "remote" external link (new tab, `rel="noopener noreferrer"`), never fetched or iframed; other schemes are shown as invalid.
-- `readArtifact` server function and `read_artifact` desktop command: project-confined (no `..`, absolute paths or symlink escapes), allow-listed extensions, 2 MB cap.
+#### Hierarchy and epics
+
+Hierarchy rows now show state: a status glyph and word, the open blocker a bead waits on, comment count, assignee and age. The tree starts collapsed, children are ordered in progress, open, deferred, closed, and the expanded set is remembered per project. Hierarchy uses the Board's filter bar and keeps the ancestor path of each match. Epics with no tasks yet stay on the Epics board as header-only lanes. Epic progress (closed/total, percent, breakdown) appears in swimlane headers and on every epic row.
+
+#### Closed window and bead ages
+
+Long-closed beads crowded the board. The Closed column, swimlanes, Hierarchy and lists now show beads closed in the last 7 days by default. Choose 1d, 7d, 30d, 90d or all (`closed=` in the URL, remembered locally). A "Show 240 closed before Oct 21" button reveals the rest. Cards and the bead modal show compact ages such as "created 12d ago", and completed epics show how long they took.
+
+#### Since you last looked
+
+Board and Hierarchy now have a band summarising what is new, closed, commented or updated since your last visit to the project, with a dot on changed cards and rows. Ages take comments into account, since a comment does not change a bead's `updated_at`.
+
+#### Read-only projects and label filters
+
+Projects in the registry can set `readonly` and `filterLabel`. A read-only project goes through a `bd-readonly` shim, shows a "Read-only" badge, hides create, edit, comment, delete and drag controls, and refuses writes in both the web server functions and the desktop commands. Separately, label filter chips on the board (multi-select, OR) work for every project.
+
+#### Bead artifacts
+
+The bead modal has an Artifacts section listing `spec_id`, the `artifacts` metadata and, for epics, the artifacts of its children. An inline viewer handles markdown, sandboxed HTML, images, json and txt, and refreshes with the live feed. Paths are confined to the project (no `..`, absolute paths or symlink escapes), limited to allowed extensions and capped at 2 MB. `http(s)` paths show as external links and are never fetched. `external_ref` shows as a link or plain text.
+
+#### Comments and the bead modal
+
+The comment box now says an agent sees a comment only when it next reads the bead, offers a copyable nudge command, and shows the author `bd` will record (`BD_BOARD_AUTHOR` overrides it). Closed beads get "Comment and reopen". Closing the modal restores browser history and focus, copy buttons cover id, command and nudge, and epic modals list open subtasks first with closed ones folded.
+
+#### Real links, keyboard and navigation
+
+Every bead opener is now a real link to `?bead=<id>`, so middle-click and copy-link work while plain click and drag still behave as before. `j`/`k` and arrow keys move through beads, `/` focuses search, and `?` lists the shortcuts. Search carries across tabs and projects, and lane collapse and scroll position are remembered.
+
+#### bd status and setup help
+
+A missing or too-old `bd` (minimum 1.3.0) now shows the install command and the `BD_BIN` setting, in web and desktop. The dashboard has a bd status card and the sidebar shows the bd version. Empty boards say why they are empty and offer the fix, and an empty Knowledge tab explains the comment prefix convention.
+
+#### Opt-in performance monitoring (RUM)
+
+The app can send real-user monitoring data to an OpenObserve instance. It is off by default and an invalid config keeps it off. A `standard` profile masks user input; a `full` profile passes everything through unmasked. Credentials and the client token are never sent. Desktop reads `~/.config/bd-board/rum.json`. Included are a source-map upload script, a dashboard generator, a setup script and README documentation. The app records cold load, the palette, `bd` calls, the modal, the live feed and router errors.
+
+#### Desktop
+
+`pnpm desktop:install` quits a running copy gracefully, copies the built app to /Applications (or ~/Applications) and opens it. The window has a minimum size of 960x600.
+
+#### Release automation
+
+Releases now go through a release-please Release PR with a version check, and the release notes are written by Claude. release-please left the version in `Cargo.lock` unchanged, so the release-notes workflow now sets it on the Release PR, and a follow-up fixed that sync step. The workflow also runs prettier on the generated `CHANGELOG.md`, so the Release PR passes `pnpm check`.
+
+- [#1](https://github.com/nyashkn/bd-board/pull/1)
+- [#4](https://github.com/nyashkn/bd-board/pull/4)
+- [#5](https://github.com/nyashkn/bd-board/pull/5)
+- [#6](https://github.com/nyashkn/bd-board/pull/6)
+
+### Fixes
+
+- **Bead edits from the web:** the modal's `{ project, id, update }` request was rejected with "No bead updates provided".
+- **Horizontal overflow:** project cards, the Projects header, stat grids and topbar tabs now fit narrow windows, which collapse tabs to icons below 900px. Long words, URLs, code blocks and tables wrap or scroll inside their own block.
+- **Bead modal:** the whole dialog scrolls below the `lg` breakpoint, and long titles and comments wrap.
+- **Since-you-last-looked:** the last-seen time is no longer rewritten when a view unmounts, which happened in StrictMode and on in-app navigation.
+
+### Smaller changes
+
+- **Closed-window note:** it is now a button that shows a date.
+- **Sidebar:** below 768px it is always the icon strip.
+- **Board toolbar:** clearer labels ("Group", "Filter: priority", "Sort: Priority"). Only the 8 most used label chips show, with the rest behind "+N more".
+- **Comment author:** comments pass `--actor` only when `BD_BOARD_AUTHOR` is set.
+
+### Missed recent releases
+
+<details>
+<summary>Previous versions</summary>
+
+| Version                                                          | Highlights                                                                                                                                |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [0.1.1](https://github.com/nyashkn/bd-board/releases/tag/v0.1.1) | TanStack Start and Router upgrade clearing three critical XSS advisories, no more "Repair Project" dialog in the browser, README demo GIF |
+| [0.1.0](https://github.com/nyashkn/bd-board/releases/tag/v0.1.0) | Live updates through `bd events tail --follow`, bd 1.3.0 now required, feed smoke test in CI, project registry loads in web builds        |
+
+</details>
 
 ## [0.1.1] - 2026-10-16
 
