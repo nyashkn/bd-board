@@ -114,6 +114,16 @@ describe('splitBeadRefs', () => {
     expect(refs('use `:::bead demo-abc` to link')).toEqual([])
     expect(refs('`:::bead demo-abc`')).toEqual([])
   })
+  it('does not transform a code span that spans lines', () => {
+    expect(refs('`foo\n:::bead a\n`')).toEqual([])
+    expect(refs('``foo ` bar\n:::bead a\nbaz``')).toEqual([])
+  })
+  it('a blank line ends an unclosed code span', () => {
+    expect(refs('`foo\n\n:::bead a')).toEqual([['a']])
+  })
+  it('a closed span does not block the next line', () => {
+    expect(refs('`foo`\n:::bead a')).toEqual([['a']])
+  })
   it('does not transform indented code or mid-line text', () => {
     expect(refs('    :::bead demo-abc')).toEqual([])
     expect(refs('see :::bead demo-abc')).toEqual([])
@@ -125,8 +135,45 @@ describe('splitBeadRefs', () => {
     expect(refs(':::bead\n```\n:::')).toEqual([])
     expect(refs(':::bead\n:::bead demo-a')).toEqual([['demo-a']])
   })
-  it('keeps CRLF-free line structure of surrounding text', () => {
-    const segs = splitBeadRefs('a\n\nb\n:::bead demo-a\n\nc')
-    expect(segs.map((s) => s.type)).toEqual(['text', 'refs', 'text'])
+  it('handles CRLF input', () => {
+    const segs = splitBeadRefs(
+      'a\r\n:::bead demo-a demo-b\r\nc\r\n:::bead\r\ndemo-c\r\n:::\r\n',
+    )
+    expect(segs.map((s) => s.type)).toEqual([
+      'text',
+      'refs',
+      'text',
+      'refs',
+      'text',
+    ])
+    expect(refs('a\r\n:::bead demo-a demo-b\r\n')).toEqual([
+      ['demo-a', 'demo-b'],
+    ])
+    expect(refs(':::bead demo-a :::\r\n')).toEqual([['demo-a']])
+  })
+  it('consumes a stray closer right after a directive', () => {
+    expect(splitBeadRefs(':::bead demo-a\n:::\nafter')).toEqual([
+      { type: 'refs', ids: ['demo-a'] },
+      { type: 'text', text: 'after' },
+    ])
+    expect(splitBeadRefs(':::bead\ndemo-a\n:::\n:::\nafter')).toEqual([
+      { type: 'refs', ids: ['demo-a'] },
+      { type: 'text', text: 'after' },
+    ])
+  })
+  it('keeps a lone closer that does not follow a directive', () => {
+    expect(splitBeadRefs('x\n:::')).toEqual([{ type: 'text', text: 'x\n:::' }])
+  })
+  it.each([50_000, 100_000])('is linear on adversarial input (%i)', (n) => {
+    const inputs = [
+      ':::bead a' + ' '.repeat(n) + 'x!',
+      ':::bead a' + ' '.repeat(n) + ':::x',
+      ':::bead' + ' '.repeat(n),
+      ':::bead ' + 'a '.repeat(n / 2) + '!',
+      ':::bead\n' + 'a\n'.repeat(n / 2),
+    ]
+    const t = performance.now()
+    for (const md of inputs) splitBeadRefs(md)
+    expect(performance.now() - t).toBeLessThan(100)
   })
 })

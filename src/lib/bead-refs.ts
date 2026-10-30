@@ -5,9 +5,10 @@ export type BeadRefSegment =
   | { type: 'text'; text: string }
   | { type: 'refs'; ids: string[] }
 
-const OPEN_RE = /^ {0,3}:::bead(?:\s+(.*?))?\s*$/
+// Matched against right-trimmed lines only: no lazy group followed by \s*$, which backtracks quadratically.
+const OPEN_RE = /^ {0,3}:::bead(?:\s+(.*))?$/
 const FENCE_RE = /^ {0,3}(`{3,}|~{3,})/
-const CLOSE_RE = /^ {0,3}:::\s*$/
+const CLOSE_RE = /^ {0,3}:::$/
 
 /** Ids from a space/comma separated list, or null when empty or any token is not a bead id. */
 function parseIds(list: string): string[] | null {
@@ -21,7 +22,7 @@ function parseIds(list: string): string[] | null {
  * malformed or unterminated stays text, and fenced code is never touched.
  */
 export function splitBeadRefs(markdown: string): BeadRefSegment[] {
-  const lines = markdown.split('\n')
+  const lines = markdown.split('\n').map((l) => l.trimEnd())
   const out: BeadRefSegment[] = []
   let text: string[] = []
   const flush = () => {
@@ -30,6 +31,8 @@ export function splitBeadRefs(markdown: string): BeadRefSegment[] {
   }
 
   let fence: { char: string; len: number } | null = null
+  // Length of the backtick run of an inline code span left open on a previous line (0 = none).
+  let span = 0
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     const f = FENCE_RE.exec(line)
@@ -38,23 +41,24 @@ export function splitBeadRefs(markdown: string): BeadRefSegment[] {
         f &&
         f[1][0] === fence.char &&
         f[1].length >= fence.len &&
-        line.trim() === f[1]
+        line === f[1]
       )
         fence = null
       text.push(line)
       continue
     }
-    if (f) {
+    if (f && !span) {
       fence = { char: f[1][0], len: f[1].length }
       text.push(line)
       continue
     }
 
-    const m = OPEN_RE.exec(line)
+    const m = span ? null : OPEN_RE.exec(line)
     let ids: string[] | null = null
     let end = i
     if (m) {
-      const rest = ((m[1] as string | undefined) ?? '').replace(/\s*:::$/, '')
+      let rest = (m[1] as string | undefined) ?? ''
+      if (rest.endsWith(':::')) rest = rest.slice(0, -3).trimEnd()
       if (rest) ids = parseIds(rest)
       else if (!m[1]) {
         // Block form: id lines up to a closing `:::`; never runs past a fence or another directive.
@@ -75,12 +79,24 @@ export function splitBeadRefs(markdown: string): BeadRefSegment[] {
     }
     if (!ids) {
       text.push(line)
+      span = line ? scanSpan(line, span) : 0 // a blank line ends the paragraph, and the span
       continue
     }
     flush()
     out.push({ type: 'refs', ids })
     i = end
+    // A lone `:::` right after a directive is its closer, not text.
+    if (i + 1 < lines.length && CLOSE_RE.test(lines[i + 1])) i++
   }
   flush()
   return out
+}
+
+/** Backtick-run length of the code span still open at the end of `line` (0 = closed). */
+function scanSpan(line: string, open: number): number {
+  for (const run of line.match(/`+/g) ?? []) {
+    if (open === 0) open = run.length
+    else if (run.length === open) open = 0
+  }
+  return open
 }

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 
 import { BeadLink } from '@/components/bead-link'
@@ -26,7 +26,7 @@ export function BeadMarkdown({
   children: string
   resolveBead: (id: string) => Bead | undefined
 }) {
-  const segments = splitBeadRefs(children)
+  const segments = useMemo(() => splitBeadRefs(children), [children])
   if (segments.every((s) => s.type === 'text')) {
     return <Markdown>{children}</Markdown>
   }
@@ -81,6 +81,8 @@ export function BeadRefChip({ id, bead }: { id: string; bead?: Bead }) {
       <PopoverAnchor asChild>
         <span
           className="inline-flex max-w-full"
+          // Esc inside 250 ms must cancel the pending open (an open card is closed by Radix).
+          onKeyDown={(e) => e.key === 'Escape' && clearTimeout(timer.current)}
           // Touch has no hover: a tap just follows the link.
           onPointerEnter={(e) => e.pointerType !== 'touch' && show()}
           onPointerLeave={hide}

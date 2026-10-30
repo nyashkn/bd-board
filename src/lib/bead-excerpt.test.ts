@@ -25,4 +25,24 @@ describe('descriptionExcerpt', () => {
     const out = descriptionExcerpt('x'.repeat(300), 3, 10)
     expect(out).toBe(`${'x'.repeat(10)}…`)
   })
+  it('keeps underscores inside words', () => {
+    expect(descriptionExcerpt('use snake_case and demo_2 here')).toBe(
+      'use snake_case and demo_2 here',
+    )
+  })
+  it('strips emphasis underscores at word edges', () => {
+    expect(descriptionExcerpt('an _emphasised_ word')).toBe(
+      'an emphasised word',
+    )
+  })
+  it('reduces a link to its text', () => {
+    expect(
+      descriptionExcerpt('see [the doc](https://example.com/x_y) now'),
+    ).toBe('see the doc now')
+  })
+  it('drops directive lines', () => {
+    expect(descriptionExcerpt('before\n:::bead demo-abc\n:::\nafter')).toBe(
+      'before\nafter',
+    )
+  })
 })

@@ -14,12 +14,13 @@ export interface World {
   home: string
   /** Sentinel text of the file the escaping artifact path points at. */
   outsideSecret: string
-  art: {
+  art: { id: string; dir: string; bead: string }
+  /** Own project so other specs' bead counts stay unchanged. */
+  ref: {
     id: string
     dir: string
+    /** Description holds a `:::bead` directive pointing at `target`. */
     bead: string
-    /** Bead whose description holds a `:::bead` directive pointing at `target`. */
-    refBead: string
     target: string
     targetTitle: string
   }
@@ -113,8 +114,9 @@ export function createWorld(): World {
     JSON.stringify({ artifacts: JSON.stringify(artifacts) }),
   ])
 
+  const refs = initProject(root, home, 'refs')
   const targetTitle = 'Referenced target bead'
-  const target = bd(art, home, [
+  const target = bd(refs, home, [
     'create',
     '--title',
     targetTitle,
@@ -122,7 +124,7 @@ export function createWorld(): World {
     'Target description line.',
     '--silent',
   ])
-  const refBead = bd(art, home, [
+  const refBead = bd(refs, home, [
     'create',
     '--title',
     'Bead with a reference',
@@ -193,6 +195,7 @@ export function createWorld(): World {
       version: 1,
       projects: [
         { id: 'art', path: art, label: 'art' },
+        { id: 'refs', path: refs, label: 'refs' },
         { id: 'ro', path: ro, label: 'ro', readonly: true },
         {
           id: 'rof',
@@ -209,7 +212,8 @@ export function createWorld(): World {
     root,
     home,
     outsideSecret: OUTSIDE_SECRET,
-    art: { id: 'art', dir: art, bead: artBead, refBead, target, targetTitle },
+    art: { id: 'art', dir: art, bead: artBead },
+    ref: { id: 'refs', dir: refs, bead: refBead, target, targetTitle },
     ro: { id: 'ro', dir: ro, bead: roBead, described },
     rof: { id: 'rof', dir: rof, wo, child, other },
     ask: { id: 'ask', dir: ask, bead: askBead },

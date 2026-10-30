@@ -8,11 +8,14 @@ export function descriptionExcerpt(
     .split('\n')
     .map((l) =>
       l
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
         .replace(/^\s*(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/, '')
-        .replace(/[`*_]/g, '')
+        .replace(/[`*]/g, '')
+        // Emphasis underscores only at word edges: snake_case and ids keep theirs.
+        .replace(/(^|\W)_+|_+(?=\W|$)/g, '$1')
         .trim(),
     )
-    .filter((l) => l && !/^(?:```|~~~)/.test(l))
+    .filter((l) => l && !/^(?:```|~~~|:::)/.test(l))
   const joined = lines.slice(0, maxLines).join('\n')
   const cut = joined.length > maxChars || lines.length > maxLines
   return cut ? `${joined.slice(0, maxChars).trimEnd()}…` : joined
