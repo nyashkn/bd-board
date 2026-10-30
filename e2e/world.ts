@@ -14,7 +14,15 @@ export interface World {
   home: string
   /** Sentinel text of the file the escaping artifact path points at. */
   outsideSecret: string
-  art: { id: string; dir: string; bead: string }
+  art: {
+    id: string
+    dir: string
+    bead: string
+    /** Bead whose description holds a `:::bead` directive pointing at `target`. */
+    refBead: string
+    target: string
+    targetTitle: string
+  }
   ro: { id: string; dir: string; bead: string; described: string }
   rof: { id: string; dir: string; wo: string; child: string; other: string }
   /** Created but NOT in the registry: a spec registers it itself, so project and bead counts elsewhere hold. */
@@ -105,6 +113,24 @@ export function createWorld(): World {
     JSON.stringify({ artifacts: JSON.stringify(artifacts) }),
   ])
 
+  const targetTitle = 'Referenced target bead'
+  const target = bd(art, home, [
+    'create',
+    '--title',
+    targetTitle,
+    '--description',
+    'Target description line.',
+    '--silent',
+  ])
+  const refBead = bd(art, home, [
+    'create',
+    '--title',
+    'Bead with a reference',
+    '--description',
+    `See also:\n\n:::bead ${target} demo-missing`,
+    '--silent',
+  ])
+
   const ro = initProject(root, home, 'ro')
   const roBead = bd(ro, home, [
     'create',
@@ -183,7 +209,7 @@ export function createWorld(): World {
     root,
     home,
     outsideSecret: OUTSIDE_SECRET,
-    art: { id: 'art', dir: art, bead: artBead },
+    art: { id: 'art', dir: art, bead: artBead, refBead, target, targetTitle },
     ro: { id: 'ro', dir: ro, bead: roBead, described },
     rof: { id: 'rof', dir: rof, wo, child, other },
     ask: { id: 'ask', dir: ask, bead: askBead },
