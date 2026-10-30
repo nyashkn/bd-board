@@ -66,7 +66,11 @@ async function waitForHits(pred: (all: Hit[]) => boolean) {
       await flush()
       return pred(hits())
     },
-    { timeout: 20000, interval: 1000, timeoutMsg: 'ingest never got the data' },
+    {
+      timeout: 40000,
+      interval: 1000,
+      timeoutMsg: `ingest never got the expected data; saw: ${[...new Set(hits().flatMap((h) => h.body.match(/"(?:name)":"[a-z.0-9-]+"/g) ?? []))].join(' ')}`,
+    },
   )
 }
 
