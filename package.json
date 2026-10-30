@@ -55,7 +55,8 @@
     "e2e": "wdio run ./e2e/wdio.conf.ts",
     "e2e:feed": "wdio run ./e2e/wdio.feed.conf.ts",
     "e2e:browser": "wdio run ./e2e/wdio.browser.conf.ts",
-    "e2e:fixture": "wdio run ./e2e/wdio.fixture.conf.ts"
+    "e2e:fixture": "wdio run ./e2e/wdio.fixture.conf.ts",
+    "e2e:rum": "E2E_FIXTURE_PORT=${E2E_FIXTURE_PORT:-3062} wdio run ./e2e/wdio.rum.conf.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",
