@@ -35,6 +35,21 @@ export async function resetApp(path = '/'): Promise<void> {
       timeoutMsg: `app did not settle on ${path}`,
     },
   )
+  await disableMotion()
+}
+
+/**
+ * The harness window is often occluded by the owner's foreground app, and
+ * WebKit then never advances CSS transitions: the sidebar's `w-12` class lands
+ * but its computed width stays 232px. Kill transitions so layout is instant.
+ */
+export async function disableMotion(): Promise<void> {
+  await browser.execute(() => {
+    const style = document.createElement('style')
+    style.textContent =
+      '*,*::before,*::after{transition:none!important;animation:none!important}'
+    document.head.appendChild(style)
+  })
 }
 
 export async function sidebarWidth(): Promise<number> {
