@@ -17,7 +17,7 @@ release.yml publishes that section as the GitHub release body, so write for a re
 ## Layout (keep this order)
 
 1. The existing `## [X.Y.Z](compare link) (date)` heading, unchanged.
-2. One theme paragraph, 1-3 sentences: what the release is about, how many PRs, any outside contributors.
+2. One theme paragraph, 1-3 sentences: what the release is about, how many PRs.
 3. `### What's New`: one `####` subsection per user-visible feature. Heading names the feature, not the PR title. Then 1-4 sentences: the problem before, what changed, what the user sees. End with PR links, `- [#N](url)`.
 4. `### Fixes`: bold-titled bullets, one line each, PR link at the end.
 5. `### Smaller changes`: bold-titled bullets for anything minor. Drop pure test, chore and docs commits.
@@ -30,7 +30,6 @@ Install instructions are appended by release.yml. Do not write them.
 - Plain words. Say what it does, in concrete terms.
 - Banned: exciting, game-changing, seamless, powerful, robust, leverage.
 - No closing zinger. At most two em dashes in the whole section.
-- Credit outside contributors with a bare `@username` (not a link) next to their PR.
 - No private project names, local paths, hostnames, tokens or internal ticket ids. This repo is public.
 
 ## Check before saving

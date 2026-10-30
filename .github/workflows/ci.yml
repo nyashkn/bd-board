@@ -36,6 +36,7 @@ jobs:
       - run: pnpm check
       - run: pnpm exec eslint --max-warnings=0
       - run: pnpm test
+      - run: node scripts/check-release-version.mjs
 
   feed-smoke:
     name: feed smoke (bd ${{ matrix.bd }})
