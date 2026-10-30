@@ -151,7 +151,7 @@ For **backup or occasional sync only**. Every machine keeps a full local replica
 
 - **Conflicts.** Two replicas that edit the same bead between syncs conflict. The pull exits 1 (`CONFLICT … in issues`) and writes on that replica fail until a human resolves it.
 - **Credentials** are needed on every machine (`dolt` takes them from the standard AWS chain, for example `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; never in the url).
-- **Schema upgrades** must be run on one machine only (`bd migrate --force` on the single designated migrator, then publish). Migrating two clones separately forks the schema and the next pull cannot merge (`bd migrate --help`).
+- **Schema upgrades** must be run on one machine only (run `bd migrate` on the single designated migrator, then publish; see `bd migrate --help` before adding any flag). Migrating two clones separately forks the schema and the next pull cannot merge (`bd migrate --help`).
 - Something other than bd-board must run the sync on a timer.
 
 ### 3. An http snapshot (R2 plus a Worker)
