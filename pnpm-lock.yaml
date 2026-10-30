@@ -36,6 +36,12 @@ importers:
       '@fontsource-variable/geist-mono':
         specifier: 5.3.0
         version: 5.3.0
+      '@openobserve/browser-rum':
+        specifier: 0.4.3
+        version: 0.4.3
+      '@openobserve/browser-rum-slim':
+        specifier: 0.4.3
+        version: 0.4.3
       '@tanstack/react-query':
         specifier: 5.104.3
         version: 5.104.3(react@19.3.0)
@@ -935,6 +941,31 @@ packages:
   '@oozcitak/util@10.0.0':
     resolution: {integrity: sha512-hAX0pT/73190NLqBPPWSdBVGtbY6VOhWYK3qqHqtXQ1gK7kS2yz4+ivsN07hpJ6I3aeMtKP6J6npsEKOAzuTLA==}
     engines: {node: '>=20.0'}
+
+  '@openobserve/browser-core@0.4.3':
+    resolution: {integrity: sha512-kfe+SWEs9YlhpmdTBAgNyMOurvUlLkghIlUwUhkWaJ+xqTAEcS862tN7awm+QnTsAVzA5QObpfjVfb7j5UdB0w==}
+
+  '@openobserve/browser-rum-core@0.4.3':
+    resolution: {integrity: sha512-nLeG/1VWZrqWNw3DVTg1TnH8Q/8R8rWaK5jghzl8/H9q+l+k0eH99DUoDNRWqEj6vkkrbnuQsobn+VWWzyNEwg==}
+
+  '@openobserve/browser-rum-slim@0.4.3':
+    resolution: {integrity: sha512-0oeAoVfvmeR8+4aveT9C0/mxT8YonJdX1WbUZ8A4KJI2jbchrasF5zPbMbhkw8KYmGXtkBohNui9i3mTNtI6ZQ==}
+    peerDependencies:
+      '@openobserve/browser-logs': 0.4.3
+    peerDependenciesMeta:
+      '@openobserve/browser-logs':
+        optional: true
+
+  '@openobserve/browser-rum@0.4.3':
+    resolution: {integrity: sha512-aRhI0SWJ0VFLduHaRQG0WSjOpXfxm2QatIx20MlRgefykds+s1jhMr0jbNyHmhSofiNgoml/DZ0nep8e6l8Ntw==}
+    peerDependencies:
+      '@openobserve/browser-logs': 0.4.3
+    peerDependenciesMeta:
+      '@openobserve/browser-logs':
+        optional: true
+
+  '@openobserve/js-core@0.4.3':
+    resolution: {integrity: sha512-TLxcxYzbkmyM+2YCiS6KvAP769HZxBRwhsvTvHD9EqLLgq0wEkQ7sc9ZS55JXM5sZGK/84EAy8CPz/EfMpIdCw==}
 
   '@oxc-project/types@0.144.0':
     resolution: {integrity: sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg==}
@@ -7083,6 +7114,28 @@ snapshots:
       '@oozcitak/util': 10.0.0
 
   '@oozcitak/util@10.0.0': {}
+
+  '@openobserve/browser-core@0.4.3':
+    dependencies:
+      '@openobserve/js-core': 0.4.3
+
+  '@openobserve/browser-rum-core@0.4.3':
+    dependencies:
+      '@openobserve/browser-core': 0.4.3
+      '@openobserve/js-core': 0.4.3
+
+  '@openobserve/browser-rum-slim@0.4.3':
+    dependencies:
+      '@openobserve/browser-core': 0.4.3
+      '@openobserve/browser-rum-core': 0.4.3
+
+  '@openobserve/browser-rum@0.4.3':
+    dependencies:
+      '@openobserve/browser-core': 0.4.3
+      '@openobserve/browser-rum-core': 0.4.3
+      '@openobserve/js-core': 0.4.3
+
+  '@openobserve/js-core@0.4.3': {}
 
   '@oxc-project/types@0.144.0': {}
 

@@ -1,6 +1,7 @@
 import { createRouter as createTanStackRouter } from '@tanstack/react-router'
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query'
 import { routeTree } from './routeTree.gen'
+import { rumError } from './lib/rum'
 import { getContext } from './integrations/tanstack-query/root-provider'
 
 // Loaded only in e2e builds (VITE_WDIO=1): enables browser.tauri.execute(),
@@ -18,6 +19,7 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
+    defaultOnCatch: (error) => rumError(error, { boundary: 'router' }),
   })
 
   setupRouterSsrQueryIntegration({ router, queryClient: context.queryClient })
