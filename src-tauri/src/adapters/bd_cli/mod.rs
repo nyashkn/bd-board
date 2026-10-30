@@ -6,11 +6,12 @@ mod probe;
 mod projects;
 mod queue;
 mod reads;
+mod snapshot;
 mod writes;
 
 use crate::domain::{
-    AddProjectOutcome, Bead, BeadDetail, BeadUpdateInput, BeadsLocation, CommentAuthor, DoltProbe,
-    PathStatus, Project, ProjectKnowledge,
+    AddProjectOutcome, Bead, BeadDetail, BeadUpdateInput, BeadsLocation, Comment, CommentAuthor,
+    DoltProbe, PathStatus, Project, ProjectKnowledge, ProjectSnapshot,
 };
 use crate::ports::{BeadSink, BeadSource, ProjectAdmin};
 
@@ -31,6 +32,19 @@ impl BeadSource for BdCli {
 
     fn project_knowledge(&self, project_id: &str) -> Result<ProjectKnowledge, String> {
         reads::get_project_knowledge_inner(project_id)
+    }
+
+    fn snapshot(&self, project_id: &str, background: bool) -> Result<ProjectSnapshot, String> {
+        snapshot::snapshot_inner(project_id, background)
+    }
+
+    fn bead_comments(
+        &self,
+        project_id: &str,
+        id: &str,
+        background: bool,
+    ) -> Result<Vec<Comment>, String> {
+        snapshot::bead_comments_inner(project_id, id, background)
     }
 }
 

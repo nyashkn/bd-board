@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import {
@@ -22,7 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { BeadLinkButton } from '@/components/bead-link'
 import { InteractiveRow } from '@/components/ui/interactive-row'
-import { projectKnowledgeQueryOptions } from '@/lib/query-options'
+import { useKnowledge } from '@/hooks/use-snapshot'
 import {
   KNOWLEDGE_TYPES,
   KNOWLEDGE_TYPE_BG_CLASS as K_BG_CLASS,
@@ -120,10 +119,7 @@ export function KnowledgeDetailModal({
   beadsById,
   onOpenKnowledge,
 }: KnowledgeDetailModalProps) {
-  const query = useQuery({
-    ...projectKnowledgeQueryOptions(project),
-    enabled: open,
-  })
+  const query = useKnowledge(project, open)
 
   const knowledge = query.data?.knowledge ?? []
   const entry = knowledgeId

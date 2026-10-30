@@ -112,6 +112,8 @@ function createRouter(project: string): Connector {
     listBeads: (a) => run((c) => c.listBeads(a)),
     beadDetail: (a) => run((c) => c.beadDetail(a)),
     projectKnowledge: (a) => run((c) => c.projectKnowledge(a)),
+    snapshot: (a) => run((c) => c.snapshot(a)),
+    beadComments: (a) => run((c) => c.beadComments(a)),
     readArtifact: (a) => run((c) => c.readArtifact(a)),
     commentAuthor: (a) => run((c) => c.commentAuthor(a)),
     addComment: (a) => run((c) => c.addComment(a), { retry: false }),

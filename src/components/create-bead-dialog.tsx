@@ -23,6 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { connectorFor } from '@/lib/core'
+import { insertBead } from '@/lib/snapshot'
+import { patchSnapshot, settleWrite } from '@/lib/snapshot-store'
 
 import type { Bead } from '@/lib/types'
 
@@ -67,6 +69,12 @@ export function CreateBeadDialog({
     setParent(lockedParent ? lockedParent.id : NO_PARENT)
   }
 
+  const parentId = lockedParent
+    ? lockedParent.id
+    : type !== 'epic' && parent !== NO_PARENT
+      ? parent
+      : undefined
+
   const mutation = useMutation({
     mutationFn: () =>
       connectorFor(project).createBead({
@@ -75,16 +83,31 @@ export function CreateBeadDialog({
           title: title.trim(),
           description: description.trim() || undefined,
           type,
-          parent: lockedParent
-            ? lockedParent.id
-            : type !== 'epic' && parent !== NO_PARENT
-              ? parent
-              : undefined,
+          parent: parentId,
         },
       }),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       toast.success(`Bead ${res.id} created`)
-      queryClient.invalidateQueries({ queryKey: ['beads', project] })
+      const now = new Date().toISOString()
+      await patchSnapshot(queryClient, project, (s) =>
+        insertBead(s, {
+          id: res.id,
+          title: title.trim(),
+          description: description.trim() || undefined,
+          status: 'open',
+          priority: 2,
+          issue_type: type,
+          created_at: now,
+          updated_at: now,
+          labels: [],
+          parent: parentId,
+          comments: [],
+          edges: parentId
+            ? [{ from: res.id, to: parentId, type: 'parent-child' }]
+            : [],
+        }),
+      )
+      settleWrite(queryClient, project)
       reset()
       onOpenChange(false)
     },

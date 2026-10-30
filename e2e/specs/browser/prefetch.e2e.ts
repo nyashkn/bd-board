@@ -1,4 +1,4 @@
-import { fakeProject, resetBrowserApp } from '../../helpers.js'
+import { fakeProject, fakeSnapshot, resetBrowserApp } from '../../helpers.js'
 
 describe('beads query prefetch on hover', () => {
   const testProject = fakeProject('prefetch-test', 'Prefetch Test')
@@ -6,22 +6,21 @@ describe('beads query prefetch on hover', () => {
   beforeEach(async () => {
     await resetBrowserApp('/', {
       list_projects: [testProject],
-      list_beads: [
+      get_project_snapshot: fakeSnapshot([
         {
           id: 'bead-1',
-          project: testProject.id,
           title: 'Test bead',
           status: 'open',
           assignee: null,
         },
-      ],
+      ]),
       desktop_probe: null,
       check_project_path: { kind: 'valid', external: true },
     })
     await $('nav[aria-label="Projects"] li a').waitForExist({ timeout: 20000 })
   })
 
-  it('prefetches beads query when hovering over project card', async () => {
+  it('prefetches the project snapshot when hovering over project card', async () => {
     const projectLink = await $('a[href="/p/prefetch-test"]')
     await projectLink.moveTo()
 
@@ -32,7 +31,7 @@ describe('beads query prefetch on hover', () => {
           (
             window as any
           ).__TSR_ROUTER__?.options?.context?.queryClient?.getQueryState([
-            'beads',
+            'snapshot',
             'prefetch-test',
           ]),
         )
@@ -47,7 +46,7 @@ describe('beads query prefetch on hover', () => {
         (
           window as any
         ).__TSR_ROUTER__?.options?.context?.queryClient?.getQueryState([
-          'beads',
+          'snapshot',
           'prefetch-test',
         ])?.status,
     )
@@ -61,7 +60,7 @@ describe('beads query prefetch on hover', () => {
     )
   })
 
-  it('prefetches beads query when hovering over project link in sidebar', async () => {
+  it('prefetches the project snapshot when hovering over project link in sidebar', async () => {
     const sidebarProjectLink = await $(
       'aside nav li a[href="/p/prefetch-test"]',
     )
@@ -74,7 +73,7 @@ describe('beads query prefetch on hover', () => {
           (
             window as any
           ).__TSR_ROUTER__?.options?.context?.queryClient?.getQueryState([
-            'beads',
+            'snapshot',
             'prefetch-test',
           ]),
         )
@@ -89,7 +88,7 @@ describe('beads query prefetch on hover', () => {
         (
           window as any
         ).__TSR_ROUTER__?.options?.context?.queryClient?.getQueryState([
-          'beads',
+          'snapshot',
           'prefetch-test',
         ])?.status,
     )

@@ -81,6 +81,28 @@ export function parseProjectInput(input: unknown): { project: string } {
   }
 }
 
+/** `background`: a refresh nobody waits on, so it yields to user calls in the bd queue. */
+export function parseSnapshotInput(input: unknown): {
+  project: string
+  background: boolean
+} {
+  return {
+    ...parseProjectInput(input),
+    background: record(input)['background'] === true,
+  }
+}
+
+export function parseBeadCommentsInput(input: unknown): {
+  project: string
+  id: string
+  background: boolean
+} {
+  return {
+    ...parseBeadInput(input),
+    background: record(input)['background'] === true,
+  }
+}
+
 export function parseBeadInput(input: unknown): {
   project: string
   id: string

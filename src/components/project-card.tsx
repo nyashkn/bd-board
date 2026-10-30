@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { ArrowUpRight, MoreVertical } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { connectorFor } from '@/lib/core'
+import { snapshotQueryOptions } from '@/lib/snapshot-store'
 
 import { ProgressRing } from '@/components/progress-ring'
 import { ReadonlyBadge } from '@/components/readonly-badge'
@@ -106,11 +106,7 @@ export function ProjectCard({ project }: { project: Project }) {
         params={{ project: project.id }}
         onMouseEnter={() =>
           queryClient.prefetchQuery({
-            queryKey: ['beads', project.id],
-            queryFn: () =>
-              connectorFor(project.id).listBeads({
-                data: { project: project.id },
-              }),
+            ...snapshotQueryOptions(project.id),
             staleTime: 3000,
           })
         }

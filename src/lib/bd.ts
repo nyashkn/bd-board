@@ -3,6 +3,7 @@ import { promisify } from 'node:util'
 import * as fsSync from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { BdAdapter } from './bd-contract.ts'
 import type {
@@ -20,6 +21,9 @@ import type {
 } from './types.ts'
 import { summarizeBeads } from './counts.ts'
 import { parseKnowledgeCommentText } from './knowledge.ts'
+import { coalesced } from './coalesce.ts'
+import { COMMENTS_LIMIT, KNOWLEDGE_LIMIT, deriveChildren } from './snapshot.ts'
+import type { ProjectSnapshot, SnapshotBead } from './snapshot.ts'
 import { loadRegistry } from './registry.ts'
 import {
   applyProbeConcurrency,
@@ -48,8 +52,7 @@ const execFileAsync = promisify(execFile)
 
 const BD_FALLBACK = '/opt/homebrew/bin/bd'
 const MAX_BUFFER = 64 * 1024 * 1024
-export const COMMENTS_LIMIT = 250
-export const KNOWLEDGE_LIMIT = 500
+export { COMMENTS_LIMIT, KNOWLEDGE_LIMIT }
 
 function bdCandidates(): string[] {
   const candidates: string[] = []
@@ -667,31 +670,6 @@ export function buildBeadGraph(
   )
 }
 
-function deriveChildren(beads: Bead[]): Bead[] {
-  const childMap = new Map<string, string[]>()
-  for (const b of beads) {
-    if (b.parent) {
-      const list = childMap.get(b.parent) ?? []
-      list.push(b.id)
-      childMap.set(b.parent, list)
-    }
-  }
-
-  const beadById = new Map(beads.map((b) => [b.id, b]))
-
-  return beads.map((b) => {
-    const childIds = childMap.get(b.id)
-    if (!childIds?.length) return b
-    return {
-      ...b,
-      children: childIds,
-      childBeads: childIds
-        .map((id) => beadById.get(id))
-        .filter((x): x is Bead => x !== undefined),
-    }
-  })
-}
-
 // bd metadata is a flat object; keep string values only (artifacts is JSON text).
 function stringMetadata(value: unknown): Record<string, string> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return
@@ -800,6 +778,30 @@ async function listBeadsIn(
   return buildBeadGraph(raw, { blocked, ready })
 }
 
+/** Pure: `bd show <id> --json` (first element) plus `bd comments <id> --json` to the detail. */
+export function buildBeadDetail(
+  raw: Record<string, unknown>,
+  rawComments: Record<string, unknown>[],
+): BeadDetail {
+  const rawDeps = Array.isArray(raw['dependencies'])
+    ? (raw['dependencies'] as Record<string, unknown>[])
+    : []
+
+  const dependencies: RelatedBead[] = rawDeps.map((d) => ({
+    id: String(d['id'] ?? ''),
+    title: String(d['title'] ?? ''),
+    status: String(d['status'] ?? 'open'),
+    issue_type: String(d['issue_type'] ?? 'task'),
+    dependency_type: String(d['dependency_type'] ?? ''),
+  }))
+
+  return {
+    ...mapRawBead(raw),
+    dependencies,
+    comments: rawComments.map(mapComment),
+  }
+}
+
 async function getBeadDetail(
   projectId: string,
   id: string,
@@ -814,31 +816,104 @@ async function getBeadDetail(
     '--json',
   ])
   const raw = rawArr[0] ?? {}
-  const bead = mapRawBead(raw)
   const rawComments =
-    bead.comment_count === 0
+    mapRawBead(raw).comment_count === 0
       ? []
       : await bdJson<Record<string, unknown>[]>(dir, [
           'comments',
           id,
           '--json',
         ]).catch(() => [] as Record<string, unknown>[])
+  return buildBeadDetail(raw, rawComments)
+}
 
-  const rawDeps = Array.isArray(raw['dependencies'])
-    ? (raw['dependencies'] as Record<string, unknown>[])
-    : []
+function parseJsonRows(raw: string | undefined): IdRow[] | null {
+  try {
+    const text = raw?.trim()
+    if (text === undefined) return null
+    return text ? (JSON.parse(text) as IdRow[]) : []
+  } catch {
+    return null
+  }
+}
 
-  const dependencies: RelatedBead[] = rawDeps.map((d) => ({
-    id: String(d['id'] ?? ''),
-    title: String(d['title'] ?? ''),
-    status: String(d['status'] ?? 'open'),
-    issue_type: String(d['issue_type'] ?? 'task'),
-    dependency_type: String(d['dependency_type'] ?? ''),
+/** Pure: the three bd outputs (raw text) to a snapshot. `ready`/`blocked` undefined = bd failed. */
+export function buildSnapshot(
+  exported: string,
+  ready: string | undefined,
+  blocked: string | undefined,
+): ProjectSnapshot {
+  const rows = exported
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+  const beads: SnapshotBead[] = rows.map((raw) => ({
+    ...mapRawBead(raw),
+    comments: (Array.isArray(raw['comments'])
+      ? (raw['comments'] as Record<string, unknown>[])
+      : []
+    ).map(mapComment),
+    edges: parseDependencyEdges(raw),
   }))
+  const readyRows = parseJsonRows(ready)
+  const blockedRows = parseJsonRows(blocked)
+  return {
+    beads,
+    ready: readyRows && readyRows.map((r) => String(r['id'])),
+    blocked:
+      blockedRows &&
+      blockedRows.map((r) => ({
+        id: String(r['id']),
+        blocked_by: Array.isArray(r['blocked_by'])
+          ? (r['blocked_by'] as unknown[]).filter(
+              (x): x is string => typeof x === 'string',
+            )
+          : [],
+      })),
+    cursor: createHash('sha1')
+      .update(`${exported}\0${ready ?? ''}\0${blocked ?? ''}`)
+      .digest('hex')
+      .slice(0, 16),
+  }
+}
 
-  const comments: Comment[] = rawComments.map(mapComment)
+/**
+ * Everything the UI reads, from three bd calls run one after another (parallel is slower on the
+ * embedded lock). Concurrent callers for a project share one run, see coalesce.ts.
+ */
+async function getSnapshot(
+  projectId: string,
+  background = false,
+): Promise<ProjectSnapshot> {
+  const dir = await resolveDir(projectId)
+  // shortcut: a run's lane is its first caller's; a user caller joining a background run waits in
+  // that lane. Upgrade if RUM shows it matters.
+  const lane: Priority = background ? 'background' : 'user'
+  return coalesced(dir, async () => {
+    const exported = await bdRaw(dir, ['export'], lane)
+    // ready/blocked are optional: an old bd leaves them undefined and the UI falls back to status.
+    const ready = await bdRaw(dir, ['ready', '--json', '-n', '0'], lane).catch(
+      () => undefined,
+    )
+    const blocked = await bdRaw(dir, ['blocked', '--json'], lane).catch(
+      () => undefined,
+    )
+    return buildSnapshot(exported, ready, blocked)
+  })
+}
 
-  return { ...bead, dependencies, comments }
+async function getBeadComments(
+  projectId: string,
+  id: string,
+  background = false,
+): Promise<Comment[]> {
+  const rows = await bdJson<Record<string, unknown>[]>(
+    await resolveDir(projectId),
+    ['comments', id, '--json'],
+    background ? 'background' : 'user',
+  )
+  return rows.map(mapComment)
 }
 
 export function buildProjectKnowledge(
@@ -1066,6 +1141,8 @@ export const bdAdapter: BdAdapter = {
   listBeads,
   getBeadDetail,
   getProjectKnowledge,
+  getSnapshot,
+  getBeadComments,
   updateBeadStatus,
   updateBead,
   previewDeleteBead,
@@ -1082,6 +1159,8 @@ export {
   listBeads,
   getBeadDetail,
   getProjectKnowledge,
+  getSnapshot,
+  getBeadComments,
   updateBeadStatus,
   updateBead,
   buildUpdateBeadArgs,

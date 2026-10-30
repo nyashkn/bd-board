@@ -7,11 +7,13 @@ pub mod feed;
 pub mod graph;
 pub mod knowledge;
 pub mod project;
+pub mod snapshot;
 
-pub use bead::{Bead, BeadDetail, BeadUpdateInput};
+pub use bead::{Bead, BeadDetail, BeadUpdateInput, Comment};
 pub use dolt::DoltProbe;
 pub use feed::BeadFeedMessage;
 pub use knowledge::ProjectKnowledge;
 pub use project::{
     AddProjectOutcome, BeadsLocation, CommentAuthor, PathStatus, Project, ProjectCounts,
 };
+pub use snapshot::ProjectSnapshot;

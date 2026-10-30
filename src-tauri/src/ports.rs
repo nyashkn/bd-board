@@ -1,11 +1,8 @@
 //! What the app needs from a bead backend. Depends only on the domain.
 //!
-//! Snapshot and change-cursor methods land with the snapshot store (bdb-84h.6); they need
-//! domain types (a snapshot, a cursor) that do not exist yet.
-
 use crate::domain::{
-    AddProjectOutcome, Bead, BeadDetail, BeadUpdateInput, BeadsLocation, CommentAuthor, DoltProbe,
-    PathStatus, Project, ProjectKnowledge,
+    AddProjectOutcome, Bead, BeadDetail, BeadUpdateInput, BeadsLocation, Comment, CommentAuthor,
+    DoltProbe, PathStatus, Project, ProjectKnowledge, ProjectSnapshot,
 };
 
 /// Where a project's beads are read from. Writes always go through the bd CLI.
@@ -13,6 +10,16 @@ pub(crate) trait BeadSource: Send + Sync {
     fn list_beads(&self, project_id: &str) -> Result<Vec<Bead>, String>;
     fn bead_detail(&self, project_id: &str, id: &str) -> Result<BeadDetail, String>;
     fn project_knowledge(&self, project_id: &str) -> Result<ProjectKnowledge, String>;
+    /// Everything the UI reads in one call; concurrent calls for a project share work.
+    /// `background`: a refresh nobody waits on; it yields to user calls in the bd queue.
+    fn snapshot(&self, project_id: &str, background: bool) -> Result<ProjectSnapshot, String>;
+    /// One bead's comments, to patch a snapshot after a comment-only change.
+    fn bead_comments(
+        &self,
+        project_id: &str,
+        id: &str,
+        background: bool,
+    ) -> Result<Vec<Comment>, String>;
 }
 
 /// Every write operation. A readonly project refuses before anything runs.

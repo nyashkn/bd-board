@@ -216,7 +216,8 @@ export function groupBeadLinks(links: BeadLink[] = []): {
 
 export type BeadFeedMessage =
   | { type: 'live'; seq: number }
-  | { type: 'change'; seq: number; issueIds: string[] }
+  /** `ops` are the journal ops behind the change; absent or empty means unknown. */
+  | { type: 'change'; seq: number; issueIds: string[]; ops?: string[] }
   | { type: 'disabled' }
   | { type: 'unsupported'; message: string }
   | { type: 'error'; message: string }
