@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
+import { rumAction } from '@/lib/rum'
 import { enableEventsJournalFn, subscribeBeadFeed } from '@/lib/server'
 import { toErrorMessage } from '@/lib/utils'
 
@@ -120,6 +121,7 @@ export function useBeadFeed(
           setMessage(msg.message)
           break
         case 'error':
+          rumAction('feed.reconnect')
           setStatus('error')
           setMessage(msg.message)
           clearTimeout(retryTimer)

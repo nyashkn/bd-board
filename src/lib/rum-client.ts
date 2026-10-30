@@ -18,7 +18,7 @@ export async function loadRumConfig(
   desktop: boolean,
 ): Promise<RumConfigResult> {
   const build = configFromEnv(
-    import.meta.env as unknown as Record<string, string | undefined>,
+    import.meta.env,
     'VITE_O2_RUM_',
   )
   let runtime: unknown

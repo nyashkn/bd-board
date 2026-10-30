@@ -19,7 +19,7 @@ export function useRum(): void {
     let t0 = 0
     const current = () => {
       const { pathname, search } = router.state.location
-      return viewName(pathname, search as { tab?: unknown; bead?: unknown })
+      return viewName(pathname, search)
     }
     const report = () => {
       const name = current()
@@ -42,8 +42,11 @@ export function useRum(): void {
         loadConfig: () => loadRumConfig(desktop),
         loadSdk: loadRumSdk,
       })
-    const idle =
-      window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 200))
+    // Safari/WKWebView (the desktop shell on macOS) may lack requestIdleCallback.
+    const idle = (cb: () => void) =>
+      'requestIdleCallback' in window
+        ? window.requestIdleCallback(cb)
+        : setTimeout(cb, 200)
     // two frames: past the first paint, then idle
     const raf = requestAnimationFrame(() =>
       requestAnimationFrame(() => idle(start)),

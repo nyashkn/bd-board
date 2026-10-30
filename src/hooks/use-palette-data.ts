@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { getBeads, getProjectKnowledgeFn, getProjects } from '@/lib/server'
 import { buildDocs, indexComments } from '@/lib/palette-search'
+import { rumDuration, rumNow } from '@/lib/rum'
 
 import type { IndexedText, PaletteDoc } from '@/lib/palette-search'
 
@@ -61,13 +62,15 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
     }),
   })
 
-  const docs = useMemo(
-    () =>
-      projects.flatMap((p, i) =>
-        buildDocs({ id: p.id, name: p.name }, beads.data[i] ?? []),
-      ),
-    [projects, beads.data],
-  )
+  const docs = useMemo(() => {
+    const t0 = rumNow()
+    const built = projects.flatMap((p, i) =>
+      buildDocs({ id: p.id, name: p.name }, beads.data[i] ?? []),
+    )
+    if (built.length)
+      rumDuration('palette.index.build', t0, { docs: built.length })
+    return built
+  }, [projects, beads.data])
 
   const [comments, setComments] = useState(
     () => new Map<string, IndexedText[]>(),
@@ -92,7 +95,11 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
             staleTime: 60_000,
           })
           if (stopped()) return
+          const t0 = rumNow()
           const index = indexComments(project, knowledge.comments)
+          rumDuration('palette.index.comments', t0, {
+            comments: knowledge.comments.length,
+          })
           setComments((prev) => new Map([...prev, ...index]))
         } catch {
           // one project failing to export must not stop the others

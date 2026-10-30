@@ -13,6 +13,7 @@ import {
   parseUpdateBeadInput,
 } from './server-validation.ts'
 import { classifyBdVersion } from './bd-errors.ts'
+import { tracked } from './rum.ts'
 import { toErrorMessage } from './utils.ts'
 
 import type { ArtifactFile } from './artifacts.ts'
@@ -116,12 +117,12 @@ export const webEnableEventsJournal = createServerFn({ method: 'POST' })
     return { ok: true as const }
   })
 
-export async function getProjects(): Promise<Project[]> {
+async function getProjectsImpl(): Promise<Project[]> {
   if (isDesktopApp()) return invoke<Project[]>('list_projects')
   return webGetProjects()
 }
 
-export async function getBeads({
+async function getBeadsImpl({
   data,
 }: {
   data: { project: string }
@@ -131,7 +132,7 @@ export async function getBeads({
   return webGetBeads({ data })
 }
 
-export async function getBeadDetailFn({
+async function getBeadDetailFnImpl({
   data,
 }: {
   data: { project: string; id: string }
@@ -144,7 +145,7 @@ export async function getBeadDetailFn({
   return webGetBeadDetail({ data })
 }
 
-export async function readArtifactFn({
+async function readArtifactFnImpl({
   data,
 }: {
   data: { project: string; path: string }
@@ -157,7 +158,7 @@ export async function readArtifactFn({
   return webReadArtifact({ data })
 }
 
-export async function getProjectKnowledgeFn({
+async function getProjectKnowledgeFnImpl({
   data,
 }: {
   data: { project: string }
@@ -169,7 +170,7 @@ export async function getProjectKnowledgeFn({
   return webGetProjectKnowledge({ data })
 }
 
-export async function updateBeadStatusFn({
+async function updateBeadStatusFnImpl({
   data,
 }: {
   data: { project: string; id: string; status: string }
@@ -185,7 +186,7 @@ export async function updateBeadStatusFn({
   return webUpdateBeadStatus({ data })
 }
 
-export async function updateBeadFn({
+async function updateBeadFnImpl({
   data,
 }: {
   data: { project: string; id: string; update: BeadUpdate }
@@ -201,7 +202,7 @@ export async function updateBeadFn({
   return webUpdateBead({ data })
 }
 
-export async function previewDeleteBeadFn({
+async function previewDeleteBeadFnImpl({
   data,
 }: {
   data: { project: string; id: string }
@@ -216,7 +217,7 @@ export async function previewDeleteBeadFn({
   return webPreviewDeleteBead({ data })
 }
 
-export async function deleteBeadFn({
+async function deleteBeadFnImpl({
   data,
 }: {
   data: { project: string; id: string }
@@ -228,7 +229,7 @@ export async function deleteBeadFn({
   return webDeleteBead({ data })
 }
 
-export async function createBeadFn({
+async function createBeadFnImpl({
   data,
 }: {
   data: {
@@ -252,7 +253,7 @@ export async function createBeadFn({
   return webCreateBead({ data })
 }
 
-export async function addCommentFn({
+async function addCommentFnImpl({
   data,
 }: {
   data: { project: string; id: string; text: string }
@@ -268,7 +269,7 @@ export async function addCommentFn({
   return webAddComment({ data })
 }
 
-export async function getCommentAuthorFn({
+async function getCommentAuthorFnImpl({
   data,
 }: {
   data: { project: string }
@@ -279,7 +280,7 @@ export async function getCommentAuthorFn({
 }
 
 /** bd runnable and new enough? Desktop reads the probe (a missing bd fails the probe itself). */
-export async function getBdStatusFn(): Promise<BdStatus> {
+async function getBdStatusFnImpl(): Promise<BdStatus> {
   if (isDesktopApp()) {
     const { loadDesktopProbe } = await import('./desktop.ts')
     const probe = await loadDesktopProbe()
@@ -288,7 +289,7 @@ export async function getBdStatusFn(): Promise<BdStatus> {
   return webGetBdStatus()
 }
 
-export async function enableEventsJournalFn({
+async function enableEventsJournalFnImpl({
   data,
 }: {
   data: { project: string }
@@ -424,3 +425,35 @@ export async function relocateProject(id: string, path: string): Promise<void> {
   }
   return invoke<void>('relocate_project', { id, path })
 }
+
+// Every bd call (server function or desktop IPC) goes through one timing wrapper: a plain
+// pass-through unless RUM is on. See lib/rum.ts.
+export const getProjects = tracked('projects', getProjectsImpl)
+export const getBeads = tracked('list', getBeadsImpl)
+export const getBeadDetailFn = tracked('show', getBeadDetailFnImpl)
+export const readArtifactFn = tracked('artifact', readArtifactFnImpl)
+export const getProjectKnowledgeFn = tracked(
+  'export',
+  getProjectKnowledgeFnImpl,
+)
+export const updateBeadStatusFn = tracked(
+  'update_status',
+  updateBeadStatusFnImpl,
+)
+export const updateBeadFn = tracked('update', updateBeadFnImpl)
+export const previewDeleteBeadFn = tracked(
+  'delete_preview',
+  previewDeleteBeadFnImpl,
+)
+export const deleteBeadFn = tracked('delete', deleteBeadFnImpl)
+export const createBeadFn = tracked('create', createBeadFnImpl)
+export const addCommentFn = tracked('comment_add', addCommentFnImpl)
+export const getCommentAuthorFn = tracked(
+  'comment_author',
+  getCommentAuthorFnImpl,
+)
+export const getBdStatusFn = tracked('status', getBdStatusFnImpl)
+export const enableEventsJournalFn = tracked(
+  'events_journal',
+  enableEventsJournalFnImpl,
+)

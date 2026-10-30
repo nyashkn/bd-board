@@ -60,6 +60,7 @@ import { splitClosed } from '@/lib/hierarchy'
 import { PROSE_CLASS, cn, initials } from '@/lib/utils'
 import { COLUMNS, groupBeadLinks, isEpic, mapStatus } from '@/lib/types'
 import { PRIORITY_TEXT_CLASS, PRIORITY_WORD } from '@/lib/sort'
+import { rumDuration, rumNow } from '@/lib/rum'
 import {
   KNOWLEDGE_TYPE_BG_CLASS as K_BG_CLASS,
   KNOWLEDGE_TYPE_DOT_CLASS as K_DOT_CLASS,
@@ -860,6 +861,20 @@ export function BeadDetailModal({
     enabled: open && !!bead,
     staleTime: 3000,
   })
+
+  // Opening a bead to its detail being on screen.
+  const openedAt = useRef(0)
+  const openId = open && bead ? bead.id : ''
+  useEffect(() => {
+    openedAt.current = openId ? rumNow() : 0
+  }, [openId])
+  const detailReady = detailQuery.isSuccess
+  useEffect(() => {
+    if (openId && detailReady && openedAt.current) {
+      rumDuration('modal.ready', openedAt.current, undefined, { bead: openId })
+      openedAt.current = 0
+    }
+  }, [openId, detailReady])
 
   const authorQuery = useQuery({
     queryKey: ['comment-author', project],

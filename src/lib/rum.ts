@@ -17,16 +17,15 @@ type Ctx = Record<string, string | number | boolean>
 
 /** The subset of the SDK this module calls; tests pass a fake. */
 export interface RumSdk {
-  init(config: Record<string, unknown>): void
-  startView(name: string): void
-  addAction(name: string, context?: object): void
-  addError(error: unknown, context?: object): void
-  addDurationVital(
+  init: (config: Record<string, unknown>) => void
+  startView: (name: string) => void
+  addAction: (name: string, context?: object) => void
+  addError: (error: unknown, context?: object) => void
+  addDurationVital: (
     name: string,
     options: { startTime: number; duration: number; context?: object },
-  ): void
-  setUser(user: { id?: string; name?: string }): void
-  startSessionReplayRecording?(): void
+  ) => void
+  setUser: (user: { id?: string; name?: string }) => void
 }
 
 type Op =
@@ -118,18 +117,19 @@ export function rumMarkCold(name: string, ctx?: Ctx, detail?: Ctx): void {
 }
 
 /** Wraps an async bd/IPC call: duration, command name and ok/error. Never args or output. */
-export function tracked<A extends unknown[], R>(
+export function tracked<TArgs extends unknown[], TResult>(
   cmd: string,
-  fn: (...args: A) => Promise<R>,
-): (...args: A) => Promise<R> {
-  return (...args: A) => (mode === 'off' ? fn(...args) : trace(cmd, fn, args))
+  fn: (...args: TArgs) => Promise<TResult>,
+): (...args: TArgs) => Promise<TResult> {
+  return (...args: TArgs) =>
+    mode === 'off' ? fn(...args) : trace(cmd, fn, args)
 }
 
-async function trace<A extends unknown[], R>(
+async function trace<TArgs extends unknown[], TResult>(
   cmd: string,
-  fn: (...args: A) => Promise<R>,
-  args: A,
-): Promise<R> {
+  fn: (...args: TArgs) => Promise<TResult>,
+  args: TArgs,
+): Promise<TResult> {
   const t0 = performance.now()
   const first = args[0] as { data?: { project?: unknown } } | undefined
   const project = first?.data?.project
