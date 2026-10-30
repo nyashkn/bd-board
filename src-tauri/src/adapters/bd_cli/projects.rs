@@ -1,7 +1,8 @@
 //! Project-level bd operations: discovery, add/init, path checks, comment author.
 
-use super::exec::{bd_json, bd_json_array, run_bd, run_bd_mut};
-use super::probe::probe_beads_location;
+use super::exec::{bd_json_array_prio, bd_json_prio, run_bd, run_bd_mut};
+use super::probe::{probe_beads_location, probe_beads_location_prio};
+use super::queue::Priority;
 use crate::domain::project::{
     apply_blocked_to_counts, build_counts_from_groups, resolve_comment_author,
 };
@@ -44,10 +45,10 @@ pub(crate) fn list_projects() -> Result<Vec<Project>, String> {
             continue;
         }
 
-        // Probe beads location
-        match probe_beads_location(&dir_path) {
+        // Probe beads location (this is the projects poll, so it queues behind user calls)
+        match probe_beads_location_prio(&dir_path, Priority::Background) {
             Ok(location) => {
-                let counts = project_counts(&dir_path);
+                let counts = project_counts_prio(&dir_path, Priority::Background);
                 projects.push(Project {
                     id: entry.id.clone(),
                     name: entry.label.clone(),
@@ -98,7 +99,11 @@ pub(crate) fn list_projects() -> Result<Vec<Project>, String> {
 }
 
 pub(crate) fn project_counts(dir: &Path) -> ProjectCounts {
-    let result = bd_json(dir, &["count", "--by-status", "--json"]).ok();
+    project_counts_prio(dir, Priority::User)
+}
+
+pub(crate) fn project_counts_prio(dir: &Path, priority: Priority) -> ProjectCounts {
+    let result = bd_json_prio(dir, &["count", "--by-status", "--json"], priority).ok();
     let groups = result
         .as_ref()
         .and_then(|v| v.get("groups"))
@@ -106,7 +111,7 @@ pub(crate) fn project_counts(dir: &Path) -> ProjectCounts {
         .cloned()
         .unwrap_or_default();
     let mut counts = build_counts_from_groups(&groups);
-    if let Some(blocked) = bd_json_array(dir, &["blocked", "--json"]) {
+    if let Some(blocked) = bd_json_array_prio(dir, &["blocked", "--json"], priority) {
         apply_blocked_to_counts(&mut counts, &blocked);
     }
     counts
