@@ -218,7 +218,13 @@ export default {
 
     if (method === 'GET' && pathname === '/manifest') {
       if (!(await canRead(req, env))) return unauthorized()
-      return serve(req, env, MANIFEST_KEY, 'private, no-cache', 'application/json')
+      return serve(
+        req,
+        env,
+        MANIFEST_KEY,
+        'private, no-cache',
+        'application/json',
+      )
     }
 
     const snap = pathname.startsWith('/snap/')

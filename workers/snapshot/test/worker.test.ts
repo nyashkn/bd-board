@@ -20,7 +20,9 @@ const call = (
     (typeof body === 'string' || body instanceof Uint8Array)
   ) {
     const size =
-      typeof body === 'string' ? new TextEncoder().encode(body).length : body.length
+      typeof body === 'string'
+        ? new TextEncoder().encode(body).length
+        : body.length
     headers.set('content-length', String(size))
   }
   return worker.fetch(

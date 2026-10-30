@@ -8,8 +8,8 @@ Nothing in this repository deploys it. Everything below runs locally unless the 
 
 | Route             | Token       | Behaviour                                                                                                                                                 |
 | ----------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /manifest`   | read, write | `200` with `etag` and `cache-control: private, no-cache`, or `304` when `If-None-Match` matches.                                                                   |
-| `GET /snap/<key>` | read, write | Immutable gzip snapshot, `cache-control: private, max-age=31536000, immutable`, with an ETag. Keys match `^snap-[0-9a-f]{16,64}\.jsonl\.gz$`.              |
+| `GET /manifest`   | read, write | `200` with `etag` and `cache-control: private, no-cache`, or `304` when `If-None-Match` matches.                                                          |
+| `GET /snap/<key>` | read, write | Immutable gzip snapshot, `cache-control: private, max-age=31536000, immutable`, with an ETag. Keys match `^snap-[0-9a-f]{16,64}\.jsonl\.gz$`.             |
 | `PUT /snap/<key>` | write       | Stores the body only if the key is absent. The key must equal `snap-` plus a prefix of the body's sha256, and the body must be gzip.                      |
 | `PUT /manifest`   | write       | Compare-and-swap. Send `If-Match: <current etag>`, or `If-None-Match: *` for the first write. A lost race gets `412`. The `key` must exist in the bucket. |
 | anything else     | none        | `404`. A missing or wrong token on the routes above gets `401`.                                                                                           |
