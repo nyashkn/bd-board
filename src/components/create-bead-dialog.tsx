@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { createBeadFn } from '@/lib/server'
+import { connectorFor } from '@/lib/core'
 
 import type { Bead } from '@/lib/types'
 
@@ -69,7 +69,7 @@ export function CreateBeadDialog({
 
   const mutation = useMutation({
     mutationFn: () =>
-      createBeadFn({
+      connectorFor(project).createBead({
         data: {
           project,
           title: title.trim(),

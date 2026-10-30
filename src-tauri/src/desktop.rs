@@ -1235,7 +1235,7 @@ fn derive_children(beads: Vec<Bead>) -> Vec<Bead> {
         .collect()
 }
 
-fn list_beads_inner(project_id: &str) -> Result<Vec<Bead>, String> {
+pub(crate) fn list_beads_inner(project_id: &str) -> Result<Vec<Bead>, String> {
     let dir = resolve_dir(project_id)?;
     let raw = bd_json(&dir, &["list", "--all", "--json"])?;
     let mut beads: Vec<Bead> = raw
@@ -1251,7 +1251,7 @@ fn list_beads_inner(project_id: &str) -> Result<Vec<Bead>, String> {
     Ok(derive_children(beads))
 }
 
-fn get_bead_detail_inner(project_id: &str, id: &str) -> Result<BeadDetail, String> {
+pub(crate) fn get_bead_detail_inner(project_id: &str, id: &str) -> Result<BeadDetail, String> {
     let dir = resolve_dir(project_id)?;
     let raw_arr = bd_json(&dir, &["show", id, "--json"])?;
     let raw_comments = bd_json(&dir, &["comments", id, "--json"]).ok();
@@ -1327,7 +1327,7 @@ fn build_project_knowledge(issues: &[Value]) -> ProjectKnowledge {
     }
 }
 
-fn get_project_knowledge_inner(project_id: &str) -> Result<ProjectKnowledge, String> {
+pub(crate) fn get_project_knowledge_inner(project_id: &str) -> Result<ProjectKnowledge, String> {
     let dir = resolve_dir(project_id)?;
     match bd_json_lines(&dir, &["export"]) {
         Ok(issues) => Ok(build_project_knowledge(&issues)),
@@ -1567,12 +1567,12 @@ pub fn list_projects() -> Result<Vec<Project>, String> {
 
 #[tauri::command]
 pub fn list_beads(project_id: String) -> Result<Vec<Bead>, String> {
-    list_beads_inner(&project_id)
+    crate::source::source_for(&project_id).list_beads(&project_id)
 }
 
 #[tauri::command]
 pub fn get_bead_detail(project_id: String, id: String) -> Result<BeadDetail, String> {
-    get_bead_detail_inner(&project_id, &id)
+    crate::source::source_for(&project_id).bead_detail(&project_id, &id)
 }
 
 const ARTIFACT_MAX_BYTES: u64 = 2 * 1024 * 1024;
@@ -1672,7 +1672,7 @@ pub fn read_artifact(project_id: String, path: String) -> Result<ArtifactFile, S
 
 #[tauri::command]
 pub fn get_project_knowledge(project_id: String) -> Result<ProjectKnowledge, String> {
-    get_project_knowledge_inner(&project_id)
+    crate::source::source_for(&project_id).project_knowledge(&project_id)
 }
 
 #[tauri::command]

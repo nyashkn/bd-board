@@ -10,7 +10,7 @@ import {
   classifyArtifactPath,
   parseExternalRef,
 } from '@/lib/artifacts'
-import { readArtifactFn } from '@/lib/server'
+import { connectorFor } from '@/lib/core'
 import { PROSE_CLASS, cn, toErrorMessage } from '@/lib/utils'
 
 import type { Artifact, ArtifactFile } from '@/lib/artifacts'
@@ -61,7 +61,10 @@ function ArtifactPane({
 }) {
   const query = useQuery({
     queryKey: ['artifact', project, artifact.path],
-    queryFn: () => readArtifactFn({ data: { project, path: artifact.path } }),
+    queryFn: () =>
+      connectorFor(project).readArtifact({
+        data: { project, path: artifact.path },
+      }),
     retry: false,
     staleTime: 3000,
   })

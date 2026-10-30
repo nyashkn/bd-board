@@ -74,16 +74,7 @@ import {
   KNOWLEDGE_TYPE_LABEL,
   KNOWLEDGE_TYPE_TEXT_CLASS as K_TEXT_CLASS,
 } from '@/lib/knowledge'
-import {
-  addCommentFn,
-  deleteBeadFn,
-  getBeadDetailFn,
-  getCommentAuthorFn,
-  getProjectKnowledgeFn,
-  previewDeleteBeadFn,
-  updateBeadFn,
-  updateBeadStatusFn,
-} from '@/lib/server'
+import { connectorFor } from '@/lib/core'
 
 import type { LucideIcon } from 'lucide-react'
 import type { FormEvent, ReactNode } from 'react'
@@ -443,7 +434,7 @@ function BeadEditDialog({
 
   const mutation = useMutation({
     mutationFn: () =>
-      updateBeadFn({
+      connectorFor(project).updateBead({
         data: {
           project,
           id: bead.id,
@@ -671,13 +662,15 @@ function BeadDeleteDialog({
 
   const previewQuery = useQuery({
     queryKey: ['delete-preview', project, bead.id],
-    queryFn: () => previewDeleteBeadFn({ data: { project, id: bead.id } }),
+    queryFn: () =>
+      connectorFor(project).previewDelete({ data: { project, id: bead.id } }),
     enabled: open,
     retry: false,
   })
 
   const mutation = useMutation({
-    mutationFn: () => deleteBeadFn({ data: { project, id: bead.id } }),
+    mutationFn: () =>
+      connectorFor(project).deleteBead({ data: { project, id: bead.id } }),
     onSuccess: () => {
       toast.success(`Bead ${bead.id} deleted`)
       queryClient.invalidateQueries({ queryKey: ['beads', project] })
@@ -864,7 +857,8 @@ export function BeadDetailModal({
 
   const detailQuery = useQuery({
     queryKey: ['bead', project, bead?.id],
-    queryFn: () => getBeadDetailFn({ data: { project, id: bead!.id } }),
+    queryFn: () =>
+      connectorFor(project).beadDetail({ data: { project, id: bead!.id } }),
     enabled: open && !!bead,
     staleTime: 3000,
   })
@@ -885,7 +879,7 @@ export function BeadDetailModal({
 
   const authorQuery = useQuery({
     queryKey: ['comment-author', project],
-    queryFn: () => getCommentAuthorFn({ data: { project } }),
+    queryFn: () => connectorFor(project).commentAuthor({ data: { project } }),
     enabled: open && !!bead && !readonly,
     staleTime: 60_000,
     retry: false,
@@ -893,7 +887,8 @@ export function BeadDetailModal({
 
   const knowledgeQuery = useQuery({
     queryKey: ['project-knowledge', project],
-    queryFn: () => getProjectKnowledgeFn({ data: { project } }),
+    queryFn: () =>
+      connectorFor(project).projectKnowledge({ data: { project } }),
     enabled: open && !!bead,
     staleTime: 4000,
   })
@@ -925,7 +920,9 @@ export function BeadDetailModal({
 
   const statusMutation = useMutation({
     mutationFn: (status: BeadColumn) =>
-      updateBeadStatusFn({ data: { project, id: bead!.id, status } }),
+      connectorFor(project).updateStatus({
+        data: { project, id: bead!.id, status },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['beads', project] })
       queryClient.invalidateQueries({ queryKey: ['bead', project, bead?.id] })
@@ -941,10 +938,12 @@ export function BeadDetailModal({
       reopen?: boolean
     }) => {
       if (reopen)
-        await updateBeadStatusFn({
+        await connectorFor(project).updateStatus({
           data: { project, id: bead!.id, status: 'open' },
         })
-      return addCommentFn({ data: { project, id: bead!.id, text } })
+      return connectorFor(project).addComment({
+        data: { project, id: bead!.id, text },
+      })
     },
     onSuccess: () => {
       setComment('')
@@ -959,7 +958,9 @@ export function BeadDetailModal({
   // Own mutation: answering must not clear the comment draft or share its pending state.
   const answerMutation = useMutation({
     mutationFn: ({ text }: { id: string; text: string }) =>
-      addCommentFn({ data: { project, id: bead!.id, text } }),
+      connectorFor(project).addComment({
+        data: { project, id: bead!.id, text },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bead', project, bead?.id] })
       queryClient.invalidateQueries({
