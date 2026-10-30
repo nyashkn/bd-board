@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import Markdown from 'react-markdown'
 import {
   AlignLeft,
   AlertTriangle,
@@ -44,6 +43,7 @@ import { useReadonly } from '@/components/readonly-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BeadLinkButton } from '@/components/bead-link'
+import { BeadMarkdown } from '@/components/bead-ref-chip'
 import { InteractiveRow } from '@/components/ui/interactive-row'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -1271,7 +1271,9 @@ export function BeadDetailModal({
                         </div>
                       ) : description ? (
                         <div className={PROSE_CLASS}>
-                          <Markdown>{description}</Markdown>
+                          <BeadMarkdown resolveBead={resolveBead}>
+                            {description}
+                          </BeadMarkdown>
                         </div>
                       ) : (
                         <p className="text-xs text-muted-foreground">
@@ -1287,7 +1289,9 @@ export function BeadDetailModal({
                           label="Acceptance criteria"
                         />
                         <div className={PROSE_CLASS}>
-                          <Markdown>{acceptance}</Markdown>
+                          <BeadMarkdown resolveBead={resolveBead}>
+                            {acceptance}
+                          </BeadMarkdown>
                         </div>
                       </section>
                     ) : null}
