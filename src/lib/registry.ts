@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 
+import { kindOfSource } from './connector-select.ts'
+
 export interface RegistryEntry {
   id: string
   path: string
@@ -10,6 +12,8 @@ export interface RegistryEntry {
   readonly?: boolean
   /** Optional, only honoured together with `readonly`: see scripts/readonly. */
   filterLabel?: string
+  /** Optional, ordered: connector URLs (`bd:`, `mysql://`, `https://`) tried first to last. */
+  sources?: string[]
 }
 
 export class RegistryError extends Error {}
@@ -34,12 +38,23 @@ export function parseRegistryEntry(raw: unknown, index: number): RegistryEntry {
       `${where}: "filterLabel" must be a non-empty string`,
     )
   }
+  const sources = e['sources']
+  if (
+    sources !== undefined &&
+    (!Array.isArray(sources) ||
+      !sources.every((s) => typeof s === 'string' && kindOfSource(s)))
+  ) {
+    throw new RegistryError(
+      `${where}: "sources" must be an array of bd:, mysql:// or https:// URLs`,
+    )
+  }
   return {
     id: e['id'] as string,
     path: e['path'] as string,
     label: e['label'] as string,
     ...(e['readonly'] !== undefined ? { readonly: e['readonly'] } : {}),
     ...(label !== undefined ? { filterLabel: label.trim() } : {}),
+    ...(sources !== undefined ? { sources: sources as string[] } : {}),
   }
 }
 

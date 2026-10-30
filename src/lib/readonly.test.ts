@@ -18,6 +18,7 @@ import {
   resolveRealBd,
   resolveWritableDir,
   bdAdapter,
+  probeDoltMode,
 } from './bd'
 import { loadRegistry, parseRegistryEntry } from './registry'
 
@@ -128,6 +129,7 @@ describe('with a fake HOME and a fake bd', () => {
             readonly: true,
             filterLabel: 'wo',
           },
+          { id: 'ex', path: proj, label: 'EX', sources: ['mysql://h:1/d'] },
         ],
       }),
     )
@@ -182,6 +184,17 @@ describe('with a fake HOME and a fake bd', () => {
       expect(r.stderr).toMatch(/read-only/)
       expect(r.stdout).toBe('')
     }
+  })
+
+  it('probeDoltMode reports garbage as an error and skips bd for explicit sources', async () => {
+    expect(await probeDoltMode('rw')).toMatchObject({
+      error: expect.any(String),
+    })
+    // The fake bd would print non-JSON; explicit sources must come back without running it.
+    expect(await probeDoltMode('ex')).toEqual({
+      error: 'not probed: explicit sources',
+      sources: ['mysql://h:1/d'],
+    })
   })
 
   it('reports readonly and filterLabel on the discovered project', async () => {

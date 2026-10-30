@@ -17,7 +17,13 @@ pub struct RegistryEntry {
         skip_serializing_if = "Option::is_none"
     )]
     pub filter_label: Option<String>,
+    /// Optional, ordered: connector URLs (`bd:`, `mysql://`, `https://`) tried first to last.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<String>,
 }
+
+/// The URL schemes a `sources` entry may use (see src/lib/connector-select.ts).
+const SOURCE_SCHEMES: [&str; 3] = ["bd:", "mysql://", "https://"];
 
 impl RegistryEntry {
     /// The filter label that applies: only a readonly project is filtered.
@@ -69,7 +75,7 @@ pub fn load() -> Result<Registry, String> {
     parse_checked(registry)
 }
 
-/// Rejects what serde cannot: a blank filterLabel. Wrong types already fail in serde.
+/// Rejects what serde cannot: a blank filterLabel or a source with an unknown scheme. Wrong types already fail in serde.
 fn parse_checked(mut registry: Registry) -> Result<Registry, String> {
     if registry.version != 1 {
         return Err(format!(
@@ -79,6 +85,18 @@ fn parse_checked(mut registry: Registry) -> Result<Registry, String> {
     }
 
     for (i, entry) in registry.projects.iter_mut().enumerate() {
+        // Never echo the value: a mysql:// URL can carry credentials.
+        if let Some(n) = entry
+            .sources
+            .iter()
+            .position(|s| !SOURCE_SCHEMES.iter().any(|p| s.starts_with(p)))
+        {
+            return Err(format!(
+                "registry project #{}: \"sources\" entry #{} must be a bd:, mysql:// or https:// URL",
+                i + 1,
+                n + 1
+            ));
+        }
         if let Some(label) = entry.filter_label.as_mut() {
             *label = label.trim().to_string();
             if label.is_empty() {
@@ -175,6 +193,7 @@ pub fn add(path: &std::path::Path, label: Option<String>) -> Result<RegistryEntr
         label: final_label,
         readonly: false,
         filter_label: None,
+        sources: vec![],
     };
 
     registry.projects.push(entry.clone());
@@ -307,5 +326,38 @@ mod tests {
         assert_eq!(v["projects"][0]["filterLabel"], "wo");
         assert!(v["projects"][1].get("readonly").is_none());
         assert!(v["projects"][1].get("filterLabel").is_none());
+    }
+
+    #[test]
+    fn sources_default_empty_and_round_trip_in_order() {
+        let r = parse(r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A"}]}"#).unwrap();
+        assert!(r.projects[0].sources.is_empty());
+        assert!(serde_json::to_value(&r).unwrap()["projects"][0]
+            .get("sources")
+            .is_none());
+
+        let r = parse(
+            r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","sources":["mysql://127.0.0.1:3307/db","bd:"]}]}"#,
+        )
+        .unwrap();
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(
+            v["projects"][0]["sources"],
+            serde_json::json!(["mysql://127.0.0.1:3307/db", "bd:"])
+        );
+    }
+
+    #[test]
+    fn rejects_bad_sources() {
+        for bad in [r#"["ftp://x"]"#, r#""bd:""#, r#"[3]"#] {
+            let json = format!(
+                r#"{{"version":1,"projects":[{{"id":"a","path":"/p","label":"A","sources":{bad}}}]}}"#
+            );
+            assert!(parse(&json).is_err(), "{bad}");
+        }
+
+        let leak = r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","sources":["postgres://u:secret@h/d"]}]}"#;
+        let err = parse(leak).err().unwrap();
+        assert!(err.contains("entry #1") && !err.contains("secret"), "{err}");
     }
 }

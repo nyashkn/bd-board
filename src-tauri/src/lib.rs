@@ -5,6 +5,7 @@ use std::process::Command;
 // pub so tests/ can drive the real commands against a `bd init` fixture.
 pub mod bd_queue;
 pub mod desktop;
+pub mod dolt_probe;
 pub mod registry;
 pub mod rum;
 pub mod source;
@@ -55,6 +56,7 @@ pub fn run() {
             desktop::add_project,
             desktop::remove_project,
             desktop::probe_project,
+            desktop::probe_dolt_mode,
             desktop::init_project,
             desktop::list_beads,
             desktop::get_bead_detail,

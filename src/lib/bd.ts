@@ -29,6 +29,8 @@ import {
   queued,
   timeoutFromEnv,
 } from './bd-queue.ts'
+import { parseDoltShow } from './connector-select.ts'
+import type { ProbeReply } from './connector-select.ts'
 import { bdNotFoundMessage, classifyBdVersion } from './bd-errors.ts'
 import type { BdStatus } from './bd-errors.ts'
 import {
@@ -201,12 +203,19 @@ type BdResult = {
 }
 
 /** One bd process per project at a time; identical in-flight reads share a process. */
-export function bdExec(dir: string, args: string[]): Promise<BdResult> {
-  return queued(dir, args, () => spawnBd(dir, args))
+export function bdExec(
+  dir: string,
+  args: string[],
+  timeout = timeoutFromEnv(process.env),
+): Promise<BdResult> {
+  return queued(dir, args, () => spawnBd(dir, args, timeout))
 }
 
-async function spawnBd(dir: string, args: string[]): Promise<BdResult> {
-  const timeout = timeoutFromEnv(process.env)
+async function spawnBd(
+  dir: string,
+  args: string[],
+  timeout: number,
+): Promise<BdResult> {
   const { candidates, env: extra } = await launchFor(dir)
   const env = { ...process.env, ...extra }
 
@@ -980,6 +989,36 @@ async function getBdStatus(): Promise<BdStatus> {
 async function enableEventsJournal(projectId: string): Promise<void> {
   const dir = await resolveWritableDir(projectId)
   await bdRaw(dir, ['config', 'set', 'events-journal', 'true'])
+}
+
+const PROBE_TIMEOUT_MS = 2000
+
+/**
+ * Which Dolt mode is this project in (`bd dolt show --json`), plus its registry `sources`.
+ * Never throws: a failure or a 2 s timeout (queued like any bd call, and the process is killed)
+ * comes back as `{ error, sources }`. With explicit `sources` it does not run bd.
+ */
+export async function probeDoltMode(projectId: string): Promise<ProbeReply> {
+  let sources: string[] = []
+  try {
+    const entry = (await loadRegistry()).find((e) => e.id === projectId)
+    if (!entry) return { error: `unknown project id: ${projectId}` }
+    sources = entry.sources ?? []
+    // Explicit sources decide the order; no bd call is needed (or wanted) to resolve them.
+    if (sources.length)
+      return { error: 'not probed: explicit sources', sources }
+    const r = await bdExec(
+      entry.path,
+      ['dolt', 'show', '--json'],
+      PROBE_TIMEOUT_MS,
+    )
+    if (r.code !== 0) {
+      return { error: bdErrorMessage(r.stdout, r.stderr, r.code), sources }
+    }
+    return { ...parseDoltShow(r.stdout), sources }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err), sources }
+  }
 }
 
 export const bdAdapter: BdAdapter = {

@@ -1,6 +1,7 @@
 use crate::bd_queue::{
     is_read_call, output_with_timeout, queue_for, timeout_from_env, Queues, TIMEOUT_GRACE,
 };
+use crate::dolt_probe::{parse_dolt_show, DoltProbe};
 use crate::registry::{self, RegistryEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -420,11 +421,19 @@ struct BdCapture {
 }
 
 fn exec_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
+    exec_bd_with(dir, args, timeout_from_env())
+}
+
+fn exec_bd_with(
+    dir: &Path,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> Result<BdCapture, String> {
     static QUEUES: OnceLock<Queues<BdCapture>> = OnceLock::new();
     let queue = queue_for(&QUEUES, &dir.to_string_lossy());
     // Reads with the same args share a process; mutations always run.
     let key = is_read_call(args).then(|| format!("{:?}", args));
-    queue.run(key.as_deref(), || spawn_bd(dir, args))
+    queue.run(key.as_deref(), || spawn_bd(dir, args, timeout))
 }
 
 fn timeout_message(args: &[&str], timeout: std::time::Duration) -> String {
@@ -439,9 +448,8 @@ fn timeout_message(args: &[&str], timeout: std::time::Duration) -> String {
     msg
 }
 
-fn spawn_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
+fn spawn_bd(dir: &Path, args: &[&str], timeout: std::time::Duration) -> Result<BdCapture, String> {
     let BdLaunch { candidates, env } = launch_for(dir)?;
-    let timeout = timeout_from_env();
 
     for candidate in &candidates {
         let mut cmd = Command::new(candidate);
@@ -1834,6 +1842,39 @@ pub async fn probe_project(path: String) -> Result<BeadsLocation, String> {
     })
     .await
 }
+
+const DOLT_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Which Dolt mode is this project in (`bd dolt show --json`), plus its registry `sources`.
+/// Never fails: an error or a 2 s timeout (queued like any bd call, and the process is killed)
+/// comes back in `error`. Not `probe_project` (the registry probe).
+#[tauri::command]
+pub async fn probe_dolt_mode(project_id: String) -> DoltProbe {
+    let entry = match registry::find(&project_id) {
+        Ok(entry) => entry,
+        Err(err) => return DoltProbe::error(err, vec![]),
+    };
+    let sources = entry.sources.clone();
+    if !sources.is_empty() {
+        return DoltProbe::error("not probed: explicit sources", sources);
+    }
+    let run = move || {
+        exec_bd_with(
+            Path::new(&entry.path),
+            &["dolt", "show", "--json"],
+            DOLT_PROBE_TIMEOUT,
+        )
+    };
+    match blocking(run).await {
+        Ok(cap) if cap.status.success() => parse_dolt_show(&cap.stdout, sources),
+        Ok(cap) => DoltProbe::error(
+            bd_error_message(&cap.stdout, &cap.stderr, &cap.status),
+            sources,
+        ),
+        Err(err) => DoltProbe::error(err, sources),
+    }
+}
+
 fn is_missing_workspace_error(message: &str) -> bool {
     let lower = message.to_lowercase();
     lower.contains("no_beads_directory")
@@ -2421,6 +2462,7 @@ mod tests {
             label: "P".into(),
             readonly,
             filter_label: filter.map(String::from),
+            sources: vec![],
         }
     }
 

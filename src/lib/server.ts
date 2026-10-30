@@ -2,7 +2,7 @@ import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
 import { createServerFn } from '@tanstack/react-start'
 
 import { readArtifactFile } from './artifact-read.ts'
-import { bdAdapter, resolveDir } from './bd.ts'
+import { bdAdapter, probeDoltMode, resolveDir } from './bd.ts'
 import {
   parseArtifactInput,
   parseBeadInput,
@@ -18,6 +18,7 @@ import { toErrorMessage } from './utils.ts'
 
 import type { ArtifactFile } from './artifacts.ts'
 import type { BdStatus } from './bd-errors.ts'
+import type { ProbeReply } from './connector-select.ts'
 import type { CommentAuthor } from './comment-author.ts'
 import type {
   AddProjectOutcome,
@@ -116,6 +117,10 @@ export const webEnableEventsJournal = createServerFn({ method: 'POST' })
     await bdAdapter.enableEventsJournal(data.project)
     return { ok: true as const }
   })
+
+const webProbeDoltMode = createServerFn({ method: 'GET' })
+  .validator(parseProjectInput)
+  .handler(({ data }) => probeDoltMode(data.project))
 
 async function getProjectsImpl(): Promise<Project[]> {
   if (isDesktopApp()) return invoke<Project[]>('list_projects')
@@ -301,6 +306,16 @@ async function enableEventsJournalFnImpl({
   return webEnableEventsJournal({ data })
 }
 
+async function probeDoltModeFnImpl({
+  data,
+}: {
+  data: { project: string }
+}): Promise<ProbeReply> {
+  if (isDesktopApp())
+    return invoke<ProbeReply>('probe_dolt_mode', { projectId: data.project })
+  return webProbeDoltMode({ data })
+}
+
 export function subscribeBeadFeed(
   project: string,
   since: number,
@@ -452,6 +467,7 @@ export const getCommentAuthorFn = tracked(
   'comment_author',
   getCommentAuthorFnImpl,
 )
+export const probeDoltModeFn = tracked('probe', probeDoltModeFnImpl)
 export const getBdStatusFn = tracked('status', getBdStatusFnImpl)
 export const enableEventsJournalFn = tracked(
   'events_journal',
