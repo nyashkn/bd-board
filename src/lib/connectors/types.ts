@@ -22,10 +22,12 @@ export interface Connector {
     data: { project: string }
   }) => Promise<ProjectKnowledge>
   /** Everything the UI reads, in one call: beads with comments and edges, ready, blocked, cursor. */
-  snapshot: (args: { data: { project: string } }) => Promise<ProjectSnapshot>
+  snapshot: (args: {
+    data: { project: string; background?: boolean }
+  }) => Promise<ProjectSnapshot>
   /** One bead's comments, to patch a snapshot after a comment-only change. */
   beadComments: (args: {
-    data: { project: string; id: string }
+    data: { project: string; id: string; background?: boolean }
   }) => Promise<Comment[]>
   readArtifact: (args: {
     data: { project: string; path: string }

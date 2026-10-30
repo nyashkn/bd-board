@@ -1,7 +1,8 @@
 //! `snapshot`: export, then ready, then blocked, one after another (parallel is slower on the
 //! embedded lock). Concurrent callers for a project share work, see `coalesced`.
 
-use super::exec::{bd_json_array, run_bd};
+use super::exec::{bd_json_array_prio, run_bd_prio};
+use super::queue::Priority;
 use crate::domain::snapshot::build_snapshot;
 use crate::domain::ProjectSnapshot;
 use crate::registry::resolve_dir;
@@ -126,10 +127,18 @@ fn hash_of(parts: &[&str]) -> String {
     format!("{:016x}", hasher.finish())
 }
 
-fn build(dir: &std::path::Path) -> Result<ProjectSnapshot, String> {
-    let exported = run_bd(dir, &["export"])?;
-    let ready = run_bd(dir, &["ready", "--json", "-n", "0"]).ok();
-    let blocked = run_bd(dir, &["blocked", "--json"]).ok();
+fn lane(background: bool) -> Priority {
+    if background {
+        Priority::Background
+    } else {
+        Priority::User
+    }
+}
+
+fn build(dir: &std::path::Path, lane: Priority) -> Result<ProjectSnapshot, String> {
+    let exported = run_bd_prio(dir, &["export"], lane)?;
+    let ready = run_bd_prio(dir, &["ready", "--json", "-n", "0"], lane).ok();
+    let blocked = run_bd_prio(dir, &["blocked", "--json"], lane).ok();
     let rows = |raw: &Option<String>| -> Option<Vec<Value>> {
         let text = raw.as_deref()?.trim();
         if text.is_empty() {
@@ -153,19 +162,27 @@ fn build(dir: &std::path::Path) -> Result<ProjectSnapshot, String> {
     ))
 }
 
-pub(crate) fn snapshot_inner(project_id: &str) -> Result<ProjectSnapshot, String> {
+// shortcut: a run's lane is its first caller's; a user caller joining a background run waits in
+// that lane. Upgrade if RUM shows it matters.
+pub(crate) fn snapshot_inner(
+    project_id: &str,
+    background: bool,
+) -> Result<ProjectSnapshot, String> {
     static SLOTS: OnceLock<Slots<ProjectSnapshot>> = OnceLock::new();
     let dir = resolve_dir(project_id)?;
     let slots = SLOTS.get_or_init(|| Mutex::new(HashMap::new()));
-    coalesced(slots, &dir.to_string_lossy(), || build(&dir))
+    coalesced(slots, &dir.to_string_lossy(), || {
+        build(&dir, lane(background))
+    })
 }
 
 pub(crate) fn bead_comments_inner(
     project_id: &str,
     id: &str,
+    background: bool,
 ) -> Result<Vec<crate::domain::Comment>, String> {
     let dir = resolve_dir(project_id)?;
-    let rows = bd_json_array(&dir, &["comments", id, "--json"])
+    let rows = bd_json_array_prio(&dir, &["comments", id, "--json"], lane(background))
         .ok_or_else(|| format!("bd comments {id} returned no list"))?;
     Ok(rows
         .iter()

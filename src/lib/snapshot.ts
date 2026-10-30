@@ -47,7 +47,10 @@ export interface ProjectSnapshot {
   ready: string[] | null
   /** Rows from `bd blocked`; null when bd could not say. */
   blocked: BlockedRow[] | null
-  /** Content hash of the three bd outputs (the feed seq would cost another bd call). */
+  /**
+   * Content hash of the three bd outputs (the feed seq would cost another bd call). In memory
+   * only: never persisted, and comparable only within one backend and session.
+   */
   cursor: string
 }
 
@@ -99,6 +102,24 @@ export function deriveChildren(beads: Bead[]): Bead[] {
 
 /** The board's bead list: what `bd list --all --json` plus links, readiness and children gave. */
 export function selectBoard(snapshot: ProjectSnapshot): Bead[] {
+  return memo(boards, snapshot, buildBoard)
+}
+
+// Selectors run once per snapshot object, however many observers ask.
+const boards = new WeakMap<ProjectSnapshot, Bead[]>()
+const knowledgeCache = new WeakMap<ProjectSnapshot, ProjectKnowledge>()
+
+function memo<T>(
+  cache: WeakMap<ProjectSnapshot, T>,
+  snapshot: ProjectSnapshot,
+  build: (s: ProjectSnapshot) => T,
+): T {
+  let value = cache.get(snapshot)
+  if (value === undefined) cache.set(snapshot, (value = build(snapshot)))
+  return value
+}
+
+function buildBoard(snapshot: ProjectSnapshot): Bead[] {
   const listed = snapshot.beads.filter(isListed)
   const known = new Set(listed.map((b) => b.id))
   const links = new Map<string, BeadLink[]>()
@@ -182,6 +203,10 @@ const byDateDesc = (a: { created_at?: string }, b: { created_at?: string }) =>
 
 /** What the project-knowledge `bd export` query gave: recent comments and the typed entries. */
 export function selectKnowledge(snapshot: ProjectSnapshot): ProjectKnowledge {
+  return memo(knowledgeCache, snapshot, buildKnowledge)
+}
+
+function buildKnowledge(snapshot: ProjectSnapshot): ProjectKnowledge {
   const all: ProjectComment[] = snapshot.beads.flatMap((b) =>
     b.comments.map((c) => ({
       id: c.id,

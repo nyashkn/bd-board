@@ -882,15 +882,21 @@ export function buildSnapshot(
  * Everything the UI reads, from three bd calls run one after another (parallel is slower on the
  * embedded lock). Concurrent callers for a project share one run, see coalesce.ts.
  */
-async function getSnapshot(projectId: string): Promise<ProjectSnapshot> {
+async function getSnapshot(
+  projectId: string,
+  background = false,
+): Promise<ProjectSnapshot> {
   const dir = await resolveDir(projectId)
+  // shortcut: a run's lane is its first caller's; a user caller joining a background run waits in
+  // that lane. Upgrade if RUM shows it matters.
+  const lane: Priority = background ? 'background' : 'user'
   return coalesced(dir, async () => {
-    const exported = await bdRaw(dir, ['export'])
+    const exported = await bdRaw(dir, ['export'], lane)
     // ready/blocked are optional: an old bd leaves them undefined and the UI falls back to status.
-    const ready = await bdRaw(dir, ['ready', '--json', '-n', '0']).catch(
+    const ready = await bdRaw(dir, ['ready', '--json', '-n', '0'], lane).catch(
       () => undefined,
     )
-    const blocked = await bdRaw(dir, ['blocked', '--json']).catch(
+    const blocked = await bdRaw(dir, ['blocked', '--json'], lane).catch(
       () => undefined,
     )
     return buildSnapshot(exported, ready, blocked)
@@ -900,10 +906,12 @@ async function getSnapshot(projectId: string): Promise<ProjectSnapshot> {
 async function getBeadComments(
   projectId: string,
   id: string,
+  background = false,
 ): Promise<Comment[]> {
   const rows = await bdJson<Record<string, unknown>[]>(
     await resolveDir(projectId),
     ['comments', id, '--json'],
+    background ? 'background' : 'user',
   )
   return rows.map(mapComment)
 }

@@ -5,6 +5,8 @@
  * those beads' comments; any other or unknown op runs a full snapshot.
  */
 export const REFRESH_DEBOUNCE_MS = 300
+/** A sustained burst still refreshes at least this often. */
+export const REFRESH_MAX_WAIT_MS = 1000
 
 export interface RefreshJobs {
   full: () => Promise<unknown>
@@ -34,6 +36,8 @@ export function createRefresher(
   let disposed = false
   const commentIds = new Set<string>()
   let earliest = 0
+  // When the oldest unrefreshed change arrived; caps how long the debounce can keep deferring.
+  let burstStart = 0
 
   const pending = () => wantFull || commentIds.size > 0
 
@@ -46,6 +50,7 @@ export function createRefresher(
     timer = undefined
     // The running job re-arms on completion if anything is still pending.
     if (running || disposed || !pending()) return
+    burstStart = 0
     const wait = earliest - Date.now()
     if (wait > 0) return arm(wait)
     running = true
@@ -71,7 +76,13 @@ export function createRefresher(
       } else {
         wantFull = true
       }
-      arm(debounceMs)
+      burstStart ||= Date.now()
+      arm(
+        Math.min(
+          debounceMs,
+          Math.max(0, burstStart + REFRESH_MAX_WAIT_MS - Date.now()),
+        ),
+      )
     },
     full() {
       wantFull = true

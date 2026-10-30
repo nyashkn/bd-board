@@ -34,12 +34,17 @@ impl BeadSource for BdCli {
         reads::get_project_knowledge_inner(project_id)
     }
 
-    fn snapshot(&self, project_id: &str) -> Result<ProjectSnapshot, String> {
-        snapshot::snapshot_inner(project_id)
+    fn snapshot(&self, project_id: &str, background: bool) -> Result<ProjectSnapshot, String> {
+        snapshot::snapshot_inner(project_id, background)
     }
 
-    fn bead_comments(&self, project_id: &str, id: &str) -> Result<Vec<Comment>, String> {
-        snapshot::bead_comments_inner(project_id, id)
+    fn bead_comments(
+        &self,
+        project_id: &str,
+        id: &str,
+        background: bool,
+    ) -> Result<Vec<Comment>, String> {
+        snapshot::bead_comments_inner(project_id, id, background)
     }
 }
 

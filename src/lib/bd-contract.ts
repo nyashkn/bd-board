@@ -15,8 +15,15 @@ export interface BdAdapter {
   listBeads: (projectId: string) => Promise<Bead[]>
   getBeadDetail: (projectId: string, id: string) => Promise<BeadDetail>
   getProjectKnowledge: (projectId: string) => Promise<ProjectKnowledge>
-  getSnapshot: (projectId: string) => Promise<ProjectSnapshot>
-  getBeadComments: (projectId: string, id: string) => Promise<Comment[]>
+  getSnapshot: (
+    projectId: string,
+    background?: boolean,
+  ) => Promise<ProjectSnapshot>
+  getBeadComments: (
+    projectId: string,
+    id: string,
+    background?: boolean,
+  ) => Promise<Comment[]>
   updateBeadStatus: (
     projectId: string,
     id: string,

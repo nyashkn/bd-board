@@ -117,16 +117,50 @@ describe('opening a bead from a warm snapshot', () => {
 })
 
 describe('refresh', () => {
-  it('cancelRefetch: false joins the running fetch instead of starting another', async () => {
+  it('a change during an in-flight fetch gets a run that began after the change', async () => {
     const client = newClient()
     await client.fetchQuery(snapshotQueryOptions('p'))
     calls.snapshot.mockClear()
-    let finish!: (s: ProjectSnapshot) => void
-    calls.snapshot.mockReturnValue(new Promise((r) => (finish = r)))
-    const a = refreshSnapshot(client, 'p')
-    const b = refreshSnapshot(client, 'p')
-    finish(fresh())
-    await Promise.all([a, b])
+    // A mount refetch is under way and will answer with the old state.
+    let stale!: (s: ProjectSnapshot) => void
+    calls.snapshot.mockReturnValueOnce(new Promise((r) => (stale = r)))
+    const stop = new QueryObserver(client, snapshotQueryOptions('p')).subscribe(
+      () => {},
+    )
+    const mount = client.refetchQueries({ queryKey: snapshotKey('p') })
+    // The agent's change lands; the refresh it triggers must not join that fetch.
+    const changed = buildSnapshot(
+      exportText.replace('"status":"in_progress"', '"status":"closed"'),
+      readyText,
+      blockedText,
+    )
+    calls.snapshot.mockResolvedValueOnce(changed)
+    await refreshSnapshot(client, 'p')
+    stale(fresh())
+    await mount
+    expect(calls.snapshot).toHaveBeenCalledTimes(2)
+    expect(
+      selectDetail(client.getQueryData(snapshotKey('p'))!, 'syn-2')?.status,
+    ).toBe('closed')
+    stop()
+  })
+
+  it('refreshes of a loaded snapshot take the background lane; the first load does not', async () => {
+    const client = newClient()
+    await client.fetchQuery(snapshotQueryOptions('p'))
+    await refreshSnapshot(client, 'p')
+    expect(calls.snapshot.mock.calls.map((c) => c[0].data.background)).toEqual([
+      false,
+      true,
+    ])
+  })
+
+  it('many comment-only ids cost one snapshot, not one bd comments call each', async () => {
+    const client = newClient()
+    await client.fetchQuery(snapshotQueryOptions('p'))
+    calls.snapshot.mockClear()
+    await refreshComments(client, 'p', ['a', 'b', 'c', 'd'])
+    expect(calls.beadComments).not.toHaveBeenCalled()
     expect(calls.snapshot).toHaveBeenCalledTimes(1)
   })
 
@@ -230,5 +264,44 @@ describe('optimistic write, then the feed confirms', () => {
     settleWrite(client, 'p')
     await vi.waitFor(() => expect(calls.snapshot).toHaveBeenCalledTimes(1))
     stop()
+  })
+
+  it('a write that cancels a running feed refresh runs it again, so the agent change lands', async () => {
+    const client = newClient()
+    await client.fetchQuery(snapshotQueryOptions('p'))
+    setFeedLive('p', true)
+    const stop = new QueryObserver(client, snapshotQueryOptions('p')).subscribe(
+      () => {},
+    )
+    // An agent closed syn-2; the refresh for it is running and will not finish before the write.
+    const withAgent = buildSnapshot(
+      exportText.replace('"status":"in_progress"', '"status":"closed"'),
+      readyText,
+      blockedText,
+    )
+    let slow!: (s: ProjectSnapshot) => void
+    calls.snapshot.mockClear()
+    calls.snapshot.mockReturnValueOnce(new Promise((r) => (slow = r)))
+    calls.snapshot.mockResolvedValue(withAgent)
+    const refresh = refreshSnapshot(client, 'p')
+
+    // Meanwhile the user comments on syn-4: the patch cancels the running refresh.
+    await patchSnapshot(client, 'p', (s) =>
+      addComment(s, 'syn-4', { id: 'tmp', text: 'mine' }),
+    )
+    slow(withAgent)
+    await refresh
+    expect(
+      selectDetail(client.getQueryData(snapshotKey('p'))!, 'syn-2')?.status,
+    ).toBe('in_progress') // the cancelled refresh left no trace
+
+    settleWrite(client, 'p')
+    await vi.waitFor(() =>
+      expect(
+        selectDetail(client.getQueryData(snapshotKey('p'))!, 'syn-2')?.status,
+      ).toBe('closed'),
+    )
+    stop()
+    setFeedLive('p', false)
   })
 })

@@ -5,10 +5,12 @@ import { readArtifactFile } from './artifact-read.ts'
 import { bdAdapter, probeDoltMode, resolveDir } from './bd.ts'
 import {
   parseArtifactInput,
+  parseBeadCommentsInput,
   parseBeadInput,
   parseCommentInput,
   parseCreateBeadInput,
   parseProjectInput,
+  parseSnapshotInput,
   parseStatusUpdateInput,
   parseUpdateBeadInput,
 } from './server-validation.ts'
@@ -49,12 +51,14 @@ const webGetBeadDetail = createServerFn({ method: 'GET' })
   .handler(({ data }) => bdAdapter.getBeadDetail(data.project, data.id))
 
 const webGetSnapshot = createServerFn({ method: 'GET' })
-  .validator(parseProjectInput)
-  .handler(({ data }) => bdAdapter.getSnapshot(data.project))
+  .validator(parseSnapshotInput)
+  .handler(({ data }) => bdAdapter.getSnapshot(data.project, data.background))
 
 const webGetBeadComments = createServerFn({ method: 'GET' })
-  .validator(parseBeadInput)
-  .handler(({ data }) => bdAdapter.getBeadComments(data.project, data.id))
+  .validator(parseBeadCommentsInput)
+  .handler(({ data }) =>
+    bdAdapter.getBeadComments(data.project, data.id, data.background),
+  )
 
 const webGetProjectKnowledge = createServerFn({ method: 'GET' })
   .validator(parseProjectInput)
@@ -163,11 +167,12 @@ async function getBeadDetailFnImpl({
 async function getSnapshotFnImpl({
   data,
 }: {
-  data: { project: string }
+  data: { project: string; background?: boolean }
 }): Promise<ProjectSnapshot> {
   if (isDesktopApp())
     return invoke<ProjectSnapshot>('get_project_snapshot', {
       projectId: data.project,
+      background: data.background === true,
     })
   return webGetSnapshot({ data })
 }
@@ -175,12 +180,13 @@ async function getSnapshotFnImpl({
 async function getBeadCommentsFnImpl({
   data,
 }: {
-  data: { project: string; id: string }
+  data: { project: string; id: string; background?: boolean }
 }): Promise<Comment[]> {
   if (isDesktopApp())
     return invoke<Comment[]>('get_bead_comments', {
       projectId: data.project,
       id: data.id,
+      background: data.background === true,
     })
   return webGetBeadComments({ data })
 }

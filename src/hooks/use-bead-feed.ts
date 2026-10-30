@@ -72,6 +72,7 @@ export function useBeadFeed(
     })
 
     const handle = (msg: BeadFeedMessage) => {
+      if (cancelled) return
       setFeedLive(project, msg.type === 'live' || msg.type === 'change')
       switch (msg.type) {
         case 'live':

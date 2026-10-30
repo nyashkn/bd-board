@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { REFRESH_DEBOUNCE_MS, createRefresher } from './snapshot-refresh.ts'
+import {
+  REFRESH_DEBOUNCE_MS,
+  REFRESH_MAX_WAIT_MS,
+  createRefresher,
+} from './snapshot-refresh.ts'
 
 const TOOK_MS = 500
 
@@ -61,6 +65,20 @@ describe('feed-driven refresh pacing', () => {
     expect(count('full:start')).toBe(2)
     await vi.advanceTimersByTimeAsync(TOOK_MS * 10)
     expect(count('full:start')).toBe(2) // at most 2 for the whole burst
+  })
+
+  it('a sustained burst still refreshes: the debounce cannot defer past the max wait', async () => {
+    const { refresher, count } = setup()
+    // an event every 100 ms, never 300 ms of quiet
+    for (let t = 0; t < 3000; t += 100) {
+      refresher.change({ issueIds: ['a'], ops: ['update'] })
+      await vi.advanceTimersByTimeAsync(100)
+    }
+    expect(count('full:start')).toBeGreaterThanOrEqual(2)
+    expect(count('full:start')).toBeLessThanOrEqual(
+      Math.ceil(3000 / REFRESH_MAX_WAIT_MS) + 1,
+    )
+    refresher.dispose()
   })
 
   it('comment-only events fetch those comments and run no full refresh', async () => {

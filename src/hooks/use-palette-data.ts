@@ -34,9 +34,10 @@ export interface PaletteData {
 }
 
 /**
- * Everything the palette searches, read through the same query keys the board uses (so beads
- * already on screen cost nothing). Comments come from the project snapshot when cached, else the read-only project export, lazily:
- * only once the palette is open and the beads are in, two projects at a time, at most 12.
+ * Everything the palette searches. A project whose snapshot is cached (the open one) is read
+ * from it and costs no bd call; the others use their own `['beads', id]` query (30 s staleTime).
+ * Comments come from the snapshot when cached, else the read-only project export, lazily: only
+ * once the palette is open and the beads are in, two projects at a time, at most 12.
  */
 export function usePaletteData(open: boolean, current?: string): PaletteData {
   const queryClient = useQueryClient()

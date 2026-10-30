@@ -63,13 +63,26 @@ pub async fn get_bead_detail(project_id: String, id: String) -> Result<BeadDetai
 }
 
 #[tauri::command]
-pub async fn get_project_snapshot(project_id: String) -> Result<ProjectSnapshot, String> {
-    blocking(move || app::source_for(&project_id).snapshot(&project_id)).await
+pub async fn get_project_snapshot(
+    project_id: String,
+    background: Option<bool>,
+) -> Result<ProjectSnapshot, String> {
+    blocking(move || {
+        app::source_for(&project_id).snapshot(&project_id, background.unwrap_or(false))
+    })
+    .await
 }
 
 #[tauri::command]
-pub async fn get_bead_comments(project_id: String, id: String) -> Result<Vec<Comment>, String> {
-    blocking(move || app::source_for(&project_id).bead_comments(&project_id, &id)).await
+pub async fn get_bead_comments(
+    project_id: String,
+    id: String,
+    background: Option<bool>,
+) -> Result<Vec<Comment>, String> {
+    blocking(move || {
+        app::source_for(&project_id).bead_comments(&project_id, &id, background.unwrap_or(false))
+    })
+    .await
 }
 
 #[tauri::command]
