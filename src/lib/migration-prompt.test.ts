@@ -157,7 +157,8 @@ function bdCommands(prompt: string): string[] {
   let fenced = false
   for (const line of prompt.split('\n')) {
     if (line.startsWith('```')) fenced = !fenced
-    else if (fenced && line.startsWith('bd ')) out.push(line.split(' #')[0])
+    else if (fenced && line.startsWith('bd '))
+      out.push(line.split(' #')[0].split(' || ')[0])
     for (const m of line.matchAll(/`(bd [^`]+)`/g)) out.push(m[1])
   }
   return out
