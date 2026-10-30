@@ -1,6 +1,6 @@
 # Read layer: one core, pluggable connectors
 
-Status: proposal (spike). Tracked by epic `bdb-84h` in the project's beads tracker.
+Status: proposal (spike). Tracked by epic `bdb-84h` in the project's beads tracker. Full measurement grid: [reports/read-layer-poc.md](reports/read-layer-poc.md).
 
 ## Problem
 
@@ -81,7 +81,14 @@ Each statement costs one RTT, and a new connection costs about 3.5 RTT. Over a n
 
 Real-edge numbers were measured from a client about 170 ms RTT from the nearest edge, 30 runs, medians, with synthetic scrambled data of the same size. A 304 saves bytes, not time: it costs the same round trip as a 200. A refresh that changes something costs about 0.6 s, the same order as an embedded `bd export`. So for a machine that runs `bd`, the Worker path is not faster than local reads; it only pays off for viewers without Dolt. The throwaway bucket and Worker were deleted after the run.
 
-Dolt 2.5.1 can also use R2 directly as a remote: `dolt remote --help` lists `s3://bucket/db?endpoint=…&region=auto` for S3-compatible stores with conditional writes, R2 included, with no DynamoDB. Every machine then keeps a full local replica and runs `bd sync` on a timer. The beads [bucket-federation guide](https://beads.gascity.com/multi-agent/bucket-federation) reports about 5 s for a clone, about 1 s for a pull+merge and about 4 s for an incremental push, at about 1.3k issues on GCS (its numbers, not ours). Our own numbers for this path were not measured.
+Dolt 2.5.1 can also use R2 directly as a remote: `dolt remote --help` lists `s3://bucket/db?endpoint=…&region=auto` for S3-compatible stores with conditional writes, R2 included, with no DynamoDB. Every machine then keeps a full local replica and runs `bd sync` on a timer. The beads [bucket-federation guide](https://beads.gascity.com/multi-agent/bucket-federation) reports about 5 s for a clone, about 1 s for a pull+merge and about 4 s for an incremental push, at about 1.3k issues on GCS (its numbers, not ours). Measured on R2 with the 234-bead database (90 MiB, 1,390 commits), using plain `dolt`:
+
+- Write-to-visible on another replica: 17.5 s.
+- Incremental push: 12.3 s. Pull: 5.2 s.
+- No-op poll: 2.6 s. Clone: 4.7 s.
+- Replica reads: as fast as local.
+
+bd 1.3.2 itself rejects the scheme (`unknown url scheme: 's3'`). A bucket remote is therefore a backup or occasional-sync option, not a live one. For live remote use, a central Dolt sql-server measured 0.2-0.6 s per bulk read at 50-150 ms RTT.
 
 Free tier: one client polling the manifest every 30 s uses 86,400 Class B operations a month (0.9% of 10 M). An inbox that is listed every 30 s uses 86,400 Class A operations (8.6% of 1 M).
 
@@ -222,7 +229,7 @@ Recommended order:
 ## Not verified
 
 - **The source of the RUM call counts.** They are inferred from code, and the labelled trace is pending.
-- **Real-network behaviour.** Remote numbers are simulated (no jitter, loss or TLS). Dolt-over-R2 clone, pull and push numbers were not measured (only the beads guide's GCS numbers are cited).
+- **Real-network behaviour.** Remote numbers are simulated (no jitter, loss or TLS). Remote SQL write-to-visible was not measured.
 - **`bd serve` behaviour.**
 - **Unsafe connections.** Whether `HASHOF('HEAD')` and `DOLT_DIFF` are safe on a connection that `bd` also writes through, and whether uncommitted `WORKING` rows ever appear (bd auto-commits, so it is not expected).
 - **Bulk-query correctness.** Whether one bulk SQL read matches `bd export` field for field. The dolt-sql connector must test against bd's output, not against the schema.
