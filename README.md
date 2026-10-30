@@ -165,6 +165,8 @@ Two optional fields per project:
 
 A wrongly typed value (for example `"readonly": "yes"`) is an error, never silently ignored. A read-only project cannot enable the events journal itself (the shim refuses `config set`), so run `bd config set events-journal true` once by hand in that project; otherwise the board polls every 8 s. Test the shim with `pnpm test:readonly` (needs bd and python3).
 
+Slow project, or one on another machine? See [docs/remote-projects.md](docs/remote-projects.md): moving from embedded to shared-server mode by hand (about 4-5x faster `bd` calls), and remote setups (a central Dolt server, a bucket remote).
+
 Use the **Open project** and **Init project** buttons in the app UI to manage projects. The app resolves each project's beads location by calling `bd where --json`, so it automatically honors all beads configuration mechanisms (embedded, shared server, proxied, global, redirects).
 
 ### Environment Variables

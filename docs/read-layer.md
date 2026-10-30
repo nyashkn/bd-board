@@ -162,7 +162,7 @@ dolt-sql is the fast path for server-mode projects, but its marginal win is smal
 - **Schema drift.** It reads bd's tables directly, so a bd schema change could return wrong data without failing. Its tests must compare against `bd export` output, and it must check `schema_version` from the probe and refuse unknown versions, falling back to bd-cli.
 - **Credentials.** It must resolve them the way bd does: `BEADS_DOLT_PASSWORD`, then bd's credentials file and TLS settings. An app launched from Finder does not inherit shell variables.
 
-Remote Dolt over a bucket (R2, S3, GCS) is not a connector. It is a project setup step: the machine keeps a local replica (`bd init --remote …`, then `bd sync` on a timer). bd-board reads that replica through bd-cli or dolt-sql like any local project. Its costs:
+Remote Dolt over a bucket (R2, S3, GCS) is not a connector (setup steps: [remote-projects.md](remote-projects.md)). It is a project setup step: the machine keeps a local replica (`bd init --remote …`, then `bd sync` on a timer). bd-board reads that replica through bd-cli or dolt-sql like any local project. Its costs:
 
 - Bucket credentials on every machine.
 - `bd sync` exits 2 on conflicts, which happen whenever two replicas edit the same bead between syncs.
@@ -203,12 +203,12 @@ Recommended order:
 5. Persisted cache (IndexedDB).
 6. RUM after. Re-decide steps 7-9 on the numbers.
 7. Probe and auto-selection, then the dolt-sql connector.
-8. Remote setup docs (bucket remote, manual server migration).
+8. Remote setup docs (bucket remote, manual server migration): [remote-projects.md](remote-projects.md).
 9. http-snapshot only if a no-Dolt viewer is needed.
 
 ## Risks
 
-- **Migration.** Moving a project from embedded to server mode has no `bd` command in 1.3.2. Every live `bd` process and agent on that project must stop, and backup targets and remotes must be re-checked. It stays a manual, owner-approved, per-project step. bd-board only detects the mode.
+- **Migration.** Moving a project from embedded to server mode has no `bd` command in 1.3.2. Every live `bd` process and agent on that project must stop, and backup targets and remotes must be re-checked. It stays a manual, owner-approved, per-project step ([procedure](remote-projects.md#a-make-a-project-faster-embedded-to-shared-server)). bd-board only detects the mode.
 - **Lock contention with agents.** Every bd-board refresh holds the embedded lock and slows the agents' own `bd` writes. The per-project queue, the minimum gap between refreshes and op-based patches keep the lock under 50% busy. Measure this during a real agent burst.
 - **Snapshot size.** Export grows with comments. At 274 KB gzipped (0.9 MB raw) for 234 beads it is fine. Above a few thousand beads, refresh by delta (`DOLT_DIFF`, or feed ids followed by `show`).
 - **Field parity.** Export includes hidden types, has no `parent`, and lacks edge-target fields. A test pins snapshot-derived detail against `show` on a generic fixture.
