@@ -47,20 +47,33 @@ describe('BdQueue', () => {
     expect(peak).toBe(2)
   })
 
-  it('shares one call between identical keyed reads', async () => {
+  it('shares one call between identical keyed reads that are still queued', async () => {
     const q = new BdQueue(1)
     let calls = 0
     const g = gate()
-    const fn = async () => {
-      calls++
-      await g.p
-      return calls
-    }
+    const fn = async () => ++calls
+    const hold = q.run(null, () => g.p)
     const x = q.run('k', fn)
     const y = q.run('k', fn)
     g.open()
+    await hold
     expect(await Promise.all([x, y])).toEqual([1, 1])
     expect(await q.run('k', fn)).toBe(2) // finished calls are not cached
+  })
+
+  it('does not hand a read that started before a write to a read issued after it', async () => {
+    const q = new BdQueue(2)
+    const g = gate()
+    const early = q.run('k', async () => {
+      await g.p
+      return 'before-write'
+    })
+    await tick() // the early read is running
+    await q.run(null, async () => 'write')
+    const late = q.run('k', async () => 'after-write')
+    g.open()
+    expect(await late).toBe('after-write')
+    expect(await early).toBe('before-write')
   })
 
   it('never coalesces null keys', async () => {
@@ -87,20 +100,64 @@ describe('BdQueue', () => {
   })
 })
 
+async function fakeBd(script: string) {
+  const { mkdtempSync, writeFileSync, chmodSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync(join(tmpdir(), 'bdq-'))
+  const fake = join(dir, 'bd')
+  writeFileSync(fake, `#!/bin/sh\n${script}\n`)
+  chmodSync(fake, 0o755)
+  vi.stubEnv('BD_BIN', fake)
+  return dir
+}
+
 describe('bdExec timeout', () => {
   it('stops a hung bd and says so', async () => {
-    const { mkdtempSync, writeFileSync, chmodSync } = await import('node:fs')
-    const { tmpdir } = await import('node:os')
-    const { join } = await import('node:path')
     const { bdExec } = await import('./bd.ts')
-    const dir = mkdtempSync(join(tmpdir(), 'bdq-'))
-    const fake = join(dir, 'bd')
-    writeFileSync(fake, '#!/bin/sh\nsleep 5\n')
-    chmodSync(fake, 0o755)
-    vi.stubEnv('BD_BIN', fake)
+    const dir = await fakeBd('sleep 5')
     vi.stubEnv('BD_BOARD_BD_TIMEOUT_MS', '150')
     try {
       await expect(bdExec(dir, ['show', 'x'])).rejects.toThrow(/timed out/)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('frees the call when a grandchild keeps the pipe open (read-only shim pipeline)', async () => {
+    const { bdExec } = await import('./bd.ts')
+    const dir = await fakeBd("(trap '' TERM; sleep 30) &\nwait")
+    vi.stubEnv('BD_BOARD_BD_TIMEOUT_MS', '150')
+    const started = Date.now()
+    try {
+      await expect(bdExec(dir, ['show', 'x'])).rejects.toThrow(/timed out/)
+      expect(Date.now() - started).toBeLessThan(2000)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('tells the user a timed-out write may have been applied', async () => {
+    const { bdExec } = await import('./bd.ts')
+    const dir = await fakeBd('sleep 5')
+    vi.stubEnv('BD_BOARD_BD_TIMEOUT_MS', '150')
+    try {
+      await expect(bdExec(dir, ['update', 'x'])).rejects.toThrow(
+        /may have been applied/,
+      )
+      await expect(bdExec(dir, ['show', 'x'])).rejects.not.toThrow(
+        /may have been applied/,
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('reports output over the buffer as that, not as a timeout', async () => {
+    const { bdExec } = await import('./bd.ts')
+    const dir = await fakeBd('head -c 70000000 /dev/zero')
+    try {
+      await expect(bdExec(dir, ['list'])).rejects.toThrow(/output.*buffer/i)
     } finally {
       vi.unstubAllEnvs()
     }

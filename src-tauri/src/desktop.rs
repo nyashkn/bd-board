@@ -1,4 +1,6 @@
-use crate::bd_queue::{is_read_call, output_with_timeout, queue_for, timeout_from_env, Queues};
+use crate::bd_queue::{
+    is_read_call, output_with_timeout, queue_for, timeout_from_env, Queues, TIMEOUT_GRACE,
+};
 use crate::registry::{self, RegistryEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -418,11 +420,23 @@ struct BdCapture {
 }
 
 fn exec_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
-    static QUEUES: OnceLock<Queues<Result<BdCapture, String>>> = OnceLock::new();
+    static QUEUES: OnceLock<Queues<BdCapture>> = OnceLock::new();
     let queue = queue_for(&QUEUES, &dir.to_string_lossy());
     // Reads with the same args share a process; mutations always run.
     let key = is_read_call(args).then(|| format!("{:?}", args));
     queue.run(key.as_deref(), || spawn_bd(dir, args))
+}
+
+fn timeout_message(args: &[&str], timeout: std::time::Duration) -> String {
+    let mut msg = format!(
+        "bd {} timed out after {}s and was stopped",
+        args.first().unwrap_or(&""),
+        timeout.as_secs()
+    );
+    if !is_read_call(args) {
+        msg.push_str("; the command may have been applied, so check before retrying");
+    }
+    msg
 }
 
 fn spawn_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
@@ -433,14 +447,8 @@ fn spawn_bd(dir: &Path, args: &[&str]) -> Result<BdCapture, String> {
         let mut cmd = Command::new(candidate);
         cmd.current_dir(dir).args(args).envs(env.iter().cloned());
 
-        match output_with_timeout(&mut cmd, timeout) {
-            Ok(Err(())) => {
-                return Err(format!(
-                    "bd {} timed out after {}s and was stopped",
-                    args.first().unwrap_or(&""),
-                    timeout.as_secs()
-                ));
-            }
+        match output_with_timeout(&mut cmd, timeout, TIMEOUT_GRACE) {
+            Ok(Err(())) => return Err(timeout_message(args, timeout)),
             Ok(Ok(output)) => {
                 if output.stdout.len() > MAX_BUFFER {
                     return Err("bd output exceeded buffer".to_string());
@@ -2047,6 +2055,12 @@ pub fn relocate_project(id: String, path: String) -> Result<RegistryEntry, Strin
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn timeout_message_warns_only_for_writes() {
+        let t = std::time::Duration::from_secs(60);
+        assert!(!super::timeout_message(&["show", "x"], t).contains("may have been applied"));
+        assert!(super::timeout_message(&["update", "x"], t).contains("may have been applied"));
+    }
 
     #[test]
     fn artifact_reads_and_confines() {

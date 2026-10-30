@@ -21,7 +21,13 @@ import type {
 import { summarizeBeads } from './counts.ts'
 import { parseKnowledgeCommentText } from './knowledge.ts'
 import { loadRegistry } from './registry.ts'
-import { queued, timeoutFromEnv } from './bd-queue.ts'
+import {
+  BdTimeoutError,
+  execFileGroup,
+  isReadCall,
+  queued,
+  timeoutFromEnv,
+} from './bd-queue.ts'
 import { bdNotFoundMessage, classifyBdVersion } from './bd-errors.ts'
 import type { BdStatus } from './bd-errors.ts'
 import {
@@ -205,7 +211,7 @@ async function spawnBd(dir: string, args: string[]): Promise<BdResult> {
 
   for (const candidate of candidates) {
     try {
-      const { stdout, stderr } = await execFileAsync(candidate, args, {
+      const { stdout, stderr } = await execFileGroup(candidate, args, {
         cwd: dir,
         env,
         maxBuffer: MAX_BUFFER,
@@ -215,15 +221,20 @@ async function spawnBd(dir: string, args: string[]): Promise<BdResult> {
     } catch (err: unknown) {
       const error = err as {
         code?: string | number
-        killed?: boolean
         stdout?: string
         stderr?: string
       }
 
-      if (error.killed) {
+      if (err instanceof BdTimeoutError) {
         throw new Error(
-          `bd ${args[0] ?? ''} timed out after ${Math.round(timeout / 1000)}s and was stopped`,
+          `bd ${args[0] ?? ''} timed out after ${Math.round(timeout / 1000)}s and was stopped` +
+            (isReadCall(args)
+              ? ''
+              : '; the command may have been applied, so check before retrying'),
         )
+      }
+      if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+        throw new Error('bd output exceeded buffer')
       }
       if (error.code === 'ENOENT') {
         continue
