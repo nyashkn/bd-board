@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MigrationPromptSection } from '@/components/migration-prompt-section'
 import {
   pickProjectDirectory,
   renameProject,
@@ -274,6 +275,8 @@ export function EditProjectModal({
               </div>
             )}
           </div>
+
+          {!isRepair && <MigrationPromptSection project={project} />}
         </div>
 
         <div className="flex justify-end gap-2">
