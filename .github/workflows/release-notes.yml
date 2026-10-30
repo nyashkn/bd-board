@@ -95,6 +95,11 @@ jobs:
           V=$(node -p "require('./package.json').version") perl -0pi -e 's/(name = "bd-board-desktop"\nversion = ")[^"]+(")/$1$ENV{V}$2/' src-tauri/Cargo.lock
           node scripts/check-release-version.mjs
 
+      # CI runs `pnpm check` (prettier) on the Release PR, so the changelog must already conform.
+      - name: format changelog
+        if: env.HAS_KEY == 'true'
+        run: npx --yes prettier@3.8.3 --write CHANGELOG.md
+
       # A human still merges the Release PR. Push only CHANGELOG.md and Cargo.lock.
       - name: commit rewrite
         if: env.HAS_KEY == 'true'
