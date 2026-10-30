@@ -21,6 +21,7 @@ import type {
 import { summarizeBeads } from './counts.ts'
 import { parseKnowledgeCommentText } from './knowledge.ts'
 import { loadRegistry } from './registry.ts'
+import { queued, timeoutFromEnv } from './bd-queue.ts'
 import { bdNotFoundMessage, classifyBdVersion } from './bd-errors.ts'
 import type { BdStatus } from './bd-errors.ts'
 import {
@@ -184,16 +185,21 @@ export function bdErrorMessage(
   return `bd exited with status ${exitCode}`
 }
 
-export async function bdExec(
-  dir: string,
-  args: string[],
-): Promise<{
+type BdResult = {
   bin: string
   env: NodeJS.ProcessEnv
   code: number
   stdout: string
   stderr: string
-}> {
+}
+
+/** One bd process per project at a time; identical in-flight reads share a process. */
+export function bdExec(dir: string, args: string[]): Promise<BdResult> {
+  return queued(dir, args, () => spawnBd(dir, args))
+}
+
+async function spawnBd(dir: string, args: string[]): Promise<BdResult> {
+  const timeout = timeoutFromEnv(process.env)
   const { candidates, env: extra } = await launchFor(dir)
   const env = { ...process.env, ...extra }
 
@@ -203,15 +209,22 @@ export async function bdExec(
         cwd: dir,
         env,
         maxBuffer: MAX_BUFFER,
+        timeout,
       })
       return { bin: candidate, env, code: 0, stdout, stderr }
     } catch (err: unknown) {
       const error = err as {
         code?: string | number
+        killed?: boolean
         stdout?: string
         stderr?: string
       }
 
+      if (error.killed) {
+        throw new Error(
+          `bd ${args[0] ?? ''} timed out after ${Math.round(timeout / 1000)}s and was stopped`,
+        )
+      }
       if (error.code === 'ENOENT') {
         continue
       }
@@ -735,15 +748,23 @@ async function getBeadDetail(
 ): Promise<BeadDetail> {
   const dir = await resolveDir(projectId)
 
-  const [rawArr, rawComments] = await Promise.all([
-    bdJson<Record<string, unknown>[]>(dir, ['show', id, '--json']),
-    bdJson<Record<string, unknown>[]>(dir, ['comments', id, '--json']).catch(
-      () => [] as Record<string, unknown>[],
-    ),
+  // show first: its comment_count says whether `bd comments` is worth a process. The
+  // per-project queue runs one bd at a time anyway, so overlapping them gains nothing.
+  const rawArr = await bdJson<Record<string, unknown>[]>(dir, [
+    'show',
+    id,
+    '--json',
   ])
-
   const raw = rawArr[0] ?? {}
   const bead = mapRawBead(raw)
+  const rawComments =
+    bead.comment_count === 0
+      ? []
+      : await bdJson<Record<string, unknown>[]>(dir, [
+          'comments',
+          id,
+          '--json',
+        ]).catch(() => [] as Record<string, unknown>[])
 
   const rawDeps = Array.isArray(raw['dependencies'])
     ? (raw['dependencies'] as Record<string, unknown>[])
