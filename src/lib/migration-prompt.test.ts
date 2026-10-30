@@ -103,6 +103,16 @@ describe('prompt safety', () => {
     expect(b).toContain('Rollback: stop bd')
   })
 
+  it('never imports unless this project has a fresh workspace', () => {
+    for (const o of ['shared-server', 'remote-server'] as const) {
+      const lines = buildMigrationPrompt(ctx, o).split('\n')
+      const init = lines.findIndex((l) => l.startsWith('bd init'))
+      const imp = lines.findIndex((l) => l.startsWith('bd import'))
+      expect(lines[init]).toMatch(/\|\| exit 1$/)
+      expect(lines.slice(init, imp)).toContain('test -d .beads || exit 1')
+    }
+  })
+
   it('stops on a redirected workspace', () => {
     expect(buildMigrationPrompt(ctx, 'shared-server')).toContain(
       'STOP and report if `bd where` does not show the workspace as `/work/ledger/.beads`',

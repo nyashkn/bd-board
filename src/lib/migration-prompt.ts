@@ -112,9 +112,10 @@ ${guard(i.aside)}
 mv .beads ${i.aside}
 
 # 2. Re-init with the same prefix so ids stay stable.
-${initLine}
+${initLine} || exit 1
 
-# 3. Load the backup.
+# 3. Load the backup (only into this project's new workspace, never a parent's).
+test -d .beads || exit 1
 bd import ${i.backup}
 \`\`\`
 Copy back any settings noted from the old \`.beads/config.yaml\` with \`bd config set\`, and re-add the Dolt remotes and backup targets noted earlier. \`bd init\` aborts over an existing database; that is the data-safety contract, do not work around it.
