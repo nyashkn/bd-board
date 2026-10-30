@@ -263,6 +263,34 @@ pub fn find(id: &str) -> Result<RegistryEntry, String> {
         .ok_or_else(|| format!("unknown project id: {id}"))
 }
 
+pub(crate) fn resolve_dir(project_id: &str) -> Result<PathBuf, String> {
+    let entry = find(project_id)?;
+    let path = PathBuf::from(&entry.path);
+    if !path.exists() {
+        return Err(format!(
+            "project directory no longer exists: {}",
+            entry.path
+        ));
+    }
+    Ok(path)
+}
+
+/// Defence in depth: every write goes through here, so a readonly project refuses before any process runs.
+pub(crate) fn resolve_writable_dir(project_id: &str) -> Result<PathBuf, String> {
+    check_writable(&find(project_id)?)?;
+    resolve_dir(project_id)
+}
+
+pub(crate) fn check_writable(entry: &RegistryEntry) -> Result<(), String> {
+    if entry.readonly {
+        return Err(format!(
+            "project \"{}\" is read-only; writes are refused",
+            entry.label
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,5 +387,20 @@ mod tests {
         let leak = r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","sources":["postgres://u:secret@h/d"]}]}"#;
         let err = parse(leak).err().unwrap();
         assert!(err.contains("entry #1") && !err.contains("secret"), "{err}");
+    }
+
+    #[test]
+    fn writes_are_refused_for_readonly_projects_only() {
+        let entry = |readonly| RegistryEntry {
+            id: "p".into(),
+            path: "/p".into(),
+            label: "P".into(),
+            readonly,
+            filter_label: None,
+            sources: vec![],
+        };
+        assert!(check_writable(&entry(false)).is_ok());
+        let err = check_writable(&entry(true)).unwrap_err();
+        assert!(err.contains("read-only"));
     }
 }

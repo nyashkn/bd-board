@@ -29,8 +29,8 @@ import {
   queued,
   timeoutFromEnv,
 } from './bd-queue.ts'
-import { parseDoltShow } from './connector-select.ts'
-import type { ProbeReply } from './connector-select.ts'
+import { parseDoltShow } from './connectors/select.ts'
+import type { ProbeReply } from './connectors/select.ts'
 import { bdNotFoundMessage, classifyBdVersion } from './bd-errors.ts'
 import type { BdStatus } from './bd-errors.ts'
 import {

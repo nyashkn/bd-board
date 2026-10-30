@@ -2,7 +2,7 @@
 //! Skipped (with a message) when `bd` is not on PATH. HOME and the bd-related
 //! env are set once, before any test body runs; nothing touches the real registry.
 
-use bd_board_desktop::desktop;
+use bd_board_desktop::commands as desktop;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::process::Command;

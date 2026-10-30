@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  isConnectionError,
-  parseDoltShow,
-  resolveCandidates,
-} from './connector-select'
-import { parseRegistryEntry, RegistryError } from './registry'
+import { isConnectionError, parseDoltShow, resolveCandidates } from './select'
+import { parseRegistryEntry, RegistryError } from '../registry'
 
 const base = { id: 'a', path: '/p', label: 'A' }
 const BD = { kind: 'bd-cli', url: 'bd:' }

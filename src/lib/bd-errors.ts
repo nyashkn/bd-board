@@ -6,7 +6,7 @@ import {
 
 export const BD_INSTALL_COMMAND = 'brew install beads'
 
-/** What to do about a missing bd; the same sentence is built in Rust (desktop.rs), keep them in step. */
+/** What to do about a missing bd; the same sentence is built in Rust (adapters/bd_cli/exec.rs), keep them in step. */
 export function bdFixHint(bdBin?: string): string {
   return `Install bd ${MIN_BD_VERSION_LIVE_UPDATES} or newer (${BD_INSTALL_COMMAND}), or set BD_BIN to the full path of the binary (.env.local for the web app, the environment for the desktop app; now: ${bdBin?.trim() || 'unset'}).`
 }

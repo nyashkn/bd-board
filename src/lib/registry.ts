@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 
-import { kindOfSource } from './connector-select.ts'
+import { kindOfSource } from './connectors/select.ts'
 
 export interface RegistryEntry {
   id: string
