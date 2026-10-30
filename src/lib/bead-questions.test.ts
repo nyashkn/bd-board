@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  askingBeads,
+  blockQuestion,
   formatAnswer,
   openStoppedQuestions,
   parseQuestions,
@@ -30,9 +32,8 @@ describe('parseQuestions', () => {
     })
   })
 
-  it('defaults the id to the comment id, then the index', () => {
-    expect(parseQuestions([c(block(':::question'), 'c9')])[0].id).toBe('c9')
-    expect(parseQuestions([c(block(':::question'))])[0].id).toBe('0')
+  it('defaults the id to q<ordinal>, not the comment id', () => {
+    expect(parseQuestions([c(block(':::question'), 'c9')])[0].id).toBe('q1')
   })
 
   it('is not stopped without the flag', () => {
@@ -69,14 +70,14 @@ describe('parseQuestions', () => {
   })
 
   it('treats an empty id= as no id', () => {
-    expect(parseQuestions([c(block(':::question id='), 'k')])[0].id).toBe('k')
+    expect(parseQuestions([c(block(':::question id='), 'k')])[0].id).toBe('q1')
   })
 
   it('finds two questions in one comment with distinct ids', () => {
     const qs = parseQuestions([
       c(`${block(':::question')}\n\n${block(':::question')}`, 'k'),
     ])
-    expect(qs.map((q) => q.id)).toEqual(['k', 'k-2'])
+    expect(qs.map((q) => q.id)).toEqual(['q1', 'q2'])
   })
 
   it('finds questions across comments', () => {
@@ -202,18 +203,91 @@ describe('answers', () => {
   })
 
   it('keeps unicode in the choice', () => {
-    const [q] = parseQuestions([c(block()), c('ANSWER: q1 Café ☕')])
+    const src = ':::question id=q1\nQ?\n- [ ] Café ☕\n- [ ] 日本語\n:::'
+    const [q] = parseQuestions([c(src), c('ANSWER: q1 Café ☕')])
     expect(q.answered?.choice).toBe('Café ☕')
   })
 
-  it('duplicate ids: each answer closes the earliest open one', () => {
+  it('duplicate ids get -2, -3 and answer independently', () => {
     const qs = parseQuestions([
       c(block()),
       c(block()),
-      c('ANSWER: q1 Option A'),
-      c('ANSWER: q1 Option B'),
+      c(block()),
+      c('ANSWER: q1-2 Option B'),
     ])
-    expect(qs.map((q) => q.answered?.choice)).toEqual(['Option A', 'Option B'])
+    expect(qs.map((q) => q.id)).toEqual(['q1', 'q1-2', 'q1-3'])
+    expect(qs.map((q) => q.answered?.choice)).toEqual([
+      undefined,
+      'Option B',
+      undefined,
+    ])
+    const more = parseQuestions([
+      c(block()),
+      c(block()),
+      c('ANSWER: q1 Option A'),
+    ])
+    expect(more.map((q) => q.answered?.choice)).toEqual(['Option A', undefined])
+  })
+
+  it('the card for a repeated id maps to the unique id and writes it', () => {
+    const qs = parseQuestions([c(block()), c(block())])
+    const q = blockQuestion(qs, 1, 0)!
+    expect(q.id).toBe('q1-2')
+    expect(formatAnswer(q.id, 'Option B')).toBe('ANSWER: q1-2 Option B')
+    expect(blockQuestion(qs, 1, 1)).toBeUndefined()
+  })
+
+  it('a unique-suffixed id never collides with an explicit one', () => {
+    const qs = parseQuestions([
+      c(block()),
+      c(block(':::question id=q1-2')),
+      c(block()),
+    ])
+    expect(new Set(qs.map((q) => q.id)).size).toBe(3)
+  })
+
+  it('a known id with a non-option choice is not an answer', () => {
+    const qs = parseQuestions([
+      c(block()),
+      c(block(':::question id=q2')),
+      c('ANSWER: q1 Option Z'),
+    ])
+    expect(qs.every((q) => !q.answered)).toBe(true)
+  })
+
+  it('matches the choice case-insensitively against the options', () => {
+    const [q] = parseQuestions([c(block()), c('ANSWER: q1   option   b ')])
+    expect(q.answered?.choice).toBe('Option B')
+  })
+
+  it('an option that starts with the id still answers (id `Use`, option `Use Redis`)', () => {
+    const src = ':::question id=Use\nQ?\n- [ ] Use Redis\n- [ ] Use SQLite\n:::'
+    const [q] = parseQuestions([c(src), c('ANSWER: Use Redis')])
+    expect(q.answered?.choice).toBe('Use Redis')
+    const [r] = parseQuestions([c(src), c('ANSWER: Use Use Redis')])
+    expect(r.answered?.choice).toBe('Use Redis')
+  })
+
+  it('the id-less form needs an exact option and a single open question', () => {
+    const [q] = parseQuestions([c(block()), c('ANSWER: Option')])
+    expect(q.answered).toBeUndefined()
+  })
+
+  it('missing id= falls back to q<ordinal> across comments, whatever the comment ids', () => {
+    const a = parseQuestions([
+      c(block(':::question'), 'x'),
+      c(block(':::question'), 'y'),
+    ])
+    const b = parseQuestions([c(block(':::question')), c(block(':::question'))])
+    expect(a.map((q) => q.id)).toEqual(['q1', 'q2'])
+    expect(b.map((q) => q.id)).toEqual(['q1', 'q2'])
+  })
+
+  it('dedupes identical option text', () => {
+    const [q] = parseQuestions([
+      c(':::question id=a\nQ\n- [ ] Same\n- [ ] Same\n- [ ] Other\n:::'),
+    ])
+    expect(q.options).toEqual(['Same', 'Other'])
   })
 
   it('ignores a bare id with no choice', () => {
@@ -231,7 +305,8 @@ describe('answers', () => {
 describe('formatAnswer', () => {
   it('formats and round-trips', () => {
     expect(formatAnswer('q1', 'Option B')).toBe('ANSWER: q1 Option B')
-    const [q] = parseQuestions([c(block()), c(formatAnswer('q1', 'Café ☕'))])
+    const src = ':::question id=q1\nQ?\n- [ ] Café ☕\n- [ ] x\n:::'
+    const [q] = parseQuestions([c(src), c(formatAnswer('q1', 'Café ☕'))])
     expect(q.answered?.choice).toBe('Café ☕')
   })
 
@@ -270,5 +345,67 @@ describe('splitQuestionBlocks', () => {
     expect(splitQuestionBlocks(t).filter((p) => 'block' in p)).toHaveLength(
       parseQuestions([c(t)]).length,
     )
+  })
+})
+
+describe('askingBeads', () => {
+  const m = (bead_id: string, text: string, created_at: string) => ({
+    bead_id,
+    text,
+    created_at,
+  })
+  const ask = (id = 'q1') => block(`:::question id=${id} stopped`)
+
+  it('orders each thread by time, whatever the input order', () => {
+    const cs = [
+      m('d-1', 'ANSWER: q1 Option A', '2026-01-02'),
+      m('d-1', ask(), '2026-01-01'),
+    ]
+    expect([...askingBeads(cs)]).toEqual([])
+    expect([...askingBeads([...cs].reverse())]).toEqual([])
+  })
+
+  it('keeps mixed beads apart: one answered, one open, one unflagged', () => {
+    const cs = [
+      m('d-1', ask(), '2026-01-01'),
+      m('d-2', ask(), '2026-01-01'),
+      m('d-3', block(), '2026-01-01'),
+      m('d-1', 'ANSWER: q1 Option B', '2026-01-02'),
+    ]
+    expect([...askingBeads(cs)]).toEqual(['d-2'])
+  })
+
+  it('an answer on another bead does not close the question', () => {
+    const cs = [
+      m('d-1', ask(), '2026-01-01'),
+      m('d-2', 'ANSWER: q1 Option A', '2026-01-02'),
+    ]
+    expect([...askingBeads(cs)]).toEqual(['d-1'])
+  })
+
+  it('judges a capped thread on what it has: a cut-off answer leaves it asking', () => {
+    const all = [
+      m('d-1', ask(), '2026-01-01'),
+      m('d-1', 'ANSWER: q1 Option A', '2026-01-02'),
+    ]
+    expect(askingBeads(all).size).toBe(0)
+    expect(askingBeads(all.slice(0, 1)).size).toBe(1)
+  })
+
+  it('clears after answering a question with no id=, as the modal writes it', () => {
+    const thread = [
+      { text: ':::question stopped\nQ?\n- [ ] Yes\n- [ ] No\n:::' },
+    ]
+    const q = parseQuestions(thread)[0]
+    const cs = [
+      { bead_id: 'd-1', text: thread[0].text, created_at: '2026-01-01' },
+      {
+        bead_id: 'd-1',
+        text: formatAnswer(q.id, 'No'),
+        created_at: '2026-01-02',
+      },
+    ]
+    expect(askingBeads(cs.slice(0, 1)).has('d-1')).toBe(true)
+    expect(askingBeads(cs).has('d-1')).toBe(false)
   })
 })

@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 
 import { BeadLink } from '@/components/bead-link'
@@ -26,16 +26,26 @@ export function QuestionCard({
   question: q,
   readonly,
   pending,
+  error,
   onAnswer,
 }: {
   question: Question
   readonly: boolean
   pending: boolean
+  /** The answer's own failure, shown on this card. */
+  error?: string
   onAnswer: (choice: string) => void
 }) {
   const name = useId()
   const [picked, setPicked] = useState(q.recommended ?? '')
   const answered = q.answered
+  const status = useRef<HTMLDivElement>(null)
+  const wasAnswered = useRef(Boolean(answered))
+  // The Answer button unmounts once answered: hand focus to the status line instead of losing it.
+  useEffect(() => {
+    if (answered && !wasAnswered.current) status.current?.focus()
+    wasAnswered.current = Boolean(answered)
+  }, [answered])
   const canAnswer = !readonly && !answered
   return (
     <div
@@ -45,13 +55,21 @@ export function QuestionCard({
       )}
       data-testid="question-card"
     >
-      <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold">
+      <div
+        ref={status}
+        role="status"
+        aria-live="polite"
+        tabIndex={-1}
+        className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold outline-none"
+      >
         <span className="text-muted-foreground">Question</span>
         {q.stopped && !answered ? (
           <span className="text-warn">Stopped: waiting on you</span>
         ) : null}
         {answered ? (
-          <span className="text-muted-foreground">Answered</span>
+          <span className="text-muted-foreground">
+            Answered: {answered.choice}
+          </span>
         ) : null}
       </div>
       <div
@@ -62,7 +80,8 @@ export function QuestionCard({
       </div>
       <div
         role="radiogroup"
-        aria-labelledby={`${name}-q`}
+        aria-labelledby={q.text ? `${name}-q` : undefined}
+        aria-label={q.text ? undefined : 'Question'}
         className="flex flex-col gap-1"
       >
         {q.options.map((opt) => {
@@ -97,9 +116,6 @@ export function QuestionCard({
           )
         })}
       </div>
-      {answered && !q.options.includes(answered.choice) ? (
-        <p className="mt-1 text-[12px]">Answered: {answered.choice}</p>
-      ) : null}
       {q.holdsUp.length ? (
         <p className="mt-2 text-[11.5px] text-muted-foreground">
           Holds up:{' '}
@@ -111,6 +127,11 @@ export function QuestionCard({
               </BeadLink>
             </span>
           ))}
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="mt-2 text-[12px] text-destructive">
+          {error}
         </p>
       ) : null}
       {canAnswer ? (

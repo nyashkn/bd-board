@@ -55,7 +55,7 @@ function parseBlock(
     const holds = HOLDS_UP.exec(line)
     if (opt) {
       flush()
-      options.push(clean(opt[1]))
+      if (!options.includes(clean(opt[1]))) options.push(clean(opt[1]))
     } else if (rec) {
       flush()
       recommended = clean(rec[1])
@@ -85,18 +85,12 @@ function parseBlock(
 function questionsIn(c: QuestionSource, index: number): Question[] {
   const out: Question[] = []
   const lines = c.text.split(/\r?\n/)
-  const base = c.id || String(index)
   for (let i = 0; i < lines.length; i++) {
     const open = OPEN.exec(lines[i].trim())
     if (!open) continue
     let end = i + 1
     while (end < lines.length && lines[end].trim() !== ':::') end++
-    const q = parseBlock(
-      open[1],
-      lines.slice(i + 1, end),
-      out.length ? `${base}-${out.length + 1}` : base,
-      index,
-    )
+    const q = parseBlock(open[1], lines.slice(i + 1, end), '', index)
     if (q) out.push(q)
     i = end
   }
@@ -108,11 +102,17 @@ const sameText = (a: string, b: string) =>
 
 /**
  * Every question in a bead's comments (oldest first), each marked answered by the first later
- * `ANSWER: <id> <choice>` for its id. `ANSWER: <option text>` works when exactly one question is
- * open at that point. Never throws; text that is not a well-formed block is simply not a question.
+ * `ANSWER: <id> <choice>` for its id, where the choice must be one of its options (case-insensitive).
+ * `ANSWER: <option text>` works when exactly one question is open at that point. Ids are unique per
+ * thread: a repeat becomes `q1-2`, `q1-3`, and a missing `id=` becomes `q<ordinal>`, so the modal
+ * and the board (same thread, any comment ids) agree. Never throws; text that is not a well-formed
+ * block is simply not a question.
+ *
+ * Not author-checked, by design: any comment that starts with `ANSWER:` closes a question.
  */
 export function parseQuestions(comments: QuestionSource[]): Question[] {
   const all: Question[] = []
+  const used = new Set<string>()
   comments.forEach((c, i) => {
     const head =
       typeof c.text === 'string' ? c.text.trim().split(/\r?\n/)[0] : ''
@@ -122,16 +122,33 @@ export function parseQuestions(comments: QuestionSource[]): Question[] {
       const open = all.filter((q) => !q.answered && q.commentIndex < i)
       const [first, ...tail] = rest.split(' ')
       const byId = open.find((q) => q.id === first)
-      if (byId && tail.length)
-        byId.answered = { choice: tail.join(' '), commentIndex: i }
-      else if (!byId && open.length === 1) {
+      const withId = byId?.options.find((o) => sameText(tail.join(' '), o))
+      if (byId && withId) byId.answered = { choice: withId, commentIndex: i }
+      else if (open.length === 1) {
+        // Also reached when the first word only looks like an id (id `Use`, option `Use Redis`).
         const opt = open[0].options.find((o) => sameText(rest, o))
         if (opt) open[0].answered = { choice: opt, commentIndex: i }
       }
     }
-    if (typeof c.text === 'string') all.push(...questionsIn(c, i))
+    if (typeof c.text !== 'string') return
+    for (const q of questionsIn(c, i)) {
+      const base = q.id || `q${all.length + 1}`
+      let id = base
+      for (let n = 2; used.has(id); n++) id = `${base}-${n}`
+      used.add(id)
+      all.push({ ...q, id })
+    }
   })
   return all
+}
+
+/** The question behind the n-th rendered block of comment `commentIndex`. */
+export function blockQuestion(
+  questions: Question[],
+  commentIndex: number,
+  block: number,
+): Question | undefined {
+  return questions.filter((q) => q.commentIndex === commentIndex)[block]
 }
 
 export function formatAnswer(id: string, choice: string): string {
@@ -173,7 +190,11 @@ export function splitQuestionBlocks(
   return parts
 }
 
-/** Ids of beads with an unanswered `stopped` question, from a project's comments (any order). */
+/**
+ * Ids of beads with an unanswered `stopped` question, from a project's comments (any order).
+ * Sees only the comments it is given: with the export's newest-250 cap, an old question whose
+ * thread is cut is judged on what remains.
+ */
 export function askingBeads(
   comments: {
     bead_id: string
@@ -182,18 +203,19 @@ export function askingBeads(
     created_at?: string
   }[],
 ): Set<string> {
-  const byBead = new Map<string, typeof comments>()
+  const threads = new Map<string, typeof comments>()
   for (const c of comments) {
-    if (!c.text.includes(':::question')) continue
-    byBead.set(c.bead_id, [...(byBead.get(c.bead_id) ?? []), c])
+    const t = threads.get(c.bead_id)
+    if (t) t.push(c)
+    else threads.set(c.bead_id, [c])
   }
-  // Answers are plain comments, so the whole thread of a bead with a question is needed in order.
   const out = new Set<string>()
-  for (const [bead, qs] of byBead) {
-    const thread = comments
-      .filter((c) => c.bead_id === bead)
-      .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''))
-    if (qs.length && openStoppedQuestions(thread).length) out.add(bead)
+  for (const [bead, thread] of threads) {
+    if (!thread.some((c) => c.text.includes(':::question'))) continue
+    const ordered = [...thread].sort((a, b) =>
+      (a.created_at ?? '').localeCompare(b.created_at ?? ''),
+    )
+    if (openStoppedQuestions(ordered).length) out.add(bead)
   }
   return out
 }

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { getBeads, getProjectKnowledgeFn, getProjects } from '@/lib/server'
 import { askingBeads } from '@/lib/bead-questions'
-import { buildDocs, docKey, indexComments } from '@/lib/palette-search'
+import { buildDocs, indexComments, replaceAsking } from '@/lib/palette-search'
 import { rumDuration, rumNow } from '@/lib/rum'
 
 import type { IndexedText, PaletteDoc } from '@/lib/palette-search'
@@ -106,11 +106,7 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
           })
           setComments((prev) => new Map([...prev, ...index]))
           const ask = askingBeads(knowledge.comments)
-          if (ask.size)
-            setAsking(
-              (prev) =>
-                new Set([...prev, ...[...ask].map((b) => docKey(project, b))]),
-            )
+          setAsking((prev) => replaceAsking(prev, project, ask))
         } catch {
           // one project failing to export must not stop the others
         }

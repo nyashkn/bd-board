@@ -282,6 +282,17 @@ export interface PaletteDoc {
 
 export const docKey = (project: string, id: string) => `${project}:${id}`
 
+/** `is:asking` keys after (re)indexing one project: its old keys are dropped, then the new ones added. */
+export function replaceAsking(
+  prev: Set<string>,
+  project: string,
+  beadIds: Iterable<string>,
+): Set<string> {
+  const next = new Set([...prev].filter((k) => !k.startsWith(`${project}:`)))
+  for (const id of beadIds) next.add(docKey(project, id))
+  return next
+}
+
 const MAX_ANCESTORS = 8
 
 /** Docs for one project's beads; the nearest epic ancestor becomes the "parent epic". */

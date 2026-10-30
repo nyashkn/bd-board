@@ -58,6 +58,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatAge } from '@/lib/age'
 import { agentNudgeCommand } from '@/lib/comment-author'
 import {
+  blockQuestion,
   formatAnswer,
   parseQuestions,
   splitQuestionBlocks,
@@ -955,6 +956,18 @@ export function BeadDetailModal({
     },
   })
 
+  // Own mutation: answering must not clear the comment draft or share its pending state.
+  const answerMutation = useMutation({
+    mutationFn: ({ text }: { id: string; text: string }) =>
+      addCommentFn({ data: { project, id: bead!.id, text } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bead', project, bead?.id] })
+      queryClient.invalidateQueries({
+        queryKey: ['project-knowledge', project],
+      })
+    },
+  })
+
   const parentBead = bead?.parent ? resolveBead(bead.parent) : undefined
   const description = detail?.description ?? bead?.description ?? ''
   const acceptance = detail?.acceptance_criteria ?? bead?.acceptance_criteria
@@ -1313,22 +1326,29 @@ export function BeadDetailModal({
                                   <QuestionCard
                                     key={n}
                                     question={
-                                      questions.filter(
-                                        (q) => q.commentIndex === i,
-                                      )[part.block]
+                                      blockQuestion(questions, i, part.block)!
                                     }
                                     readonly={readonly}
-                                    pending={commentMutation.isPending}
-                                    onAnswer={(choice) =>
-                                      commentMutation.mutate({
-                                        text: formatAnswer(
-                                          questions.filter(
-                                            (q) => q.commentIndex === i,
-                                          )[part.block].id,
-                                          choice,
-                                        ),
-                                      })
+                                    pending={answerMutation.isPending}
+                                    error={
+                                      answerMutation.isError &&
+                                      answerMutation.variables.id ===
+                                        blockQuestion(questions, i, part.block)!
+                                          .id
+                                        ? answerMutation.error.message
+                                        : undefined
                                     }
+                                    onAnswer={(choice) => {
+                                      const id = blockQuestion(
+                                        questions,
+                                        i,
+                                        part.block,
+                                      )!.id
+                                      answerMutation.mutate({
+                                        id,
+                                        text: formatAnswer(id, choice),
+                                      })
+                                    }}
                                   />
                                 ) : (
                                   <p
