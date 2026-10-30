@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/nyashkn/bd-board/compare/v0.1.1...v0.2.0) (2026-10-30)
+
+
+### What's New
+
+* bd status card on the dashboard, bd version in the rail, rail collapses below md ([d37e394](https://github.com/nyashkn/bd-board/commit/d37e394ed6f9803646301cc929a02e74b7f1343f))
+* **bd:** helpful bd-missing errors (web and desktop), comment author resolution and BD_BOARD_AUTHOR override, bd status ([437302a](https://github.com/nyashkn/bd-board/commit/437302aa34d1c65918ac99dfa7f82683cd1aa4ce))
+* Blocked and Ready follow bd blocked / bd ready ([b47c78a](https://github.com/nyashkn/bd-board/commit/b47c78a96355a8d976662fa1892e2d5343d28deb))
+* **board:** closed recency window (URL closed=1d|7d|30d|90d|all), completed epics follow it, epic progress everywhere ([f635eaa](https://github.com/nyashkn/bd-board/commit/f635eaa2277b0ec28ca98696ace9541f84ffb296))
+* **board:** distinct toolbar labels, top labels with a more popover; knowledge empty state teaches the convention ([091df60](https://github.com/nyashkn/bd-board/commit/091df6000c55592b9cafa1ab2096edca7f8a4934))
+* **board:** empty states say why and offer the fix; contrast tokens ([0efb8a4](https://github.com/nyashkn/bd-board/commit/0efb8a4e18e65844b3c622e8fc8a6058214e2177))
+* **board:** epics with no tasks yet stay on the Epics board ([03a2e9c](https://github.com/nyashkn/bd-board/commit/03a2e9c2bedb2b848f3230298d2f88f58c27e391))
+* **board:** since-you-last-looked band with comment-aware activity ([7c2650f](https://github.com/nyashkn/bd-board/commit/7c2650f4d9976c87692c57156af48065b85968df))
+* closed-window note is a button with a date ([35aa601](https://github.com/nyashkn/bd-board/commit/35aa601454422dcbe51fecabc4b732e8ade89442))
+* **desktop:** desktop:install script (graceful quit, ditto, no sudo) ([594d178](https://github.com/nyashkn/bd-board/commit/594d1788f18d97cef78dd1cdcfa677d69896936a))
+* **desktop:** minimum window size 960x600 ([96109ea](https://github.com/nyashkn/bd-board/commit/96109ea80d135610a3cd3caabb92338bd032b7e8))
+* **filter:** label filter chips (OR, URL param l) for all projects; epic lanes kept when epic or child matches ([fd203e8](https://github.com/nyashkn/bd-board/commit/fd203e806fe5b8401cc5303e572904a9390d458f))
+* **hierarchy:** state per row, collapsed sorted tree, Board filters ([ba0c06f](https://github.com/nyashkn/bd-board/commit/ba0c06f3c7fc66fb3a5a6de026b096037cb74327))
+* keyboard model (j/k, arrows, / search, ? cheatsheet) and a labelled theme toggle ([71325b7](https://github.com/nyashkn/bd-board/commit/71325b73a64b55a31184589b98a916819c5f77e9))
+* **lib:** age formatter and epic stats/completeness helpers with tests ([36cbf49](https://github.com/nyashkn/bd-board/commit/36cbf49efcadef03990869f9035fb87c2ec584af))
+* **lib:** pure rules for last-seen diffing, comment author, bd setup errors, keyboard, closed fold, toolbar labels ([dd3a593](https://github.com/nyashkn/bd-board/commit/dd3a5936a1f7dc4d920af5c257e7eeda50e7889b))
+* **modal:** close pops history and restores focus; copy id/command/nudge buttons ([ad837e6](https://github.com/nyashkn/bd-board/commit/ad837e68006d339d9366c2f56ecae8a9d8a8f323))
+* **modal:** how comments reach agents, author shown and configurable, reopen on closed beads, open subtasks first with closed folded ([3b23df3](https://github.com/nyashkn/bd-board/commit/3b23df378b73c8a50f3ff9bc3f77bc0406948e5d))
+* **nav:** carry search across tabs/projects, persist lane collapse and scroll, roving radiogroups ([28b8d8e](https://github.com/nyashkn/bd-board/commit/28b8d8e74ded4426e663bcca580202b30e5e9618))
+* **palette:** Cmd+K command palette overlay with chips, late comment group, copy id ([aa03f28](https://github.com/nyashkn/bd-board/commit/aa03f28ae48a0d325931b682d457ccb7130f7a5b))
+* **palette:** project switcher in the scope pill, Open project rows, Ctrl/Cmd+Shift+L and +. shortcuts ([38a7fe5](https://github.com/nyashkn/bd-board/commit/38a7fe55757e09dcfab8ae6d99aabe4de00ee44e))
+* **palette:** pure query, fuzzy search, snippet and recent-list logic ([daed66c](https://github.com/nyashkn/bd-board/commit/daed66c85a2c1b3fc012b54b8c48452470929f2d))
+* **palette:** typo tolerance and current-project scope pill (Ctrl/Cmd+Shift+.); matrix cells B6, F5-F6; e2e ([d139adb](https://github.com/nyashkn/bd-board/commit/d139adbeaa2af2f7f696649d09ccb7db402000d6))
+* **readonly:** per-project readonly/filterLabel registry fields, bd-readonly shim + generic filter, write refusal (TS + Rust) ([3d35e92](https://github.com/nyashkn/bd-board/commit/3d35e923020ca15924d4d189bab4e0928440d94b))
+* **readonly:** read-only badge, hide create/edit/comment/delete/drag, skip journal enable ([093e4f6](https://github.com/nyashkn/bd-board/commit/093e4f660c76ff489cabaa6b7e6e5d4009cab7fa))
+* **rum:** applicationName config (sent as the SDK's applicationId), rum-setup.sh, real example settings ([40c45a2](https://github.com/nyashkn/bd-board/commit/40c45a2f6f42378abc2b1039ebd1fb95dfb0c312))
+* **rum:** desktop rum_config command reading ~/.config/bd-board/rum.json ([4cc1d65](https://github.com/nyashkn/bd-board/commit/4cc1d65e0fb12998aa898ed36e2c7ea773fbec13))
+* **rum:** docs-review fixes: dashboard folder and update recipe, Basic-auth source-map upload, token model, retention warnings, CORS allow-list in the fake intake ([2f7eb92](https://github.com/nyashkn/bd-board/commit/2f7eb92e99da1af99fd8dc50ceea2302a17e4ede))
+* **rum:** full profile is a pass-through with nothing masked; credentials and client token never sent; standard uses mask-user-input ([a280a46](https://github.com/nyashkn/bd-board/commit/a280a46abf38a8b77aef656099ee03dbc792f083))
+* **rum:** instrument cold load, palette, bd calls, modal, feed and router errors ([8e859a7](https://github.com/nyashkn/bd-board/commit/8e859a772638339419b13d62f783cf523babbc67))
+* **rum:** opt-in OpenObserve RUM core: config validator, privacy profiles, queue-and-flush facade, runtime config route ([e79dabb](https://github.com/nyashkn/bd-board/commit/e79dabb68ed320c7feba32dc1c673d2914aebab5))
+* **rum:** source-map upload script (dry run), dashboard generator, env example and README section ([7e77299](https://github.com/nyashkn/bd-board/commit/7e772994addfc67c8121ede695285aaf99e5d745))
+* **theme:** add light palette from owner patch ([4045328](https://github.com/nyashkn/bd-board/commit/4045328aea3bc08c3969ec4f7daf67ad111ad251))
+* **theme:** light/dark/system toggle, no-flash head script, token-based overlays ([0c186af](https://github.com/nyashkn/bd-board/commit/0c186af442d5a082003140560424beba28fa31f5))
+* **ui:** bead ages on cards and modal; fix markdown contrast in light mode (prose bound to foreground token) ([e905829](https://github.com/nyashkn/bd-board/commit/e905829f0975204c8c1cd436491a6bc803a95b75))
+* **web:** bead-link helpers (withBead search, isModifiedClick) ([ffb8582](https://github.com/nyashkn/bd-board/commit/ffb8582225253a4d11b439fee3062bad78ff7ff2))
+* **web:** every bead opener is a real link to ?bead=&lt;id&gt; ([349fdaa](https://github.com/nyashkn/bd-board/commit/349fdaa74e9d553403a065db326fe195290ae479))
+
+
+### Fixes
+
+* **counts:** one derivation for totals, blocked, ready, mine ([edbd5fc](https://github.com/nyashkn/bd-board/commit/edbd5fc52e6092f60a8bfb7b7c176116fba62466))
+* **markdown:** wrap long words, scroll code and tables inside their block ([e289a79](https://github.com/nyashkn/bd-board/commit/e289a795616ad586110e6c97cf81a30f1d44cb99))
+* **modal:** whole dialog scrolls below lg, wrap long titles and comments ([e2f695e](https://github.com/nyashkn/bd-board/commit/e2f695e322a3f945d206cddfb20ddda5a0341545))
+* **projects:** contain project card layout (column flex, min-w-0) ([ead8885](https://github.com/nyashkn/bd-board/commit/ead888505e7a8332eff438939e47cd057dcd4c8e))
+* **projects:** wrap header actions, responsive stat and project grids ([e5227a9](https://github.com/nyashkn/bd-board/commit/e5227a9c008a65a2a332449aec8d07846119945c))
+* **since:** do not rewrite last-seen on unmount (StrictMode and SPA navigation); format ([98e75fc](https://github.com/nyashkn/bd-board/commit/98e75fcadc75e2e7baf4ecbe748928e2fe2f0dd4))
+* **topbar:** icon-only tabs below 900px so the theme toggle stays in view ([b602ba2](https://github.com/nyashkn/bd-board/commit/b602ba2ff981dca4a6bdeb90e760e21e9afd10f5))
+* **web:** accept the { project, id, update } envelope the bead modal sends (web edits threw 'No bead updates provided') ([d2d3e95](https://github.com/nyashkn/bd-board/commit/d2d3e9504bcfcc54f15882b996fd31b45f54fc8a))
+
 ## [Unreleased]
 
 ### Added
