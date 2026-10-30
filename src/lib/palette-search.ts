@@ -1,5 +1,6 @@
 /** Command palette search over beads already in memory: fuzzy score, highlight ranges, snippets, ranking. Pure. */
 import { beadArtifacts } from './artifacts'
+import { fold } from './palette-query'
 import { isReady } from './sort'
 import { beadColumn, isEpic } from './types'
 
@@ -162,7 +163,7 @@ export interface IndexedText {
 
 const indexed = (s: string): IndexedText => {
   const text = collapse(s)
-  return { text, lower: text.toLowerCase() }
+  return { text, lower: fold(text) }
 }
 
 export interface PaletteDoc {
@@ -208,8 +209,8 @@ export function buildDocs(
       project: project.id,
       projectName: project.name,
       bead,
-      idL: bead.id.toLowerCase(),
-      titleL: bead.title.toLowerCase(),
+      idL: fold(bead.id),
+      titleL: fold(bead.title),
       labels: (bead.labels ?? []).map(indexed),
       assignee: bead.assignee ? indexed(bead.assignee) : undefined,
       description: bead.description ? indexed(bead.description) : undefined,
@@ -373,7 +374,11 @@ export function passesChip(
     case 'is':
       if (v === 'mine')
         return Boolean(ctx.me) && doc.assignee?.lower === ctx.me?.toLowerCase()
-      if (v === 'ready') return isReady(doc.bead) && !doc.closed
+      // A bead waiting on an open dependency is not ready even when bd's ready flag is absent.
+      if (v === 'ready')
+        return (
+          isReady(doc.bead) && !doc.closed && beadColumn(doc.bead) !== 'blocked'
+        )
       if (v === 'blocked') return beadColumn(doc.bead) === 'blocked'
       return (
         ctx.since !== undefined &&

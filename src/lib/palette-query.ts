@@ -23,6 +23,19 @@ export interface PaletteQuery {
   words: string[]
 }
 
+/**
+ * Lower-case and strip accents, one UTF-16 unit in, one out, so highlight ranges stay valid.
+ * behaviour decision: "cafe" finds "Café" and "resume" finds "Résumé" (ClickUp folds accents).
+ */
+export function fold(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^\x20-\x7e]/g, (c) => {
+      const d = c.normalize('NFD')
+      return d.length === 2 && /\p{M}/u.test(d[1]) ? d[0] : c
+    })
+}
+
 export const MAX_QUERY_CHARS = 200
 export const MAX_WORDS = 8
 
@@ -85,7 +98,7 @@ export function buildQuery(chips: Chip[], input: string): PaletteQuery {
   for (const token of tokens) {
     const chip = chipOf(token)
     if (chip) all.push(chip)
-    else if (words.length < MAX_WORDS) words.push(token.toLowerCase())
+    else if (words.length < MAX_WORDS) words.push(fold(token))
   }
   return { chips: all, words }
 }
