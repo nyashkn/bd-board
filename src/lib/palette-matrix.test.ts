@@ -252,7 +252,7 @@ describe('B6 typo tolerance', () => {
           title: `${words[i % 10]} ${words[(i * 7) % 10]} item ${i}`,
           description: Array.from(
             { length: 30 },
-            (_, j) => words[(i + j * 3) % 10],
+            (_unused, j) => words[(i + j * 3) % 10],
           ).join(' '),
           labels: [words[i % 10]],
           assignee: 'person' + (i % 7),

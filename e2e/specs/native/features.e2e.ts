@@ -178,7 +178,7 @@ describe('new features in the real desktop window', () => {
         ].map((a) => (a as HTMLElement).innerText.replace(/\s+/g, ' ').trim()),
         main:
           (
-            document.querySelector('main') as HTMLElement | null
+            document.querySelector('main')
           )?.innerText.replace(/\s+/g, ' ') ?? '',
       }))
     await browser.waitUntil(async () => (await read()).rail.length >= 3, {
