@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0](https://github.com/nyashkn/bd-board/compare/v0.1.1...v0.2.0) (2026-10-30)
 
-This release adds a Cmd/Ctrl+K command palette, light and dark themes, read-only projects, bead artifacts and opt-in performance monitoring. Blocked and Ready now match what `bd` reports, and the layout no longer overflows on narrow windows. Most of the work landed as direct merges; the one pull request is the release automation, [#1](https://github.com/nyashkn/bd-board/pull/1).
+This release adds a Cmd/Ctrl+K command palette, light and dark themes, read-only projects, bead artifacts and opt-in performance monitoring. Blocked and Ready now match what `bd` reports, and the layout no longer overflows on narrow windows. Most of the work landed as direct merges; the three pull requests, [#1](https://github.com/nyashkn/bd-board/pull/1), [#4](https://github.com/nyashkn/bd-board/pull/4) and [#5](https://github.com/nyashkn/bd-board/pull/5), are all release automation.
 
 ### What's New
 
@@ -65,9 +65,11 @@ The app can send real-user monitoring data to an OpenObserve instance. It is off
 
 #### Release automation
 
-Releases now go through a release-please Release PR with a version check, and the release notes are written by Claude.
+Releases now go through a release-please Release PR with a version check, and the release notes are written by Claude. release-please left the version in `Cargo.lock` unchanged, so the release-notes workflow now sets it on the Release PR, and a follow-up fixed that sync step.
 
 - [#1](https://github.com/nyashkn/bd-board/pull/1)
+- [#4](https://github.com/nyashkn/bd-board/pull/4)
+- [#5](https://github.com/nyashkn/bd-board/pull/5)
 
 ### Fixes
 
