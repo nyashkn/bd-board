@@ -243,7 +243,10 @@ Three conventions the board understands. None needs the board running.
 
 ## Commands
 
+Install [just](https://just.systems) (`brew install just`). The gate is `just ci`: it runs what CI runs, so run it before pushing. `just` alone lists the recipes. The pnpm commands below still work on their own.
+
 ```bash
+just ci
 pnpm dev
 pnpm typecheck
 pnpm check
