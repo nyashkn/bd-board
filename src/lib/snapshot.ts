@@ -17,6 +17,9 @@ import type {
  * through these selectors and never calls `bd show` to open a bead.
  */
 
+/** Bump when the ProjectSnapshot shape changes: persisted snapshots from older builds are discarded. */
+export const SNAPSHOT_SCHEMA_VERSION = '1'
+
 export const COMMENTS_LIMIT = 250
 export const KNOWLEDGE_LIMIT = 500
 

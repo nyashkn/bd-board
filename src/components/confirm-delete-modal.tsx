@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { removeProject } from '@/lib/server'
+import { forgetSnapshot } from '@/lib/snapshot-persist'
 import { toErrorMessage } from '@/lib/utils'
 
 interface ConfirmDeleteModalProps {
@@ -32,6 +33,7 @@ export function ConfirmDeleteModal({
     mutationFn: () => removeProject(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
+      void forgetSnapshot(queryClient, projectId)
       toast.success(`Project "${projectName}" removed`)
       onOpenChange(false)
     },
