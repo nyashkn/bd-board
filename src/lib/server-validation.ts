@@ -92,6 +92,22 @@ export function parseSnapshotInput(input: unknown): {
   }
 }
 
+export function parseHttpSnapshotInput(input: unknown): {
+  project: string
+  source: string
+  peek: boolean
+} {
+  const o = record(input)
+  const source = o['source']
+  if (typeof source !== 'string' || !source.startsWith('https://'))
+    throw new Error('source is invalid')
+  return {
+    ...parseProjectInput(input),
+    source,
+    peek: o['peek'] === true,
+  }
+}
+
 export function parseBeadCommentsInput(input: unknown): {
   project: string
   id: string

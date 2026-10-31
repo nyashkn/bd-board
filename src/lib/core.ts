@@ -1,6 +1,7 @@
-import { probeDoltModeFn } from './server.ts'
+import { isDesktopApp, probeDoltModeFn } from './server.ts'
 
 import { bdCli } from './connectors/bd-cli.ts'
+import { httpSnapshotConnector } from './connectors/http-snapshot.ts'
 import { isConnectionError, resolveCandidates } from './connectors/select.ts'
 import { rumAction } from './rum.ts'
 import { toErrorMessage } from './utils.ts'
@@ -18,10 +19,16 @@ export type { Connector }
 
 type ConnectorFactory = (url: string) => Connector
 
-// Only bd-cli exists; dolt-sql and http-snapshot register here when they land. Until then the
-// router recognises those kinds and skips them.
+// bd-cli and http-snapshot are built in; dolt-sql registers here when it lands. Until then the
+// router recognises that kind and skips it.
 const factories = new Map<ConnectorKind, ConnectorFactory>()
-const registerBuiltins = () => factories.set('bd-cli', () => bdCli)
+const registerBuiltins = () => {
+  factories.set('bd-cli', () => bdCli)
+  // The fetch and the reader token live in the web server; the desktop shell has no HTTP client
+  // yet, so there the router skips this kind and uses the next source.
+  if (!isDesktopApp())
+    factories.set('http-snapshot', (url) => httpSnapshotConnector(url))
+}
 registerBuiltins()
 
 export function registerConnectorKind(

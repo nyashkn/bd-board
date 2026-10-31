@@ -21,6 +21,8 @@ vi.mock('@/lib/server', () => ({
   getCommentAuthorFn: vi.fn(),
   getProjectKnowledgeFn: vi.fn(),
   getSnapshotFn: vi.fn(),
+  getHttpSnapshotFn: vi.fn(),
+  isDesktopApp: vi.fn(() => false),
   previewDeleteBeadFn: vi.fn(),
   probeDoltModeFn: vi.fn(),
   readArtifactFn: vi.fn(),

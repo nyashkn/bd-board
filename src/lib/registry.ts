@@ -14,6 +14,8 @@ export interface RegistryEntry {
   filterLabel?: string
   /** Optional, ordered: connector URLs (`bd:`, `mysql://`, `https://`) tried first to last. */
   sources?: string[]
+  /** Optional: the NAME (BD_BOARD_SNAPSHOT_*) of the env var holding the http-snapshot reader token. Never the token. The prefix stops a registry entry from sending an unrelated secret (AWS keys, ...) to its own source. */
+  credentials_ref?: string
 }
 
 export class RegistryError extends Error {}
@@ -48,6 +50,16 @@ export function parseRegistryEntry(raw: unknown, index: number): RegistryEntry {
       `${where}: "sources" must be an array of bd:, mysql:// or https:// URLs`,
     )
   }
+  const ref = e['credentials_ref']
+  if (
+    ref !== undefined &&
+    (typeof ref !== 'string' || !/^BD_BOARD_SNAPSHOT_[A-Z0-9_]+$/.test(ref))
+  ) {
+    // Never echo the value: someone may have pasted the token here.
+    throw new RegistryError(
+      `${where}: "credentials_ref" must be an environment variable named BD_BOARD_SNAPSHOT_<NAME>`,
+    )
+  }
   return {
     id: e['id'] as string,
     path: e['path'] as string,
@@ -55,6 +67,7 @@ export function parseRegistryEntry(raw: unknown, index: number): RegistryEntry {
     ...(e['readonly'] !== undefined ? { readonly: e['readonly'] } : {}),
     ...(label !== undefined ? { filterLabel: label.trim() } : {}),
     ...(sources !== undefined ? { sources: sources as string[] } : {}),
+    ...(ref !== undefined ? { credentials_ref: ref } : {}),
   }
 }
 

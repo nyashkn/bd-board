@@ -3,11 +3,13 @@ import { createServerFn } from '@tanstack/react-start'
 
 import { readArtifactFile } from './artifact-read.ts'
 import { bdAdapter, probeDoltMode, resolveDir } from './bd.ts'
+import { readHttpSnapshot } from './http-snapshot.ts'
 import {
   parseArtifactInput,
   parseBeadCommentsInput,
   parseBeadInput,
   parseCommentInput,
+  parseHttpSnapshotInput,
   parseCreateBeadInput,
   parseProjectInput,
   parseSnapshotInput,
@@ -135,6 +137,10 @@ export const webEnableEventsJournal = createServerFn({ method: 'POST' })
 const webProbeDoltMode = createServerFn({ method: 'GET' })
   .validator(parseProjectInput)
   .handler(({ data }) => probeDoltMode(data.project))
+
+const webGetHttpSnapshot = createServerFn({ method: 'GET' })
+  .validator(parseHttpSnapshotInput)
+  .handler(({ data }) => readHttpSnapshot(data.project, data.source, data.peek))
 
 async function getProjectsImpl(): Promise<Project[]> {
   if (isDesktopApp()) return invoke<Project[]>('list_projects')
@@ -357,6 +363,19 @@ async function probeDoltModeFnImpl({
   return webProbeDoltMode({ data })
 }
 
+async function getHttpSnapshotFnImpl({
+  data,
+}: {
+  data: { project: string; source: string; peek?: boolean }
+}): Promise<{ cursor: string; snapshot?: ProjectSnapshot }> {
+  // Server-side fetch only (it holds the token); the desktop shell has no HTTP client yet.
+  if (isDesktopApp())
+    throw new Error(
+      'http-snapshot sources are not available in the desktop app',
+    )
+  return webGetHttpSnapshot({ data: { peek: false, ...data } })
+}
+
 export function subscribeBeadFeed(
   project: string,
   since: number,
@@ -511,6 +530,7 @@ export const getCommentAuthorFn = tracked(
   getCommentAuthorFnImpl,
 )
 export const probeDoltModeFn = tracked('probe', probeDoltModeFnImpl)
+export const getHttpSnapshotFn = tracked('http_snapshot', getHttpSnapshotFnImpl)
 export const getBdStatusFn = tracked('status', getBdStatusFnImpl)
 export const enableEventsJournalFn = tracked(
   'events_journal',

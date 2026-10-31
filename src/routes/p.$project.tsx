@@ -205,11 +205,11 @@ function BoardPage() {
 
   const projectsQuery = useQuery(projectsQueryOptions())
   // Unknown (still loading) counts as read-only so write controls never flash up.
-  const readonly = projectsQuery.data
+  const projectReadonly = projectsQuery.data
     ? Boolean(projectsQuery.data.find((p) => p.id === project)?.readonly)
     : true
 
-  const feed = useBeadFeed(project, readonly)
+  const feed = useBeadFeed(project, projectReadonly)
 
   // The one place that revalidates on entering a project; the feed keeps it fresh, and the
   // old poll stays as the fallback while the feed is not live.
@@ -219,6 +219,17 @@ function BoardPage() {
     refetchOnMount: true,
     refetchOnWindowFocus: feed.status !== 'live',
   })
+
+  // A project read through an http-snapshot source cannot be written to: same read-only mode.
+  // Until a read succeeds the active connector is unknown, so a first https source counts.
+  const snapshotFirst = Boolean(
+    projectsQuery.data?.find((p) => p.id === project)?.snapshotFirst,
+  )
+  const readonly =
+    projectReadonly ||
+    (beadsQuery.isSuccess
+      ? connectorFor(project).id === 'http-snapshot'
+      : snapshotFirst)
 
   const beads = beadsQuery.data ?? []
   const firstBeads = beadsQuery.isSuccess

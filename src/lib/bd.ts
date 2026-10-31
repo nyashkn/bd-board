@@ -382,11 +382,16 @@ async function counts(
 
 function projectPolicy(
   entry: RegistryEntry,
-): Pick<Project, 'readonly' | 'filterLabel'> {
-  if (!entry.readonly) return {}
+): Pick<Project, 'readonly' | 'filterLabel' | 'snapshotFirst'> {
+  const snapshotFirst = entry.sources?.[0]?.startsWith('https://') === true
   return {
-    readonly: true,
-    ...(entry.filterLabel ? { filterLabel: entry.filterLabel } : {}),
+    ...(entry.readonly
+      ? {
+          readonly: true,
+          ...(entry.filterLabel ? { filterLabel: entry.filterLabel } : {}),
+        }
+      : {}),
+    ...(snapshotFirst ? { snapshotFirst: true } : {}),
   }
 }
 
