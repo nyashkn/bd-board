@@ -97,32 +97,34 @@ Free tier: one client polling the manifest every 30 s uses 86,400 Class B operat
 Source: the desktop service (`bd-board-desktop`) in the `_rumdata` stream. Durations are the SDK's nanoseconds, shown in ms. The new desktop build (snapshot store, bd queue, persisted cache) was installed at 2026-10-31 00:34 UTC (03:34 Africa/Nairobi).
 
 - **Window A (before):** 2026-10-29 00:34 UTC to 2026-10-31 00:34 UTC.
-- **Window B (after):** 2026-10-31 00:34 UTC to 01:35 UTC. This is an **early read**: one hour of use, so most cells have too few samples. Web-service events after the cutover are headless test runs against a local dev server and are excluded.
+- **Window B (after):** 2026-10-31 00:34 UTC to 13:16 UTC, on build 824143e (snapshot store, bd queue, persisted cache, connectors; before #35 and #37). Use was light: 3 bead-modal views in 12 hours, and the app sat idle with a bead open overnight. Web-service events after the cutover are headless test runs against a local dev server and are excluded.
 
-| Metric                        | A: p50 / p95, N                                                                                              | B: p50 / p95, N                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `bd.call.projects`            | 1269 / 1922 ms, N=124                                                                                        | 881 / 1203 ms, N=59                                                                             |
-| `bd.call.list`                | 1031 / 3826 ms, N=56                                                                                         | none: replaced by the snapshot                                                                  |
-| `bd.call.export`              | 1426 / 4284 ms, N=39                                                                                         | none: replaced by the snapshot                                                                  |
-| `bd.call.show`                | 736 / 5976 ms, N=15, too few samples                                                                         | none: bead opens read the snapshot                                                              |
-| `bd.call.comment_author`      | 1072 / 5252 ms, N=9, too few samples                                                                         | 96 ms, N=1, too few samples                                                                     |
-| `bd.call.status`              | 5250 / 6198 ms, N=4, too few samples                                                                         | 230 ms, N=1, too few samples                                                                    |
-| `bd.call.snapshot` (bd-cli)   | not emitted                                                                                                  | 953 / 1014 ms, N=5, too few samples                                                             |
-| `bd.call.dolt_snapshot`       | not emitted                                                                                                  | 190 / 225 ms, N=12, too few samples                                                             |
-| `bd.call.dolt_comments`       | not emitted                                                                                                  | 5 / 20 ms, N=14, too few samples                                                                |
-| `bd.call.probe`               | not emitted                                                                                                  | 96 / 138 ms, N=2, too few samples                                                               |
-| INP, bead-modal view          | 1568 / 2848 ms, N=21                                                                                         | 664 / 664 ms, N=6, too few samples                                                              |
-| `bd.call` per bead-modal view | 7 views: projects 9.7, list 4.6, export 3.0, show 2.0, comment_author 1.1, status 0.3 (N=7, too few samples) | 1 view: projects 54, dolt_comments 12, dolt_snapshot 6, comment_author 1 (N=1, too few samples) |
-| Long tasks                    | 0                                                                                                            | 0                                                                                               |
-| Errors                        | 0                                                                                                            | 0                                                                                               |
+| Metric                        | A: p50 / p95, N                                                                                              | B: p50 / p95, N                                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `bd.call.projects`            | 1269 / 1922 ms, N=124                                                                                        | 1067 / 1241 ms, N=659                                                                                  |
+| `bd.call.list`                | 1031 / 3826 ms, N=56                                                                                         | 943 ms, N=1, too few samples                                                                           |
+| `bd.call.export`              | 1426 / 4284 ms, N=39                                                                                         | 509 ms, N=1, too few samples                                                                           |
+| `bd.call.show`                | 736 / 5976 ms, N=15, too few samples                                                                         | none: bead opens read the snapshot                                                                     |
+| `bd.call.comment_author`      | 1072 / 5252 ms, N=9, too few samples                                                                         | 125 / 206 ms, N=3, too few samples                                                                     |
+| `bd.call.status`              | 5250 / 6198 ms, N=4, too few samples                                                                         | 200 / 230 ms, N=3, too few samples                                                                     |
+| `bd.call.snapshot` (bd-cli)   | not emitted                                                                                                  | 953 / 1014 ms, N=5, too few samples                                                                    |
+| `bd.call.dolt_snapshot`       | not emitted                                                                                                  | 190 / 226 ms, N=13, too few samples                                                                    |
+| `bd.call.dolt_comments`       | not emitted                                                                                                  | 5 / 19 ms, N=16, too few samples                                                                       |
+| `bd.call.probe`               | not emitted                                                                                                  | 96 / 138 ms, N=2, too few samples                                                                      |
+| INP, bead-modal view          | 1568 / 2848 ms, N=21                                                                                         | 664 / 664 ms, N=8, too few samples                                                                     |
+| `bd.call` per bead-modal view | 7 views: projects 9.7, list 4.6, export 3.0, show 2.0, comment_author 1.1, status 0.3 (N=7, too few samples) | 3 views: projects 218, dolt_comments 4.7, dolt_snapshot 2.3, comment_author 1.0 (N=3, too few samples) |
+| Long tasks                    | 0                                                                                                            | 0                                                                                                      |
+| Errors                        | 0                                                                                                            | 0                                                                                                      |
 
-In window B, `bd.call` by the `view` attribute was bead-modal 73, projects 11, board 7, knowledge 1, none 2. Window A has no `view` attribute, so A is grouped by the RUM view name that was active when the call finished (`view_name`).
+In window B, `bd.call` by the `view` attribute was bead-modal 678, projects 11, board 9, none 4, knowledge 1. Window A has no `view` attribute, so A is grouped by the RUM view name that was active when the call finished (`view_name`).
 
-**What the early read shows:**
+**What window B shows:**
 
-- **`show`, `list` and `export` are gone.** A bead open no longer calls `bd`. For server-mode projects the whole read is one `dolt_snapshot` of about 0.2 s.
-- **Bead-modal INP p95 fell from 2.8 s to about 0.7 s.** It is still above the 300 ms target, and N=6 is too small to judge.
-- **The `projects` call is now the main `bd` traffic, and it is background polling.** The 54 calls in one bead-modal view came while that bead stayed open for about 16 minutes: one call every 16 s or so, at about 0.9 s each. Opening the bead did not cause them. Gating the poll on the head hash, or polling less often, would remove most of this traffic.
+- **`show` is gone and `list`/`export` almost so.** A bead open no longer calls `bd`. For server-mode projects the whole read is one `dolt_snapshot` of about 0.2 s.
+- **Bead-modal INP p95 fell from 2.8 s to about 0.7 s.** It is still above the 300 ms target, and N=8 is too small to judge.
+- **The `projects` poll was nearly all the remaining `bd` traffic:** 659 calls at about 1 s each, one every 15 s while a bead stayed open overnight. Opening a bead did not cause them.
+
+**Build de91f58 (#35, #37), installed 2026-10-31 13:15 UTC:** the projects list now refetches only when a snapshot cursor moves (at most every 15 s) or every 60 s. In its first 5 minutes it made 3 `projects` calls (at start, then about once a minute) where the previous build made about 20, with no errors.
 
 ### Queries
 
@@ -160,7 +162,7 @@ SELECT count(*) AS n FROM "_rumdata" WHERE service = '<service>' AND type = 'err
 
 ### Re-run
 
-Tracked by `bdb-84h.9`. Re-run after at least one day of real use on the new build to replace the early read; until window B has about 20 samples per cell the table says "too few samples". `scripts/o2/rum-before-after.py` runs these queries and prints the table. It reads `O2_URL`, `O2_ORG`, `O2_USER` and `O2_PASS` from the environment, and optionally `CUTOVER_UTC` and `SERVICE`:
+Tracked by `bdb-84h.9`. Re-run after at least one day of active use on build de91f58; until window B has about 20 samples per cell the table says "too few samples". `scripts/o2/rum-before-after.py` runs these queries and prints the table. It reads `O2_URL`, `O2_ORG`, `O2_USER` and `O2_PASS` from the environment, and optionally `CUTOVER_UTC` and `SERVICE`:
 
 ```bash
 python3 scripts/o2/rum-before-after.py
@@ -302,7 +304,7 @@ Follow-ups are tracked in bead `bdb-84h.20`; the RUM re-run in `bdb-84h.9`.
 
 - **Is a no-Dolt viewer (web or phone) in scope?** If not, http-snapshot, the Worker, the writer and the inbox can be dropped. Deploying the Worker is the owner's call.
 - **Inbox UI.** Whether the bead modal's comment box should queue through the inbox on http-snapshot projects.
-- **RUM re-run** (`bdb-84h.9`): the early read (1 h) confirms that a bead open emits no `show`. Re-run after a day of use for real sample sizes. The background `projects` poll (about every 16 s) is the largest remaining `bd` load.
+- **RUM re-run** (`bdb-84h.20`): 12 hours of window B confirm that a bead open emits no `show`, but only 3 bead opens happened. Re-run on build de91f58 after a day of active use to judge the 300 ms target (N≥20).
 
 ## Not verified
 
