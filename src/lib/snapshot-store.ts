@@ -118,12 +118,18 @@ export function settleWrite(client: QueryClient, project: string): void {
 }
 
 /**
- * The projects list (rail counts) is refetched only when some project's snapshot cursor moves,
- * not on a timer: an idle app makes no `bd` calls for it. Returns the unsubscribe.
+ * The projects list (rail counts) is refetched when some project's snapshot cursor moves, not on
+ * a 15 s timer: an idle app makes no `bd` calls for it. Moves are throttled (trailing) to one
+ * refetch per `delayMs`, since an agent's write burst moves the cursor about once a second.
+ * Returns the unsubscribe.
  */
-export function refetchProjectsOnCursorMove(client: QueryClient): () => void {
+export function refetchProjectsOnCursorMove(
+  client: QueryClient,
+  delayMs = 5_000,
+): () => void {
   const seen = new Map<string, string>()
-  return client.getQueryCache().subscribe((event) => {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const unsubscribe = client.getQueryCache().subscribe((event) => {
     const [head, project] = event.query.queryKey
     if (event.type !== 'updated' || head !== 'snapshot') return
     const cursor = (event.query.state.data as ProjectSnapshot | undefined)
@@ -131,7 +137,17 @@ export function refetchProjectsOnCursorMove(client: QueryClient): () => void {
     if (cursor === undefined) return
     const prev = seen.get(project as string)
     seen.set(project as string, cursor)
-    if (prev !== undefined && prev !== cursor)
-      void client.invalidateQueries({ queryKey: ['projects'] })
+    if (prev === undefined || prev === cursor || timer) return
+    timer = setTimeout(() => {
+      timer = undefined
+      void client.invalidateQueries(
+        { queryKey: ['projects'] },
+        { cancelRefetch: false },
+      )
+    }, delayMs)
   })
+  return () => {
+    clearTimeout(timer)
+    unsubscribe()
+  }
 }

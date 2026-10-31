@@ -5,8 +5,8 @@ import { activateRum, resetRumForTests, tracked } from './rum.ts'
 import { createRefresher } from './snapshot-refresh.ts'
 import {
   isFeedLive,
-  refetchProjectsOnCursorMove,
   patchSnapshot,
+  refetchProjectsOnCursorMove,
   refreshComments,
   refreshSnapshot,
   setFeedLive,
@@ -317,7 +317,7 @@ describe('refetchProjectsOnCursorMove', () => {
       staleTime: 60_000,
     })
     const stop = observer.subscribe(() => {})
-    const unsubscribe = refetchProjectsOnCursorMove(client)
+    const unsubscribe = refetchProjectsOnCursorMove(client, 10)
     await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1))
 
     const snap = (cursor: string) => ({ beads: [], cursor }) as never
@@ -333,7 +333,17 @@ describe('refetchProjectsOnCursorMove', () => {
     await new Promise((r) => setTimeout(r, 20))
     expect(queryFn).toHaveBeenCalledTimes(2)
 
-    unsubscribe()
+    client.setQueryData(key, snap('h3')) // a burst of moves inside one window
+    client.setQueryData(key, snap('h4'))
+    client.setQueryData(snapshotKey('beta'), snap('b2'))
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(3))
+    await new Promise((r) => setTimeout(r, 40))
+    expect(queryFn).toHaveBeenCalledTimes(3)
+
+    client.setQueryData(key, snap('h5'))
+    unsubscribe() // a pending refetch is dropped with the subscription
+    await new Promise((r) => setTimeout(r, 40))
+    expect(queryFn).toHaveBeenCalledTimes(3)
     stop()
   })
 })

@@ -690,7 +690,6 @@ function BeadDeleteDialog({
       toast.success(`Bead ${bead.id} deleted`)
       await patchSnapshot(queryClient, project, (s) => removeBead(s, bead.id))
       settleWrite(queryClient, project)
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
       queryClient.removeQueries({
         queryKey: ['delete-preview', project, bead.id],
       })
