@@ -92,6 +92,73 @@ bd 1.3.2 itself rejects the scheme (`unknown url scheme: 's3'`). A bucket remote
 
 Free tier: one client polling the manifest every 30 s uses 86,400 Class B operations a month (0.9% of 10 M). An inbox that is listed every 30 s uses 86,400 Class A operations (8.6% of 1 M).
 
+## RUM before and after
+
+Source: the desktop service (`bd-board-desktop`) in the `_rumdata` stream. Durations are the SDK's nanoseconds, shown in ms. The new desktop build (snapshot store, bd queue, persisted cache) was installed at 2026-10-31 00:34 UTC (03:34 Africa/Nairobi).
+
+- **Window A (before):** 2026-10-29 00:34 UTC to 2026-10-31 00:34 UTC.
+- **Window B (after):** 2026-10-31 00:34 UTC to 2026-10-31 00:57 UTC (query time). The last desktop event of any kind is from 2026-10-30 about 19:52 UTC, so **window B holds no desktop events at all**: the new build has not reported yet. Web-service events after the cutover are headless test runs against a local dev server and are excluded.
+
+| Metric                                                  | A: p50 / p95, N                                                                                              | B: p50 / p95, N |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------- |
+| `bd.call.projects`                                      | 1269 / 1922 ms, N=124                                                                                        | no data (N=0)   |
+| `bd.call.list`                                          | 1031 / 3826 ms, N=56                                                                                         | no data (N=0)   |
+| `bd.call.export`                                        | 1426 / 4284 ms, N=39                                                                                         | no data (N=0)   |
+| `bd.call.show`                                          | 736 / 5976 ms, N=15, too few samples                                                                         | no data (N=0)   |
+| `bd.call.comment_author`                                | 1072 / 5252 ms, N=9, too few samples                                                                         | no data (N=0)   |
+| `bd.call.status`                                        | 5250 / 6198 ms, N=4, too few samples                                                                         | no data (N=0)   |
+| `bd.call.snapshot`, `bd.call.comments`, `bd.call.probe` | not emitted before this build                                                                                | no data (N=0)   |
+| INP, bead-modal view                                    | 1568 / 2848 ms, N=21                                                                                         | no data (N=0)   |
+| `bd.call` per bead-modal view                           | 7 views: projects 9.7, list 4.6, export 3.0, show 2.0, comment_author 1.1, status 0.3 (N=7, too few samples) | no data (N=0)   |
+| Long tasks                                              | 0 (N=0)                                                                                                      | 0 (N=0)         |
+| Errors                                                  | 0 (N=0)                                                                                                      | 0 (N=0)         |
+
+The `view` attribute (bead .1) does not exist in window A, so A is grouped by the RUM view name that was active when the call finished (`view_name`). Reading B by the `view` attribute works once data arrives.
+
+**Target (open or switch a bead under 300 ms at p95): not yet measurable.** There are no post-cutover desktop samples. For reference, the old build's bead-modal INP was p95 2.8 s (N=21), and a warm open on the new build should emit no `bd.call` at all, which is the thing to check first in B.
+
+### Queries
+
+Run per window with the window bounds as the search time range (`start`, `end`); `<service>` is `bd-board-desktop`.
+
+```sql
+-- bd.call.* p50/p95/count per label
+SELECT replace(vital_name, 'bd.call.', '') AS label, count(*) AS n,
+       approx_percentile_cont(vital_duration / 1000000, 0.5) AS p50,
+       approx_percentile_cont(vital_duration / 1000000, 0.95) AS p95
+FROM "_rumdata" WHERE service = '<service>' AND type = 'vital' AND vital_name LIKE 'bd.call.%'
+GROUP BY label ORDER BY label;
+
+-- INP on the bead modal view
+SELECT count(*) AS n,
+       approx_percentile_cont(view_interaction_to_next_paint / 1000000, 0.5) AS p50,
+       approx_percentile_cont(view_interaction_to_next_paint / 1000000, 0.95) AS p95
+FROM "_rumdata" WHERE service = '<service>' AND type = 'view' AND view_name = 'bead-modal'
+  AND view_interaction_to_next_paint IS NOT NULL;
+
+-- bead-modal views, and the bd.call made inside them (divide for calls per view)
+SELECT count(distinct view_id) AS n FROM "_rumdata" WHERE service = '<service>' AND view_name = 'bead-modal';
+SELECT replace(vital_name, 'bd.call.', '') AS label, count(*) AS n
+FROM "_rumdata" WHERE service = '<service>' AND type = 'vital' AND vital_name LIKE 'bd.call.%'
+  AND view_name = 'bead-modal' GROUP BY label ORDER BY label;
+
+-- bd.call by the new `view` attribute (empty before bead .1)
+SELECT context_view AS cv, count(*) AS n FROM "_rumdata"
+WHERE service = '<service>' AND type = 'vital' AND vital_name LIKE 'bd.call.%' GROUP BY cv ORDER BY n DESC;
+
+-- long tasks, errors
+SELECT count(*) AS n FROM "_rumdata" WHERE service = '<service>' AND type = 'long_task';
+SELECT count(*) AS n FROM "_rumdata" WHERE service = '<service>' AND type = 'error';
+```
+
+### Re-run
+
+Re-run after at least one day of real use on the new build; until window B has about 20 samples per cell the table says "too few samples". `scripts/o2/rum-before-after.py` runs these queries and prints the table. It reads `O2_URL`, `O2_ORG`, `O2_USER` and `O2_PASS` from the environment, and optionally `CUTOVER_UTC` and `SERVICE`:
+
+```bash
+python3 scripts/o2/rum-before-after.py
+```
+
 ## What other systems do
 
 Only the parts that transfer are listed here.
