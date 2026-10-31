@@ -122,7 +122,7 @@ In window B, `bd.call` by the `view` attribute was bead-modal 73, projects 11, b
 
 - **`show`, `list` and `export` are gone.** A bead open no longer calls `bd`. For server-mode projects the whole read is one `dolt_snapshot` of about 0.2 s.
 - **Bead-modal INP p95 fell from 2.8 s to about 0.7 s.** It is still above the 300 ms target, and N=6 is too small to judge.
-- **The `projects` call is now the main `bd` traffic.** It fired 54 times during one open bead, at about 0.9 s each. That refetch is the next thing to cut, before the 300 ms target can be checked.
+- **The `projects` call is now the main `bd` traffic, and it is background polling.** The 54 calls in one bead-modal view came while that bead stayed open for about 16 minutes: one call every 16 s or so, at about 0.9 s each. Opening the bead did not cause them. Gating the poll on the head hash, or polling less often, would remove most of this traffic.
 
 ### Queries
 
@@ -302,7 +302,7 @@ Follow-ups are tracked in bead `bdb-84h.20`; the RUM re-run in `bdb-84h.9`.
 
 - **Is a no-Dolt viewer (web or phone) in scope?** If not, http-snapshot, the Worker, the writer and the inbox can be dropped. Deploying the Worker is the owner's call.
 - **Inbox UI.** Whether the bead modal's comment box should queue through the inbox on http-snapshot projects.
-- **RUM re-run** (`bdb-84h.9`): the early read (1 h) confirms that a bead open emits no `show`. Re-run after a day of use for real sample sizes; cut the `projects` refetch first.
+- **RUM re-run** (`bdb-84h.9`): the early read (1 h) confirms that a bead open emits no `show`. Re-run after a day of use for real sample sizes. The background `projects` poll (about every 16 s) is the largest remaining `bd` load.
 
 ## Not verified
 
