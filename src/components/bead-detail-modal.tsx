@@ -690,6 +690,7 @@ function BeadDeleteDialog({
       toast.success(`Bead ${bead.id} deleted`)
       await patchSnapshot(queryClient, project, (s) => removeBead(s, bead.id))
       settleWrite(queryClient, project)
+      // explicit: the snapshot may have no observer once the modal closes, so no cursor move
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       queryClient.removeQueries({
         queryKey: ['delete-preview', project, bead.id],
