@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/nyashkn/bd-board/compare/v0.2.0...v0.3.0) (2026-10-31)
+
+
+### What's New
+
+* **beads:** :::bead references with hover preview ([#9](https://github.com/nyashkn/bd-board/issues/9)) ([834cd65](https://github.com/nyashkn/bd-board/commit/834cd65bb4cac619b88f08f309e0b929275c0fc4))
+* **core:** pick each project's connector from an ordered source list with live fallback (bdb-84h.8) ([#22](https://github.com/nyashkn/bd-board/issues/22)) ([0b21553](https://github.com/nyashkn/bd-board/commit/0b2155314b7ddaaddf5f5d47d56f0099a1ef9d6e))
+* **dolt-sql:** read-only SQL connector for Dolt server projects (bdb-84h.10) ([#33](https://github.com/nyashkn/bd-board/issues/33)) ([824143e](https://github.com/nyashkn/bd-board/commit/824143e2171b006041cd370b119920cae07f0e57))
+* **http-snapshot:** read-only connector for R2 snapshot manifests (bdb-84h.12) ([#30](https://github.com/nyashkn/bd-board/issues/30)) ([2bfb3a6](https://github.com/nyashkn/bd-board/commit/2bfb3a6e467b1f69be5fea1ae86aab015e7bfd65))
+* **projects:** copy a migration prompt for an agent on embedded projects (bdb-84h.16) ([#25](https://github.com/nyashkn/bd-board/issues/25)) ([0ff58a6](https://github.com/nyashkn/bd-board/commit/0ff58a6c28f264609bb8196f6efb9ee634c7ff77))
+* **questions:** ask and answer on a bead ([#8](https://github.com/nyashkn/bd-board/issues/8)) ([0193a2b](https://github.com/nyashkn/bd-board/commit/0193a2ba27ce316d72b28c240b6fdd6afe5df842))
+* **rum:** label every bd.call vital with the current view ([#19](https://github.com/nyashkn/bd-board/issues/19)) ([448aade](https://github.com/nyashkn/bd-board/commit/448aadefec1de4abe1cba461fccd0fe08a947de2))
+* **snapshot:** R2 snapshot writer and token-gated Worker with manifest ETag/304 (bdb-84h.13) ([#23](https://github.com/nyashkn/bd-board/issues/23)) ([e43e7a1](https://github.com/nyashkn/bd-board/commit/e43e7a13dcaa95f1f4234ae00a752230f2b37c61))
+* **snapshot:** write-back inbox, Worker queue applied with bd comments add (bdb-84h.14) ([#29](https://github.com/nyashkn/bd-board/issues/29)) ([ee2cd35](https://github.com/nyashkn/bd-board/commit/ee2cd3556292f1e8269e439e341bd8ef5295ed80))
+
+
+### Fixes
+
+* **bd:** harden the per-project bd queue (bdb-84h.18) ([#26](https://github.com/nyashkn/bd-board/issues/26)) ([0cccd35](https://github.com/nyashkn/bd-board/commit/0cccd359dfdba9dba39d567d6de8b7f93306a949))
+* **bd:** per-project bd call queue, async Tauri commands, spawn timeouts ([#20](https://github.com/nyashkn/bd-board/issues/20)) ([bca53a3](https://github.com/nyashkn/bd-board/commit/bca53a397c3efebb86fa80d54823c1a8d793221a))
+* **core:** client snapshot store, bead open with zero bd calls (bdb-84h.6) ([#27](https://github.com/nyashkn/bd-board/issues/27)) ([164d29a](https://github.com/nyashkn/bd-board/commit/164d29abb1065789d2776c612a9a4a17e8371f01))
+* **core:** persist project snapshots for instant cold start (bdb-84h.7) ([#28](https://github.com/nyashkn/bd-board/issues/28)) ([1e105a4](https://github.com/nyashkn/bd-board/commit/1e105a4c13f2a1ee01d724f789ab709bae92b20a))
+* **desktop:** send childBeads and links so Subtasks and Edges populate ([#12](https://github.com/nyashkn/bd-board/issues/12)) ([ec5a2b8](https://github.com/nyashkn/bd-board/commit/ec5a2b8edf5b1c68feacfbdf6325d11395d8754c))
+* **desktop:** send counts.active so the home subtitle stops reading every bead as open ([#35](https://github.com/nyashkn/bd-board/issues/35)) ([c01b325](https://github.com/nyashkn/bd-board/commit/c01b325a6d5dd4777d09ff8e5efda24dd7024c0d))
+* **rail:** refetch project counts when a snapshot cursor moves, not every 15 s ([#37](https://github.com/nyashkn/bd-board/issues/37)) ([de91f58](https://github.com/nyashkn/bd-board/commit/de91f582a3ec097753d78b4c1188316abf58df07))
+* **ui:** stop redundant export and projects refetches on bead open and switch ([#18](https://github.com/nyashkn/bd-board/issues/18)) ([31db1f1](https://github.com/nyashkn/bd-board/commit/31db1f13815b8460de59eccd67f8f847a26628d9))
+
 ## [0.2.0](https://github.com/nyashkn/bd-board/compare/v0.1.1...v0.2.0) (2026-10-30)
 
 This release adds a Cmd/Ctrl+K command palette, light and dark themes, read-only projects, bead artifacts and opt-in performance monitoring. Blocked and Ready now match what `bd` reports, and the layout no longer overflows on narrow windows. Most of the work landed as direct merges; the four pull requests, [#1](https://github.com/nyashkn/bd-board/pull/1), [#4](https://github.com/nyashkn/bd-board/pull/4), [#5](https://github.com/nyashkn/bd-board/pull/5) and [#6](https://github.com/nyashkn/bd-board/pull/6), are all release automation.
