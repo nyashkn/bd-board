@@ -9,6 +9,8 @@ pub struct ProjectCounts {
     pub closed: i64,
     pub deferred: i64,
     pub total: i64,
+    /// total minus closed; the TS board reads this, so the desktop must send it too.
+    pub active: i64,
 }
 
 #[derive(Serialize)]
@@ -83,6 +85,7 @@ pub(crate) fn build_counts_from_groups(rows: &[Value]) -> ProjectCounts {
         closed: 0,
         deferred: 0,
         total: 0,
+        active: 0,
     };
 
     for row in rows {
@@ -102,6 +105,7 @@ pub(crate) fn build_counts_from_groups(rows: &[Value]) -> ProjectCounts {
         }
     }
 
+    counts.active = counts.total - counts.closed;
     counts
 }
 
@@ -199,6 +203,16 @@ mod tests {
             (8, 1, 0, 5)
         );
         assert_eq!(counts.total, 14);
+    }
+
+    #[test]
+    fn build_counts_from_groups_active_excludes_closed_and_serializes() {
+        let counts = build_counts_from_groups(&[
+            json!({"group": "open", "count": 4}),
+            json!({"group": "closed", "count": 6}),
+        ]);
+        assert_eq!(counts.active, 4);
+        assert_eq!(serde_json::to_value(&counts).unwrap()["active"], 4);
     }
 
     #[test]
