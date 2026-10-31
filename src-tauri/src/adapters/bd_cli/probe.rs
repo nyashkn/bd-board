@@ -75,6 +75,8 @@ pub(crate) fn parse_dolt_show(stdout: &str, sources: Vec<String>) -> DoltProbe {
         schema_version: o.get("schema_version").and_then(Value::as_i64),
         error: None,
         sources,
+        user: text("user"),
+        tls: o.get("tls").and_then(Value::as_bool),
     }
 }
 pub(crate) const DOLT_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);

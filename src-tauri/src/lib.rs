@@ -12,6 +12,32 @@ mod ports;
 pub mod registry;
 pub mod rum;
 
+/// Hooks for the integration tests in tests/; not part of the app.
+#[doc(hidden)]
+#[cfg(feature = "dolt-sql")]
+pub mod test_support {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    /// Starts the SQL change probe and sends each feed message, as JSON, to `send`.
+    pub fn dolt_watch(
+        project_id: &str,
+        poll: Duration,
+        send: impl Fn(serde_json::Value) -> bool + Send + 'static,
+    ) -> Result<Arc<AtomicBool>, String> {
+        let db = crate::adapters::dolt_sql::handle_for(project_id)?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let flag = stop.clone();
+        std::thread::spawn(move || {
+            crate::adapters::dolt_sql::watch_loop(&db, &flag, poll, &|m| {
+                send(serde_json::to_value(m).unwrap_or_default())
+            })
+        });
+        Ok(stop)
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopProbe {
@@ -25,7 +51,8 @@ pub struct DesktopProbe {
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(app::FeedWatches::default());
+        .manage(app::FeedWatches::default())
+        .manage(app::DoltWatches::default());
 
     #[cfg(feature = "wdio")]
     let builder = builder
@@ -37,6 +64,7 @@ pub fn run() {
             if payload.event() == tauri::webview::PageLoadEvent::Started {
                 use tauri::Manager;
                 webview.state::<app::FeedWatches>().cancel_all();
+                webview.state::<app::DoltWatches>().cancel_all();
             }
         })
         .setup(|_| {
@@ -64,6 +92,10 @@ pub fn run() {
             commands::get_bead_detail,
             commands::get_project_snapshot,
             commands::get_bead_comments,
+            commands::dolt_sql_snapshot,
+            commands::dolt_sql_comments,
+            commands::watch_dolt_feed,
+            commands::unwatch_dolt_feed,
             commands::read_artifact,
             commands::get_project_knowledge,
             commands::update_bead_status,
@@ -87,6 +119,7 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 use tauri::Manager;
                 app.state::<app::FeedWatches>().cancel_all();
+                app.state::<app::DoltWatches>().cancel_all();
             }
         });
 }

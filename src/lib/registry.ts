@@ -14,8 +14,34 @@ export interface RegistryEntry {
   filterLabel?: string
   /** Optional, ordered: connector URLs (`bd:`, `mysql://`, `https://`) tried first to last. */
   sources?: string[]
-  /** Optional: the NAME (BD_BOARD_SNAPSHOT_*) of the env var holding the http-snapshot reader token. Never the token. The prefix stops a registry entry from sending an unrelated secret (AWS keys, ...) to its own source. */
-  credentials_ref?: string
+  /**
+   * Optional: environment variable NAMES, never values. The prefixes stop a registry entry from
+   * sending an unrelated secret (AWS keys, ...) to its own source. A string is the http-snapshot
+   * reader token (BD_BOARD_SNAPSHOT_*); an object is the dolt-sql user and password
+   * (BD_BOARD_DOLT_* or exactly DOLT_REMOTE_USER / DOLT_REMOTE_PASSWORD), read by the desktop app.
+   */
+  credentials_ref?: string | DoltLoginRef
+}
+
+export interface DoltLoginRef {
+  user?: string
+  password?: string
+}
+
+const SNAPSHOT_VAR = /^BD_BOARD_SNAPSHOT_[A-Z0-9_]+$/
+const DOLT_VAR =
+  /^(DOLT_REMOTE_USER|DOLT_REMOTE_PASSWORD|BD_BOARD_DOLT_[A-Z0-9_]+)$/
+
+function validCredentialsRef(ref: unknown): ref is string | DoltLoginRef {
+  if (typeof ref === 'string') return SNAPSHOT_VAR.test(ref)
+  if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return false
+  const o = ref as Record<string, unknown>
+  return Object.keys(o).every(
+    (k) =>
+      (k === 'user' || k === 'password') &&
+      typeof o[k] === 'string' &&
+      DOLT_VAR.test(o[k]),
+  )
 }
 
 export class RegistryError extends Error {}
@@ -50,14 +76,12 @@ export function parseRegistryEntry(raw: unknown, index: number): RegistryEntry {
       `${where}: "sources" must be an array of bd:, mysql:// or https:// URLs`,
     )
   }
-  const ref = e['credentials_ref']
-  if (
-    ref !== undefined &&
-    (typeof ref !== 'string' || !/^BD_BOARD_SNAPSHOT_[A-Z0-9_]+$/.test(ref))
-  ) {
-    // Never echo the value: someone may have pasted the token here.
+  const ref =
+    'credentials_ref' in e ? e['credentials_ref'] : e['credentialsRef']
+  if (ref !== undefined && !validCredentialsRef(ref)) {
+    // Never echo the value: someone may have pasted a token or password here.
     throw new RegistryError(
-      `${where}: "credentials_ref" must be an environment variable named BD_BOARD_SNAPSHOT_<NAME>`,
+      `${where}: "credentials_ref" must be an environment variable named BD_BOARD_SNAPSHOT_<NAME> (http-snapshot), or an object naming the SQL user and password variables (dolt-sql)`,
     )
   }
   return {

@@ -17,6 +17,10 @@ use crate::ports::{BeadSink, BeadSource, ProjectAdmin};
 
 pub(crate) use exec::bd_candidates;
 pub use feed::FeedWatches;
+#[cfg(feature = "dolt-sql")]
+pub(crate) use probe::probe_dolt_mode;
+#[cfg(feature = "dolt-sql")]
+pub(crate) use snapshot::{coalesced, readiness_inner as readiness, Slots};
 
 /// Reads and writes through the bd CLI, the only backend today.
 pub(crate) struct BdCli;

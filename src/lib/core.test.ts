@@ -31,7 +31,10 @@ vi.mock('@/lib/server', () => ({
   updateBeadStatusFn: vi.fn(),
 }))
 
-vi.mock('@/lib/rum', () => ({ rumAction: vi.fn() }))
+vi.mock('@/lib/rum', () => ({
+  rumAction: vi.fn(),
+  tracked: <T>(_cmd: string, fn: T) => fn,
+}))
 
 const probe = vi.mocked(server.probeDoltModeFn)
 const SERVER = {

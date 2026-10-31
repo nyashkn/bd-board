@@ -393,6 +393,42 @@ describe('registry credentials_ref', () => {
   })
 })
 
+describe('registry credentials_ref (dolt-sql login form)', () => {
+  const base = { id: 'a', path: '/p', label: 'A' }
+  it('keeps an object of allowed variable names', () => {
+    const ref = {
+      user: 'DOLT_REMOTE_USER',
+      password: 'BD_BOARD_DOLT_HUB_PASSWORD',
+    }
+    expect(
+      parseRegistryEntry({ ...base, credentials_ref: ref }, 0),
+    ).toMatchObject({ credentials_ref: ref })
+  })
+  it.each([
+    { password: 'AWS_SECRET_ACCESS_KEY' },
+    { user: 'AWS_SECRET_ACCESS_KEY' },
+    // each connector accepts only its own prefix
+    { password: 'BD_BOARD_SNAPSHOT_TOKEN' },
+    { password: 'BD_BOARD_DOLT_' },
+    { pass: 'DOLT_REMOTE_PASSWORD' },
+    { password: 7 },
+    ['DOLT_REMOTE_PASSWORD'],
+    null,
+  ])('rejects %j without echoing it', (bad) => {
+    const run = () => parseRegistryEntry({ ...base, credentials_ref: bad }, 0)
+    expect(run).toThrow(RegistryError)
+    expect(run).not.toThrow(/AWS_SECRET/)
+  })
+  it('a dolt name is not a valid snapshot token name', () => {
+    expect(() =>
+      parseRegistryEntry(
+        { ...base, credentials_ref: 'DOLT_REMOTE_PASSWORD' },
+        0,
+      ),
+    ).toThrow(RegistryError)
+  })
+})
+
 describe('readHttpSnapshot (server side)', () => {
   beforeEach(async () => {
     const { loadRegistry } = await import('./registry.ts')

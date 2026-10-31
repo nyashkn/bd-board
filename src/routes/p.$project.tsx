@@ -24,6 +24,7 @@ import { CreateBeadDialog } from '@/components/create-bead-dialog'
 import { ProjectKnowledgePanel } from '@/components/project-knowledge-panel'
 import { LiveUpdatesIndicator } from '@/components/live-updates-indicator'
 import { ReadonlyContext } from '@/components/readonly-badge'
+import { SnapshotNotice } from '@/components/snapshot-notice'
 import { Button } from '@/components/ui/button'
 import { SinceBand, SinceContext } from '@/components/since-band'
 import { connectorFor } from '@/lib/core'
@@ -468,9 +469,11 @@ function BoardPage() {
             />
           ) : null}
 
+          <SnapshotNotice project={project} />
+
           {beadsQuery.isLoading ? (
             <BoardSkeleton />
-          ) : beadsQuery.isError ? (
+          ) : beadsQuery.isError && beadsQuery.data === undefined ? (
             <BoardError
               message={toErrorMessage(beadsQuery.error, 'Failed to load beads')}
               onRetry={() => beadsQuery.refetch()}

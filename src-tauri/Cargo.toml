@@ -21,8 +21,12 @@ tauri = { version = "2.11.2", features = [] }
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-wdio = { version = "1.3", optional = true }
 tauri-plugin-wdio-webdriver = { version = "1.3", optional = true }
+mysql = { version = "28", default-features = false, features = ["minimal-rust", "rustls-tls-ring"], optional = true }
 
 [features]
-default = []
+# dolt-sql is on by default (the desktop app reads Dolt servers over SQL); it adds about 4 MB, so
+# `--no-default-features` builds without it and the commands answer "source unavailable".
+default = ["dolt-sql"]
+dolt-sql = ["dep:mysql"]
 custom-protocol = ["tauri/custom-protocol"]
 wdio = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]

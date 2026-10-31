@@ -1,7 +1,7 @@
 //! The `#[tauri::command]` driver functions: thin glue from IPC to the ports (via `app`).
 //! Names, signatures and serde shapes are the mocked-IPC e2e contract.
 
-use crate::app::{self, FeedWatches};
+use crate::app::{self, DoltWatches, FeedWatches};
 use crate::artifacts::{self, ArtifactFile};
 use crate::domain::{
     AddProjectOutcome, Bead, BeadDetail, BeadFeedMessage, BeadsLocation, Comment, CommentAuthor,
@@ -32,6 +32,21 @@ pub fn watch_bead_feed(
     watches.start(dir, since, move |m| on_message.send(m).is_ok())
 }
 
+/// The SQL change probe: `Live` once connected, then a `Change` whenever the Dolt head moves.
+#[tauri::command]
+pub fn watch_dolt_feed(
+    project_id: String,
+    on_message: tauri::ipc::Channel<BeadFeedMessage>,
+    watches: tauri::State<'_, DoltWatches>,
+) -> Result<u32, String> {
+    watches.start(&project_id, move |m| on_message.send(m).is_ok())
+}
+
+#[tauri::command]
+pub fn unwatch_dolt_feed(watch_id: u32, watches: tauri::State<'_, DoltWatches>) {
+    watches.stop(watch_id);
+}
+
 #[tauri::command]
 pub fn unwatch_bead_feed(watch_id: u32, watches: tauri::State<'_, FeedWatches>) {
     watches.stop(watch_id);
@@ -39,7 +54,7 @@ pub fn unwatch_bead_feed(watch_id: u32, watches: tauri::State<'_, FeedWatches>) 
 
 #[tauri::command]
 pub async fn enable_events_journal(project_id: String) -> Result<(), String> {
-    blocking(move || app::sink_for(&project_id).enable_events_journal(&project_id)).await
+    blocking(move || app::sink_for(&project_id)?.enable_events_journal(&project_id)).await
 }
 
 #[tauri::command]
@@ -73,6 +88,34 @@ pub async fn get_project_snapshot(
     .await
 }
 
+/// The same snapshot read over SQL (desktop only). Errors start with "source unavailable".
+#[tauri::command]
+pub async fn dolt_sql_snapshot(
+    project_id: String,
+    background: Option<bool>,
+) -> Result<ProjectSnapshot, String> {
+    blocking(move || {
+        app::sql_source_for(&project_id)?.snapshot(&project_id, background.unwrap_or(false))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn dolt_sql_comments(
+    project_id: String,
+    id: String,
+    background: Option<bool>,
+) -> Result<Vec<Comment>, String> {
+    blocking(move || {
+        app::sql_source_for(&project_id)?.bead_comments(
+            &project_id,
+            &id,
+            background.unwrap_or(false),
+        )
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn get_bead_comments(
     project_id: String,
@@ -101,7 +144,8 @@ pub async fn update_bead_status(
     id: String,
     status: String,
 ) -> Result<(), String> {
-    blocking(move || app::sink_for(&project_id).update_bead_status(&project_id, &id, &status)).await
+    blocking(move || app::sink_for(&project_id)?.update_bead_status(&project_id, &id, &status))
+        .await
 }
 
 #[tauri::command]
@@ -110,17 +154,17 @@ pub async fn update_bead(
     id: String,
     update: BeadUpdateInput,
 ) -> Result<(), String> {
-    blocking(move || app::sink_for(&project_id).update_bead(&project_id, &id, update)).await
+    blocking(move || app::sink_for(&project_id)?.update_bead(&project_id, &id, update)).await
 }
 
 #[tauri::command]
 pub async fn preview_delete_bead(project_id: String, id: String) -> Result<String, String> {
-    blocking(move || app::sink_for(&project_id).preview_delete_bead(&project_id, &id)).await
+    blocking(move || app::sink_for(&project_id)?.preview_delete_bead(&project_id, &id)).await
 }
 
 #[tauri::command]
 pub async fn delete_bead(project_id: String, id: String) -> Result<(), String> {
-    blocking(move || app::sink_for(&project_id).delete_bead(&project_id, &id)).await
+    blocking(move || app::sink_for(&project_id)?.delete_bead(&project_id, &id)).await
 }
 
 #[tauri::command]
@@ -132,7 +176,7 @@ pub async fn create_bead(
     parent: Option<String>,
 ) -> Result<String, String> {
     blocking(move || {
-        app::sink_for(&project_id).create_bead(
+        app::sink_for(&project_id)?.create_bead(
             &project_id,
             &title,
             description.as_deref(),
@@ -145,7 +189,7 @@ pub async fn create_bead(
 
 #[tauri::command]
 pub async fn add_comment(project_id: String, id: String, text: String) -> Result<(), String> {
-    blocking(move || app::sink_for(&project_id).add_comment(&project_id, &id, &text)).await
+    blocking(move || app::sink_for(&project_id)?.add_comment(&project_id, &id, &text)).await
 }
 
 #[tauri::command]
@@ -179,6 +223,7 @@ pub async fn add_project(path: String, name: Option<String>) -> Result<AddProjec
 
 #[tauri::command]
 pub fn remove_project(id: String) -> Result<(), String> {
+    app::forget_project(&id);
     registry::remove(&id)
 }
 
@@ -193,10 +238,12 @@ pub async fn init_project(
 
 #[tauri::command]
 pub fn rename_project(id: String, name: String) -> Result<RegistryEntry, String> {
+    app::forget_project(&id);
     registry::rename(&id, name)
 }
 
 #[tauri::command]
 pub fn relocate_project(id: String, path: String) -> Result<RegistryEntry, String> {
+    app::forget_project(&id);
     registry::relocate(&id, path)
 }

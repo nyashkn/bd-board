@@ -1,9 +1,10 @@
 # Remote projects and moving to shared-server mode
 
-Two setup topics for the [read layer](read-layer.md). Both are `bd` setup steps you run yourself; bd-board adds no code for them. All numbers come from [reports/read-layer-poc.md](reports/read-layer-poc.md) (bd 1.3.2, Dolt 2.5.1, a 234-bead project).
+Two setup topics for the [read layer](read-layer.md). Both are `bd` setup steps you run yourself; bd-board never creates, migrates or syncs a server. (Reading a server over SQL is the `dolt-sql` connector, below.) All numbers come from [reports/read-layer-poc.md](reports/read-layer-poc.md) (bd 1.3.2, Dolt 2.5.1, a 234-bead project).
 
 - [A. Make a project faster: embedded to shared-server](#a-make-a-project-faster-embedded-to-shared-server)
 - [B. Remote projects](#b-remote-projects)
+- [Reading a hub over SQL (dolt-sql)](#reading-a-hub-over-sql-dolt-sql)
 - [The `sources` list](#the-sources-list)
 
 ## A. Make a project faster: embedded to shared-server
@@ -88,7 +89,10 @@ On a throwaway project (synthetic beads, a temporary `HOME` so the real shared s
 
 ## B. Remote projects
 
-In the owner's order of preference. bd-board sees a remote project the way it sees a local one: through the `bd` on your machine.
+In the owner's order of preference. There are two shapes, and they differ in where the data you read lives:
+
+- **A local ledger, synced.** The project has a real `.beads/` on your machine, kept current with `bd federation sync` or `bd dolt pull` (and a bucket remote in option 2). bd-board reads it through `bd-cli` like any local project, writes go through `bd`, and the data is exactly as fresh as the last sync; bd-board does not show when that was, so run the sync on a timer you control and check `bd federation status`.
+- **Direct read-only SQL.** Nothing is synced: bd-board connects to the server and reads over SQL (`dolt-sql`, see below). Always current within a second, no local `bd` needed, read-only.
 
 ### 1. A central Dolt sql-server (recommended for live use)
 
@@ -121,8 +125,48 @@ bd dolt test
   Keep the file mode 600. `bd dolt set` never stores a password or TLS flag, so `--server-tls` on `init` applies to that run only; set `BEADS_DOLT_SERVER_TLS=1` or use the credentials file for later commands. A desktop app started from Finder does not inherit shell variables, so use the credentials file there.
 
 - **Joining an existing server database.** Use `bd init --server --server-host … --database <name>` (`--database` names the existing database), then `bd dolt show --json` to check.
-- **Latency.** Each `bd` call pays several round trips, so expect `bd` itself to feel slow at 150 ms. That is where the dolt-sql connector helps: bd-board then sees `embedded: false` in `bd dolt show --json`, treats the project as server mode, and reads it over one SQL connection. Until that connector lands, bd-board reads through `bd` as before.
+- **Latency.** Each `bd` call pays several round trips, so expect `bd` itself to feel slow at 150 ms. That is where the dolt-sql connector helps: bd-board sees `embedded: false` in `bd dolt show --json`, treats the project as server mode, and reads it over one SQL connection (one round trip per refresh).
 - **Writes** still go through `bd`, one writer at a time per bead as usual; there is no sync step and no conflict state.
+
+### Reading a hub over SQL (dolt-sql)
+
+Desktop app only. The `dolt-sql` connector reads the beads straight from the Dolt server, read-only, on one connection per project; the web build skips it. It is used automatically for a local project in server mode, and for a remote hub when you list the hub as a source.
+
+**1. Create a SELECT-only user on the server.** Hub grants can be global (on one hub, pull needs `CLONE_ADMIN` and push needs `SUPER`), so never reuse the account you push or pull with: bd-board only reads, and the read-only transaction it opens does not stop DDL or `CALL` in Dolt 2.5.1. Run as an admin:
+
+```sql
+CREATE USER 'bd_board_reader'@'%' IDENTIFIED BY '<password>';
+GRANT SELECT ON mydb.* TO 'bd_board_reader'@'%';
+```
+
+(Checked on a local Dolt 2.5.1 server: this user can run every query bd-board sends, including `DOLT_DIFF`, and is refused `INSERT`, `CREATE TABLE` and `CALL`.) Require TLS on the server (`listener.require_secure_transport: true`).
+
+**2. List the hub as a source, with the names of the variables that hold the login.** (`credentials_ref` is one field shared by the connectors: an object like the one below for dolt-sql, a plain `BD_BOARD_SNAPSHOT_*` string for an http snapshot; each connector accepts only its own form.) Never put the user or password in `projects.json`: a `mysql://` URL with a user or password is rejected at load, and `credentials_ref` takes variable **names** only, and only two forms are accepted: exactly `DOLT_REMOTE_USER` / `DOLT_REMOTE_PASSWORD`, or a name starting with `BD_BOARD_DOLT_` (for example `BD_BOARD_DOLT_HUB_PASSWORD`). Any other name, such as `AWS_SECRET_ACCESS_KEY`, is rejected when the registry loads, so an entry cannot point an unrelated secret at a host. A host other than `localhost`, `127.0.0.0/8` or `::1` also needs `?tls=true` (or `BEADS_DOLT_SERVER_TLS=1`); without it the source is refused before any password is read.
+
+```json
+{
+  "id": "hub",
+  "path": "/path/to/placeholder-dir",
+  "label": "Hub",
+  "sources": ["mysql://dolt-hub.example:3306/mydb?tls=true", "bd:"],
+  "credentials_ref": {
+    "user": "DOLT_REMOTE_USER",
+    "password": "DOLT_REMOTE_PASSWORD"
+  }
+}
+```
+
+Set `DOLT_REMOTE_USER` and `DOLT_REMOTE_PASSWORD` in the environment of the app. An app started from Finder does not see your shell variables: set them with `launchctl setenv`, or start the app from a terminal. Without `credentials_ref`, an explicit `mysql://` source uses the `[host:port]` entry of `~/.config/beads/credentials` (bd's own `BEADS_DOLT_*` variables are only used for the server `bd dolt show` reports, never for a host named in `sources`). TLS is verified against the bundled web PKI roots; a private CA is not supported yet. A keychain reference is not implemented.
+
+**3. What you get, and what you do not.**
+
+- A refresh and a change probe are one round trip each (so about one RTT, 0.3 s at 290 ms; measured only against a local server, not a real hub); a write made by anyone through `bd` shows up within about a second.
+- Everything is shown: closed beads and gates too.
+- Writes stay on `bd`. A project that lists only `mysql://` sources (no `bd:`) has no local `bd` to write through, so it is **read-only** in the UI and every write command refuses it. List `bd:` as well if the directory is a real bd project that should stay writable.
+- Ready and blocked come from the local `bd`, so a hub with no local `bd` shows them as unavailable (a small note on the board), not as a guess.
+- Off-network (refused, timed out) the read fails within 2 s, the router tries the next source (for `["mysql://…", "bd:"]` that is the local ledger), and if none works the board keeps the last snapshot and says "Hub unreachable, showing last snapshot (age)". A wrong password, missing grants, an unknown bd schema version or a missing `tls=true` is different: it is shown as "source misconfigured (dolt-sql)" and does not fall back. Error text never contains the host, user, password or URL.
+- It reads the Dolt head, so commits made with `dolt-auto-commit` set to `batch` (uncommitted until `bd dolt commit`) are not seen until committed.
+- The hub's R2 replica is a Dolt remote, not a bd-board format: bd-board never reads it.
 
 ### 2. A bucket remote (S3, R2, GCS)
 
@@ -190,4 +234,4 @@ A project in `~/.config/bd-board/projects.json` can list where to read from, in 
 }
 ```
 
-When absent, the default order is: embedded project, `bd`; server-mode project, Dolt SQL, then `bd`. Writes always go through `bd`.
+When absent, the default order is: embedded project, `bd`; server-mode project, Dolt SQL, then `bd`. Writes always go through `bd`. A list without any `bd:` entry makes the project read-only. `credentials_ref` (names of environment variables for the SQL user and password) belongs to the same entry; see [Reading a hub over SQL](#reading-a-hub-over-sql-dolt-sql).

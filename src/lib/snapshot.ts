@@ -51,10 +51,13 @@ export interface ProjectSnapshot {
   /** Rows from `bd blocked`; null when bd could not say. */
   blocked: BlockedRow[] | null
   /**
-   * Content hash of the three bd outputs (the feed seq would cost another bd call). In memory
-   * only: never persisted, and comparable only within one backend and session.
+   * Content hash of the three bd outputs (the feed seq would cost another bd call); the SQL reader
+   * sends the Dolt head hash. In memory only: never persisted, and comparable only within one
+   * backend and session.
    */
   cursor: string
+  /** The SQL reader had no bd to ask, so ready and blocked are empty on purpose. */
+  readiness_unavailable?: boolean
 }
 
 /** What `bd list` hides by default and `bd export` does not (gates), plus infra types. */

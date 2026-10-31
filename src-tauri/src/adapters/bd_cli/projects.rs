@@ -39,7 +39,7 @@ pub(crate) fn list_projects() -> Result<Vec<Project>, String> {
                     deferred: 0,
                     total: 0,
                 },
-                readonly: entry.readonly,
+                readonly: entry.is_readonly(),
                 filter_label: entry.effective_filter_label(),
             });
             continue;
@@ -59,7 +59,7 @@ pub(crate) fn list_projects() -> Result<Vec<Project>, String> {
                     missing: false,
                     error: None,
                     counts,
-                    readonly: entry.readonly,
+                    readonly: entry.is_readonly(),
                     filter_label: entry.effective_filter_label(),
                 });
             }
@@ -81,7 +81,7 @@ pub(crate) fn list_projects() -> Result<Vec<Project>, String> {
                         deferred: 0,
                         total: 0,
                     },
-                    readonly: entry.readonly,
+                    readonly: entry.is_readonly(),
                     filter_label: entry.effective_filter_label(),
                 });
             }
@@ -204,7 +204,7 @@ pub(crate) fn add_project(path: &str, name: Option<String>) -> Result<AddProject
                     missing: false,
                     error: None,
                     counts,
-                    readonly: entry.readonly,
+                    readonly: entry.is_readonly(),
                     filter_label: entry.effective_filter_label(),
                 },
             })
@@ -254,7 +254,7 @@ pub(crate) fn init_project(
                 missing: false,
                 error: None,
                 counts,
-                readonly: entry.readonly,
+                readonly: entry.is_readonly(),
                 filter_label: entry.effective_filter_label(),
             });
         }
@@ -292,7 +292,7 @@ pub(crate) fn init_project(
         missing: false,
         error: None,
         counts,
-        readonly: entry.readonly,
+        readonly: entry.is_readonly(),
         filter_label: entry.effective_filter_label(),
     })
 }

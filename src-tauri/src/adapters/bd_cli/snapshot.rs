@@ -14,12 +14,12 @@ use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 type Outcome<V> = Arc<(Mutex<Option<Result<V, String>>>, Condvar)>;
 
-struct Slot<V> {
+pub(crate) struct Slot<V> {
     running: Option<Outcome<V>>,
     trailing: Option<Outcome<V>>,
 }
 
-type Slots<V> = Mutex<HashMap<String, Slot<V>>>;
+pub(crate) type Slots<V> = Mutex<HashMap<String, Slot<V>>>;
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -67,7 +67,7 @@ impl<V> Drop for Publish<'_, V> {
 /// One run at a time per key. Callers that arrive while it runs join a single trailing run that
 /// starts when it ends, so a burst costs at most two runs and no caller gets a result that began
 /// before its call (a write may have landed in between).
-fn coalesced<V: Clone>(
+pub(crate) fn coalesced<V: Clone>(
     slots: &Slots<V>,
     key: &str,
     build: impl FnOnce() -> Result<V, String>,
@@ -174,6 +174,19 @@ pub(crate) fn snapshot_inner(
     coalesced(slots, &dir.to_string_lossy(), || {
         build(&dir, lane(background))
     })
+}
+
+/// `bd ready` and `bd blocked` rows, for readers that take the beads from elsewhere. None when
+/// either call fails (no bd, or no local ledger for the project).
+#[cfg(feature = "dolt-sql")]
+pub(crate) fn readiness_inner(
+    project_id: &str,
+    background: bool,
+) -> Option<(Vec<Value>, Vec<Value>)> {
+    let dir = resolve_dir(project_id).ok()?;
+    let ready = bd_json_array_prio(&dir, &["ready", "--json", "-n", "0"], lane(background))?;
+    let blocked = bd_json_array_prio(&dir, &["blocked", "--json"], lane(background))?;
+    Some((ready, blocked))
 }
 
 pub(crate) fn bead_comments_inner(
