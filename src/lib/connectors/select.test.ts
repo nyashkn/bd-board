@@ -128,6 +128,8 @@ describe('isConnectionError', () => {
     new Error('socket hang up'),
     Object.assign(new Error('x'), { code: 'ECONNRESET' }),
     'failed to fetch',
+    'source unavailable (dolt-sql): project is not in server mode',
+    'source unavailable (dolt-sql): unexpected reply',
   ])('treats %j as a connection error', (err) => {
     expect(isConnectionError(err)).toBe(true)
   })
@@ -137,6 +139,11 @@ describe('isConnectionError', () => {
     'Invalid status',
     new Error('project "x" is read-only; writes are refused'),
     new Error('bd exited with status 1'),
+    'source misconfigured (dolt-sql): authentication failed',
+    'source misconfigured (dolt-sql): unsupported bd schema version',
+    'source misconfigured (dolt-sql): remote source requires tls=true',
+    // only the reader's own message, at the start, counts
+    'bd said: source unavailable (dolt-sql)',
     undefined,
   ])('treats %j as a domain error', (err) => {
     expect(isConnectionError(err)).toBe(false)

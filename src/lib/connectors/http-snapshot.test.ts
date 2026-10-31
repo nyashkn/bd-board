@@ -27,7 +27,10 @@ vi.mock('@/lib/server', () => ({
   updateBeadFn: vi.fn(),
   updateBeadStatusFn: vi.fn(),
 }))
-vi.mock('@/lib/rum', () => ({ rumAction: vi.fn() }))
+vi.mock('@/lib/rum', () => ({
+  rumAction: vi.fn(),
+  tracked: <T>(_cmd: string, fn: T) => fn,
+}))
 
 const SRC = 'https://snap.example.com/manifest.json'
 const snapshot = {

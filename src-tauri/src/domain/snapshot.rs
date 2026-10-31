@@ -36,8 +36,12 @@ pub struct ProjectSnapshot {
     pub ready: Option<Vec<String>>,
     /// Rows from `bd blocked`; None when bd could not say.
     pub blocked: Option<Vec<BlockedRow>>,
-    /// Content hash of the three bd outputs (the feed seq would cost another bd call).
+    /// Content hash of the three bd outputs (the feed seq would cost another bd call); for the
+    /// SQL reader, the Dolt head hash.
     pub cursor: String,
+    /// The SQL reader had no bd to ask, so `ready` and `blocked` are empty on purpose.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub readiness_unavailable: bool,
 }
 
 fn edges_of(raw: &Value) -> Vec<SnapshotEdge> {
@@ -107,6 +111,7 @@ pub(crate) fn build_snapshot(
         ready: ready.map(ids),
         blocked: blocked.map(blocked_rows),
         cursor,
+        readiness_unavailable: false,
     }
 }
 

@@ -94,6 +94,11 @@ const CONNECTION_CODES =
 const CONNECTION_TEXT =
   /connection (refused|reset|lost|closed|timed out)|can't connect|cannot connect|failed to fetch|network error|socket hang up|server has gone away|broken pipe|snapshot source unavailable/i
 
+// The Rust dolt-sql reader says "unavailable" for everything that is down or unreadable right now,
+// and "source misconfigured (dolt-sql)" for a bad login, schema or config: that one must surface,
+// not fall back. Anchored so only the reader's own message can claim to be a connection error.
+const SOURCE_UNAVAILABLE = /^source unavailable \(dolt-sql\)/
+
 /**
  * Connection class (the source is unreachable, so another may work) versus domain class (the source
  * answered: "not found", a validation error). Tauri rejects with plain strings, so read both.
@@ -102,5 +107,9 @@ export function isConnectionError(err: unknown): boolean {
   const code = (err as { code?: unknown } | null)?.code
   if (typeof code === 'string' && CONNECTION_CODES.test(code)) return true
   const msg = err instanceof Error ? err.message : String(err)
-  return CONNECTION_CODES.test(msg) || CONNECTION_TEXT.test(msg)
+  return (
+    CONNECTION_CODES.test(msg) ||
+    CONNECTION_TEXT.test(msg) ||
+    SOURCE_UNAVAILABLE.test(msg)
+  )
 }

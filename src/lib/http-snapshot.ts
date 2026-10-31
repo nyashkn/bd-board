@@ -269,7 +269,7 @@ export async function readHttpSnapshot(
   if (!entry?.sources?.includes(source))
     throw new Error('unknown snapshot source for this project')
   const ref = entry.credentials_ref
-  if (!ref)
+  if (typeof ref !== 'string')
     throw new Error(
       'http-snapshot needs "credentials_ref" (the name of an environment variable holding the reader token) on the project',
     )
