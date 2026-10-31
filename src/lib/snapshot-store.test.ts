@@ -5,6 +5,7 @@ import { activateRum, resetRumForTests, tracked } from './rum.ts'
 import { createRefresher } from './snapshot-refresh.ts'
 import {
   isFeedLive,
+  refetchProjectsOnCursorMove,
   patchSnapshot,
   refreshComments,
   refreshSnapshot,
@@ -303,5 +304,36 @@ describe('optimistic write, then the feed confirms', () => {
     )
     stop()
     setFeedLive('p', false)
+  })
+})
+
+describe('refetchProjectsOnCursorMove', () => {
+  it('refetches the projects list once when a cursor moves, never when it does not', async () => {
+    const client = new QueryClient()
+    const queryFn = vi.fn(async () => [])
+    const observer = new QueryObserver(client, {
+      queryKey: ['projects'],
+      queryFn,
+      staleTime: 60_000,
+    })
+    const stop = observer.subscribe(() => {})
+    const unsubscribe = refetchProjectsOnCursorMove(client)
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1))
+
+    const snap = (cursor: string) => ({ beads: [], cursor }) as never
+    const key = snapshotKey('alpha')
+    client.setQueryData(key, snap('h1')) // first sighting
+    client.setQueryData(key, snap('h1')) // unchanged cursor
+    client.setQueryData(snapshotKey('beta'), snap('b1'))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(queryFn).toHaveBeenCalledTimes(1)
+
+    client.setQueryData(key, snap('h2')) // moved
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(queryFn).toHaveBeenCalledTimes(2)
+
+    unsubscribe()
+    stop()
   })
 })

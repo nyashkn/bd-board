@@ -22,8 +22,11 @@ import {
 import { useBdStatus } from '@/hooks/use-bd-status'
 import { useBoardBeads } from '@/hooks/use-snapshot'
 import { cn } from '@/lib/utils'
-import { snapshotQueryOptions } from '@/lib/snapshot-store'
-import { PROJECTS_POLL_MS, projectsQueryOptions } from '@/lib/query-options'
+import {
+  refetchProjectsOnCursorMove,
+  snapshotQueryOptions,
+} from '@/lib/snapshot-store'
+import { projectsQueryOptions } from '@/lib/query-options'
 
 import { getStoredIdentity, setStoredIdentity } from '@/lib/identity'
 import {
@@ -218,10 +221,8 @@ export function ProjectRail() {
     null,
   )
 
-  const projectsQuery = useQuery({
-    ...projectsQueryOptions(),
-    refetchInterval: PROJECTS_POLL_MS,
-  })
+  const projectsQuery = useQuery(projectsQueryOptions())
+  useEffect(() => refetchProjectsOnCursorMove(queryClient), [queryClient])
   const projects = projectsQuery.data ?? []
 
   const beadsQuery = useBoardBeads(project)

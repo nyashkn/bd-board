@@ -116,3 +116,22 @@ export function settleWrite(client: QueryClient, project: string): void {
       { cancelRefetch: false },
     )
 }
+
+/**
+ * The projects list (rail counts) is refetched only when some project's snapshot cursor moves,
+ * not on a timer: an idle app makes no `bd` calls for it. Returns the unsubscribe.
+ */
+export function refetchProjectsOnCursorMove(client: QueryClient): () => void {
+  const seen = new Map<string, string>()
+  return client.getQueryCache().subscribe((event) => {
+    const [head, project] = event.query.queryKey
+    if (event.type !== 'updated' || head !== 'snapshot') return
+    const cursor = (event.query.state.data as ProjectSnapshot | undefined)
+      ?.cursor
+    if (cursor === undefined) return
+    const prev = seen.get(project as string)
+    seen.set(project as string, cursor)
+    if (prev !== undefined && prev !== cursor)
+      void client.invalidateQueries({ queryKey: ['projects'] })
+  })
+}

@@ -3,14 +3,15 @@ import { queryOptions } from '@tanstack/react-query'
 import { connectorFor } from '@/lib/core'
 import { getProjects } from '@/lib/server'
 
-export const PROJECTS_POLL_MS = 15_000
+export const PROJECTS_STALE_MS = 15_000
 
-// One shared definition: observers dedupe the fetch, and only the root rail polls (see PROJECTS_POLL_MS).
+// One shared definition: observers dedupe the fetch. No timer: the rail refetches it when a snapshot
+// cursor moves (refetchProjectsOnCursorMove), after writes, and on window focus once stale.
 export const projectsQueryOptions = () =>
   queryOptions({
     queryKey: ['projects'],
     queryFn: () => getProjects(),
-    staleTime: PROJECTS_POLL_MS,
+    staleTime: PROJECTS_STALE_MS,
   })
 
 // The palette's cross-project comment index, for projects whose snapshot is not cached. The open
