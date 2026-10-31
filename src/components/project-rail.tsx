@@ -26,7 +26,7 @@ import {
   refetchProjectsOnCursorMove,
   snapshotQueryOptions,
 } from '@/lib/snapshot-store'
-import { projectsQueryOptions } from '@/lib/query-options'
+import { PROJECTS_FALLBACK_MS, projectsQueryOptions } from '@/lib/query-options'
 
 import { getStoredIdentity, setStoredIdentity } from '@/lib/identity'
 import {
@@ -221,7 +221,10 @@ export function ProjectRail() {
     null,
   )
 
-  const projectsQuery = useQuery(projectsQueryOptions())
+  const projectsQuery = useQuery({
+    ...projectsQueryOptions(),
+    refetchInterval: PROJECTS_FALLBACK_MS,
+  })
   useEffect(() => refetchProjectsOnCursorMove(queryClient), [queryClient])
   const projects = projectsQuery.data ?? []
 

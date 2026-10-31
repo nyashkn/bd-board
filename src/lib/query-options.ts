@@ -4,9 +4,12 @@ import { connectorFor } from '@/lib/core'
 import { getProjects } from '@/lib/server'
 
 export const PROJECTS_STALE_MS = 15_000
+// Safety net for projects with no loaded snapshot (no cursor): agents' writes there still reach the counts.
+export const PROJECTS_FALLBACK_MS = 5 * 60_000
 
-// One shared definition: observers dedupe the fetch. No timer: the rail refetches it when a snapshot
-// cursor moves (refetchProjectsOnCursorMove), after writes, and on window focus once stale.
+// One shared definition: observers dedupe the fetch. The rail refetches it when a snapshot cursor
+// moves (refetchProjectsOnCursorMove), after writes, on window focus once stale, and every
+// PROJECTS_FALLBACK_MS.
 export const projectsQueryOptions = () =>
   queryOptions({
     queryKey: ['projects'],
