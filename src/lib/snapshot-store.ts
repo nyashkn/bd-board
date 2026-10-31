@@ -120,12 +120,13 @@ export function settleWrite(client: QueryClient, project: string): void {
 /**
  * The projects list (rail counts) is refetched when some project's snapshot cursor moves, not on
  * a 15 s timer: an idle app makes no `bd` calls for it. Moves are throttled (trailing) to one
- * refetch per `delayMs`, since an agent's write burst moves the cursor about once a second.
+ * refetch per `delayMs` (the old poll's rate), since an agent's write burst moves the cursor about
+ * once a second.
  * Returns the unsubscribe.
  */
 export function refetchProjectsOnCursorMove(
   client: QueryClient,
-  delayMs = 5_000,
+  delayMs = 15_000,
 ): () => void {
   const seen = new Map<string, string>()
   let timer: ReturnType<typeof setTimeout> | undefined
