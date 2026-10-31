@@ -92,7 +92,7 @@ export function resolveCandidates(
 const CONNECTION_CODES =
   /\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH|ENOTFOUND|EPIPE)\b/
 const CONNECTION_TEXT =
-  /connection (refused|reset|lost|closed|timed out)|can't connect|cannot connect|failed to fetch|network error|socket hang up|server has gone away|broken pipe/i
+  /connection (refused|reset|lost|closed|timed out)|can't connect|cannot connect|failed to fetch|network error|socket hang up|server has gone away|broken pipe|snapshot source unavailable/i
 
 /**
  * Connection class (the source is unreachable, so another may work) versus domain class (the source

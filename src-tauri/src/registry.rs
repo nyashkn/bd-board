@@ -20,6 +20,10 @@ pub struct RegistryEntry {
     /// Optional, ordered: connector URLs (`bd:`, `mysql://`, `https://`) tried first to last.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<String>,
+    /// Optional: the name of the environment variable that holds an http-snapshot reader token.
+    /// The desktop shell does not read it; it is kept so a registry rewrite does not drop it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credentials_ref: Option<String>,
 }
 
 /// The URL schemes a `sources` entry may use (see src/lib/connectors/select.ts).
@@ -96,6 +100,20 @@ fn parse_checked(mut registry: Registry) -> Result<Registry, String> {
                 i + 1,
                 n + 1
             ));
+        }
+        // Never echo the value: someone may have pasted the token here.
+        if let Some(r) = entry.credentials_ref.as_deref() {
+            let mut chars = r.chars();
+            let ok = chars
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+            if !ok {
+                return Err(format!(
+                    "registry project #{}: \"credentials_ref\" must be an environment variable name",
+                    i + 1
+                ));
+            }
         }
         if let Some(label) = entry.filter_label.as_mut() {
             *label = label.trim().to_string();
@@ -194,6 +212,7 @@ pub fn add(path: &std::path::Path, label: Option<String>) -> Result<RegistryEntr
         readonly: false,
         filter_label: None,
         sources: vec![],
+        credentials_ref: None,
     };
 
     registry.projects.push(entry.clone());
@@ -319,6 +338,17 @@ mod tests {
     }
 
     #[test]
+    fn credentials_ref_is_kept_and_must_be_a_variable_name() {
+        let ok = r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","credentials_ref":"SNAP_TOKEN"}]}"#;
+        let r = parse(ok).unwrap();
+        assert_eq!(r.projects[0].credentials_ref.as_deref(), Some("SNAP_TOKEN"));
+        assert!(serde_json::to_string(&r).unwrap().contains("credentials_ref"));
+        let bad = r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","credentials_ref":"s3cret-token"}]}"#;
+        let err = parse(bad).err().unwrap();
+        assert!(!err.contains("s3cret"));
+    }
+
+    #[test]
     fn filter_label_without_readonly_is_not_effective() {
         let r = parse(
             r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","filterLabel":"wo"}]}"#,
@@ -398,6 +428,7 @@ mod tests {
             readonly,
             filter_label: None,
             sources: vec![],
+            credentials_ref: None,
         };
         assert!(check_writable(&entry(false)).is_ok());
         let err = check_writable(&entry(true)).unwrap_err();

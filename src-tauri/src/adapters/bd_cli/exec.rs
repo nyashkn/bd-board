@@ -518,6 +518,7 @@ mod tests {
             readonly,
             filter_label: filter.map(String::from),
             sources: vec![],
+            credentials_ref: None,
         }
     }
 

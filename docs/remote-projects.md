@@ -156,7 +156,22 @@ For **backup or occasional sync only**. Every machine keeps a full local replica
 
 ### 3. An http snapshot (R2 plus a Worker)
 
-Read-only, for viewers without Dolt (a browser or phone). **Not built yet**: planned as beads `bdb-84h.12` to `.14`. Measured in the POC: 0.6 s refresh, 244 ms no-change poll. It needs a token-gated Worker, so it is deferred until a no-Dolt viewer is wanted.
+Read-only, for viewers without Dolt (a browser or phone). The Worker and writer are in `workers/snapshot/` (not deployed by this repo); the client connector is `http-snapshot` (bead `bdb-84h.12`). Measured in the POC: 0.6 s refresh, 244 ms no-change poll.
+
+```json
+{
+  "id": "ledger",
+  "path": "/path/to/ledger",
+  "sources": ["https://snap.example.com/manifest.json"],
+  "credentials_ref": "BDB_SNAPSHOT_TOKEN"
+}
+```
+
+- **Source URL.** The Worker's address; a trailing `/manifest.json` or `/manifest` is dropped and the connector requests `<base>/manifest` and `<base>/snap/<key>`. Only `https://` is accepted.
+- **Token.** `credentials_ref` is the _name_ of an environment variable that holds the Worker's **read** token (never the token itself; the registry rejects anything that is not a variable name). Set it in the environment of the bd-board web server. The fetch runs on that server, so the token never reaches the browser, RUM or logs, and the Worker needs no CORS. The desktop app has no HTTP client yet and skips this source (the next source in `sources` is used).
+- **Read-only.** Writes are refused with a clear error and never retried or sent to another source; the board hides write controls while this source is active. Ready and blocked are not in a snapshot, so they are unavailable and the board uses the link-based rule.
+- **Freshness.** The open project polls the manifest every 30 s (`If-None-Match`, so an unchanged snapshot costs a 304). A changed manifest downloads the snapshot, checks its size and sha256, inflates it (capped at 64 MiB) and refreshes the board. A manifest whose `created_at` goes backwards is rejected as a replay.
+- **Errors.** A network error or HTTP 5xx falls back to the next source. A 401 stops with "snapshot token rejected" and does not fall back.
 
 ## The `sources` list
 
@@ -169,7 +184,7 @@ A project in `~/.config/bd-board/projects.json` can list where to read from, in 
   "sources": [
     "bd:",
     "mysql://127.0.0.1:3307/mydb",
-    "https://example.com/snap/manifest.json"
+    "https://snap.example.com/manifest.json"
   ]
 }
 ```
