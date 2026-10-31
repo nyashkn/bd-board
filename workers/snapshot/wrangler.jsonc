@@ -5,5 +5,5 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "r2_buckets": [{ "binding": "SNAP", "bucket_name": "bd-board-snapshots" }],
-  // Secrets READ_TOKEN and WRITE_TOKEN are set with `wrangler secret put`, never in this file.
+  // Secrets READ_TOKEN, WRITE_TOKEN and INBOX_TOKEN are set with `wrangler secret put`, never in this file.
 }
