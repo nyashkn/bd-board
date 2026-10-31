@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto'
+import { createServer } from 'node:http'
 import { gzipSync } from 'node:zlib'
+
+import type { AddressInfo } from 'node:net'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -162,18 +165,151 @@ describe('http-snapshot client', () => {
     expect(err.message).toMatch(/content is larger/)
   })
 
-  it('rejects a replayed manifest (created_at goes back)', async () => {
+  it('keeps the cached snapshot when the manifest goes backwards (replay)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const w = worker(
       pack(exportText, { created_at: '2026-01-05T00:00:00.000Z' }),
     )
     const c = client(w.fetchMock as unknown as typeof fetch)
-    await c.refresh()
+    const first = await c.refresh()
     w.publish(
-      pack(exportText + '\n', { created_at: '2026-01-04T00:00:00.000Z' }),
+      pack(exportText + '\n', {
+        head: 'old',
+        created_at: '2026-01-04T00:00:00.000Z',
+      }),
     )
-    const err = await failure(c.refresh())
-    expect(err.message).toMatch(/backwards/)
-    expect(isConnectionError(err)).toBe(false)
+    // Served from the cache every time, not an error that never clears.
+    expect(await c.refresh()).toBe(first)
+    expect(await c.refresh()).toBe(first)
+    expect(first.cursor).toBe('head1')
+    expect(warn).toHaveBeenCalled()
+    // A newer manifest moves on again.
+    w.publish(
+      pack(exportText + '\n', {
+        head: 'new',
+        created_at: '2026-01-06T00:00:00.000Z',
+      }),
+    )
+    expect((await c.refresh()).cursor).toBe('new')
+    warn.mockRestore()
+  })
+
+  it.each([
+    ['a path traversal', '../snap-0123456789abcdef.jsonl.gz'],
+    ['a nested path', 'x/snap-0123456789abcdef.jsonl.gz'],
+    [
+      'an absolute URL',
+      'https://evil.example.com/snap-0123456789abcdef.jsonl.gz',
+    ],
+    ['a query', 'snap-0123456789abcdef.jsonl.gz?x=1'],
+  ])('rejects a manifest key with %s, without fetching it', async (_n, key) => {
+    const p = pack(exportText)
+    const w = worker({ gz: p.gz, manifest: { ...p.manifest, key } })
+    const err = await failure(
+      client(w.fetchMock as unknown as typeof fetch).refresh(),
+    )
+    expect(err.message).toMatch(/unexpected shape/)
+    expect(w.fetchMock).toHaveBeenCalledTimes(1) // the manifest only
+  })
+
+  it('requires the key to be a prefix of the sha256', async () => {
+    const p = pack(exportText)
+    const key = `snap-${'0'.repeat(16)}.jsonl.gz`
+    expect(p.manifest.sha256.startsWith('0'.repeat(16))).toBe(false)
+    const w = worker({ gz: p.gz, manifest: { ...p.manifest, key } })
+    const err = await failure(
+      client(w.fetchMock as unknown as typeof fetch).refresh(),
+    )
+    expect(err.message).toMatch(/unexpected shape/)
+    // A longer prefix of the same sha256 is fine.
+    const ok = worker({
+      gz: p.gz,
+      manifest: {
+        ...p.manifest,
+        key: `snap-${p.manifest.sha256.slice(0, 32)}.jsonl.gz`,
+      },
+    })
+    await client(ok.fetchMock as unknown as typeof fetch).refresh()
+  })
+
+  it('a body that dies mid-way is connection-class', async () => {
+    const p = pack(exportText)
+    const dying = new ReadableStream<Uint8Array>({
+      start(ctl) {
+        ctl.enqueue(p.gz.subarray(0, 10))
+        ctl.error(new Error(`socket closed ${TOKEN}`))
+      },
+    })
+    const f = vi.fn(async (url: string) =>
+      url.endsWith('/manifest')
+        ? reply(JSON.stringify(p.manifest))
+        : reply(dying),
+    )
+    const err = await failure(client(f as unknown as typeof fetch).refresh())
+    expect(isConnectionError(err)).toBe(true)
+    expect(err.message).not.toContain(TOKEN)
+  })
+
+  it('names an invalid line by number only', async () => {
+    const w = worker(pack(`${exportText}\n{"secret": nope ${TOKEN}`))
+    const err = await failure(
+      client(w.fetchMock as unknown as typeof fetch).refresh(),
+    )
+    expect(err.message).toMatch(/^snapshot has an invalid line \d+$/)
+    expect(err.message).not.toContain('nope')
+  })
+
+  it('asks for identity encoding and refuses a content-encoded body', async () => {
+    const p = pack(exportText)
+    const w = worker(p)
+    await client(w.fetchMock as unknown as typeof fetch).refresh()
+    const snapInit = w.fetchMock.mock.calls[1][1] as RequestInit
+    expect(new Headers(snapInit.headers).get('accept-encoding')).toBe(
+      'identity',
+    )
+
+    const f = vi.fn(async (url: string) =>
+      url.endsWith('/manifest')
+        ? reply(JSON.stringify(p.manifest))
+        : reply(new Uint8Array(p.gz), 200, { 'content-encoding': 'gzip' }),
+    )
+    const err = await failure(client(f as unknown as typeof fetch).refresh())
+    expect(err.message).toMatch(/content-encoding/)
+  })
+
+  it('works through the real fetch (undici) and refuses a gzip content-encoding', async () => {
+    const p = pack(exportText)
+    let encode = false
+    const seen: Array<string | undefined> = []
+    const srv = createServer((req, res) => {
+      if (req.url === '/manifest') {
+        res.setHeader('content-type', 'application/json')
+        return void res.end(JSON.stringify(p.manifest))
+      }
+      seen.push(req.headers['accept-encoding'])
+      res.setHeader('content-type', 'application/gzip')
+      if (encode) res.setHeader('content-encoding', 'gzip')
+      res.end(p.gz)
+    })
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r))
+    const { port } = srv.address() as AddressInfo
+    const source = `http://127.0.0.1:${port}/manifest.json`
+    try {
+      const ok = await createHttpSnapshotClient({
+        source,
+        token: TOKEN,
+      }).refresh()
+      expect(ok.beads.length).toBeGreaterThan(0)
+      expect(seen[0]).toBe('identity')
+      encode = true
+      const err = await failure(
+        createHttpSnapshotClient({ source, token: TOKEN }).refresh(),
+      )
+      // undici inflated the body, so it is no longer the bytes the manifest hashed.
+      expect(err.message).toMatch(/content-encoding/)
+    } finally {
+      srv.close()
+    }
   })
 
   it('rejects a malformed manifest', async () => {
@@ -231,14 +367,29 @@ describe('registry credentials_ref', () => {
   const base = { id: 'a', path: '/p', label: 'A' }
   it('keeps an env var name', () => {
     expect(
-      parseRegistryEntry({ ...base, credentials_ref: 'SNAP_TOKEN' }, 0),
-    ).toMatchObject({ credentials_ref: 'SNAP_TOKEN' })
+      parseRegistryEntry(
+        { ...base, credentials_ref: 'BD_BOARD_SNAPSHOT_TOKEN' },
+        0,
+      ),
+    ).toMatchObject({ credentials_ref: 'BD_BOARD_SNAPSHOT_TOKEN' })
   })
-  it.each(['a b', 'tok-1', '', 7])('rejects %j without echoing it', (bad) => {
+  it.each([
+    'a b',
+    'tok-1',
+    '',
+    7,
+    'AWS_SECRET_ACCESS_KEY',
+    'SNAP_TOKEN',
+    'BD_BOARD_SNAPSHOT_',
+    'bd_board_snapshot_x',
+    'BD_BOARD_SNAPSHOT_a-b',
+  ])('rejects %j without echoing it', (bad) => {
     const run = () => parseRegistryEntry({ ...base, credentials_ref: bad }, 0)
     expect(run).toThrow(RegistryError)
     expect(run).toThrow(/environment variable name/)
-    if (typeof bad === 'string' && bad) expect(run).not.toThrow(bad)
+    // The message names the required prefix, so skip inputs that are only that prefix.
+    if (typeof bad === 'string' && bad && !bad.startsWith('BD_BOARD_SNAPSHOT_'))
+      expect(run).not.toThrow(bad)
   })
 })
 
@@ -252,10 +403,10 @@ describe('readHttpSnapshot (server side)', () => {
         path: '/q',
         label: 'Q',
         sources: [SOURCE],
-        credentials_ref: 'BDB_TEST_SNAP_TOKEN',
+        credentials_ref: 'BD_BOARD_SNAPSHOT_TEST_TOKEN',
       },
     ])
-    delete process.env['BDB_TEST_SNAP_TOKEN']
+    delete process.env['BD_BOARD_SNAPSHOT_TEST_TOKEN']
   })
 
   it('only fetches a source the registry lists', async () => {
@@ -270,11 +421,11 @@ describe('readHttpSnapshot (server side)', () => {
       (await failure(readHttpSnapshot('p', SOURCE, false))).message,
     ).toMatch(/credentials_ref/)
     const err = await failure(readHttpSnapshot('q', SOURCE, false))
-    expect(err.message).toMatch(/BDB_TEST_SNAP_TOKEN is not set/)
+    expect(err.message).toMatch(/BD_BOARD_SNAPSHOT_TEST_TOKEN is not set/)
   })
 
   it('reads the token from the environment and peeks without the snapshot', async () => {
-    process.env['BDB_TEST_SNAP_TOKEN'] = TOKEN
+    process.env['BD_BOARD_SNAPSHOT_TEST_TOKEN'] = TOKEN
     const w = worker(pack(exportText))
     vi.stubGlobal('fetch', w.fetchMock)
     try {
@@ -288,7 +439,7 @@ describe('readHttpSnapshot (server side)', () => {
       )
     } finally {
       vi.unstubAllGlobals()
-      delete process.env['BDB_TEST_SNAP_TOKEN']
+      delete process.env['BD_BOARD_SNAPSHOT_TEST_TOKEN']
     }
   })
 })

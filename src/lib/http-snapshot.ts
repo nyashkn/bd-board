@@ -11,7 +11,9 @@ import type { ProjectSnapshot } from './snapshot.ts'
 
 export const MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 const MAX_MANIFEST_BYTES = 4 * 1024
-const TIMEOUT_MS = 20_000
+const MANIFEST_TIMEOUT_MS = 20_000
+// The snapshot body can be tens of MiB on a slow link; the abort covers the body read too.
+const SNAPSHOT_TIMEOUT_MS = 60_000
 const SNAP_KEY = /^snap-[0-9a-f]{16,64}\.jsonl\.gz$/
 const SHA256 = /^[0-9a-f]{64}$/
 
@@ -40,17 +42,29 @@ function checkStatus(res: Response, what: string): void {
     throw new Error(`snapshot ${what} request failed (HTTP ${res.status})`)
 }
 
-/** Reads a stream, giving up (and cancelling it) once it passes `limit` bytes. */
+/**
+ * Reads a stream, giving up (and cancelling it) once it passes `limit` bytes. With `network`, a
+ * failure while reading is a connection-class error (the body died mid-way), so the router can fall
+ * back; the cause is dropped because it can echo the request.
+ */
 async function readCapped(
   stream: ReadableStream<Uint8Array> | null,
   limit: number,
   what: string,
+  network = true,
 ): Promise<Uint8Array> {
   const chunks: Uint8Array[] = []
   let total = 0
   const reader = stream?.getReader()
   while (reader) {
-    const { done, value } = await reader.read()
+    let chunk: ReadableStreamReadResult<Uint8Array>
+    try {
+      chunk = await reader.read()
+    } catch (err) {
+      if (!network) throw err
+      throw unavailable('network error')
+    }
+    const { done, value } = chunk
     if (done) break
     total += value.byteLength
     if (total > limit) {
@@ -120,12 +134,16 @@ export function createHttpSnapshotClient(opts: {
   let snapshot: ProjectSnapshot | undefined
   let inflight: Promise<ProjectSnapshot> | undefined
 
-  async function get(path: string, extra: Record<string, string> = {}) {
+  async function get(
+    path: string,
+    timeoutMs: number,
+    extra: Record<string, string> = {},
+  ) {
     try {
       return await doFetch(`${base}${path}`, {
         // redirect 'error': a redirect must never carry the bearer token elsewhere.
         redirect: 'error',
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
         headers: { authorization: `Bearer ${opts.token}`, ...extra },
       })
     } catch {
@@ -137,6 +155,7 @@ export function createHttpSnapshotClient(opts: {
   async function run(): Promise<ProjectSnapshot> {
     const res = await get(
       '/manifest',
+      MANIFEST_TIMEOUT_MS,
       etag && snapshot ? { 'if-none-match': etag } : {},
     )
     checkStatus(res, 'manifest')
@@ -150,10 +169,16 @@ export function createHttpSnapshotClient(opts: {
       ),
     )
     if (
+      snapshot &&
       manifest &&
       Date.parse(next.created_at) < Date.parse(manifest.created_at)
-    )
-      throw new Error('snapshot manifest went backwards (possible replay)')
+    ) {
+      // A replayed (older) manifest is ignored, not fatal: keep showing what we verified before.
+      console.warn(
+        'snapshot manifest went backwards (possible replay); keeping the cached snapshot',
+      )
+      return snapshot
+    }
     const tag = res.headers.get('etag')
     if (snapshot && manifest?.sha256 === next.sha256) {
       etag = tag
@@ -163,10 +188,17 @@ export function createHttpSnapshotClient(opts: {
     if (next.size > MAX_SNAPSHOT_BYTES)
       throw new Error('snapshot is larger than the allowed size')
 
-    const snap = await get(`/snap/${next.key}`)
+    // identity: the sha256 is of the gzip bytes themselves, so no transport decoding in between.
+    const snap = await get(`/snap/${next.key}`, SNAPSHOT_TIMEOUT_MS, {
+      'accept-encoding': 'identity',
+    })
     checkStatus(snap, 'snapshot')
     if (snap.status !== 200)
       throw new Error('snapshot request failed (unexpected 304)')
+    // fetch inflates a gzip-encoded response behind our back, which would break the sha256 check.
+    const encoding = snap.headers.get('content-encoding')
+    if (encoding && encoding.toLowerCase() !== 'identity')
+      throw new Error('snapshot response has an unexpected content-encoding')
     const gz = await readCapped(snap.body, next.size, 'download')
     if (gz.byteLength !== next.size)
       throw new Error('snapshot size does not match the manifest')
@@ -183,7 +215,7 @@ export function createHttpSnapshotClient(opts: {
         new DecompressionStream('gzip'),
       )
       text = new TextDecoder().decode(
-        await readCapped(inflated, MAX_SNAPSHOT_BYTES, 'content'),
+        await readCapped(inflated, MAX_SNAPSHOT_BYTES, 'content', false),
       )
     } catch (err) {
       if (err instanceof Error && err.message.startsWith('snapshot ')) throw err
@@ -192,9 +224,15 @@ export function createHttpSnapshotClient(opts: {
     // `bd export` can also print memory records; only issues are beads.
     const issues = text
       .split('\n')
-      .filter((line) => {
+      .filter((line, i) => {
         if (!line.trim()) return false
-        const type = (JSON.parse(line) as { _type?: string })._type
+        let type: unknown
+        try {
+          type = (JSON.parse(line) as { _type?: unknown })._type
+        } catch {
+          // No content in the message: a line can hold anything.
+          throw new Error(`snapshot has an invalid line ${i + 1}`)
+        }
         return type === undefined || type === 'issue'
       })
       .join('\n')

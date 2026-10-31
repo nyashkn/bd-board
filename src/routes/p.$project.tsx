@@ -221,9 +221,15 @@ function BoardPage() {
   })
 
   // A project read through an http-snapshot source cannot be written to: same read-only mode.
+  // Until a read succeeds the active connector is unknown, so a first https source counts.
+  const snapshotFirst = Boolean(
+    projectsQuery.data?.find((p) => p.id === project)?.snapshotFirst,
+  )
   const readonly =
     projectReadonly ||
-    (beadsQuery.isSuccess && connectorFor(project).id === 'http-snapshot')
+    (beadsQuery.isSuccess
+      ? connectorFor(project).id === 'http-snapshot'
+      : snapshotFirst)
 
   const beads = beadsQuery.data ?? []
   const firstBeads = beadsQuery.isSuccess

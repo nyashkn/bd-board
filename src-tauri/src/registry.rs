@@ -103,14 +103,15 @@ fn parse_checked(mut registry: Registry) -> Result<Registry, String> {
         }
         // Never echo the value: someone may have pasted the token here.
         if let Some(r) = entry.credentials_ref.as_deref() {
-            let mut chars = r.chars();
-            let ok = chars
-                .next()
-                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-                && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+            let ok = r.strip_prefix("BD_BOARD_SNAPSHOT_").is_some_and(|rest| {
+                !rest.is_empty()
+                    && rest
+                        .chars()
+                        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+            });
             if !ok {
                 return Err(format!(
-                    "registry project #{}: \"credentials_ref\" must be an environment variable name",
+                    "registry project #{}: \"credentials_ref\" must be an environment variable named BD_BOARD_SNAPSHOT_<NAME>",
                     i + 1
                 ));
             }
@@ -338,14 +339,32 @@ mod tests {
     }
 
     #[test]
-    fn credentials_ref_is_kept_and_must_be_a_variable_name() {
-        let ok = r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","credentials_ref":"SNAP_TOKEN"}]}"#;
+    fn credentials_ref_is_kept_and_must_be_a_snapshot_variable_name() {
+        let ok = r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","credentials_ref":"BD_BOARD_SNAPSHOT_TOKEN"}]}"#;
         let r = parse(ok).unwrap();
-        assert_eq!(r.projects[0].credentials_ref.as_deref(), Some("SNAP_TOKEN"));
-        assert!(serde_json::to_string(&r).unwrap().contains("credentials_ref"));
+        assert_eq!(
+            r.projects[0].credentials_ref.as_deref(),
+            Some("BD_BOARD_SNAPSHOT_TOKEN")
+        );
+        assert!(serde_json::to_string(&r)
+            .unwrap()
+            .contains("credentials_ref"));
         let bad = r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","credentials_ref":"s3cret-token"}]}"#;
         let err = parse(bad).err().unwrap();
         assert!(!err.contains("s3cret"));
+        for name in [
+            "AWS_SECRET_ACCESS_KEY",
+            "BD_BOARD_SNAPSHOT_lower",
+            "BD_BOARD_SNAPSHOT_",
+        ] {
+            let json = format!(
+                r#"{{"version":1,"projects":[{{"id":"a","path":"/p","label":"A","credentials_ref":"{name}"}}]}}"#
+            );
+            let err = parse(&json).err().unwrap();
+            if name != "BD_BOARD_SNAPSHOT_" {
+                assert!(!err.contains(name), "error echoed {name}");
+            }
+        }
     }
 
     #[test]

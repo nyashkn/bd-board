@@ -140,6 +140,8 @@ export interface Project {
   counts: ProjectCounts
   /** Registry `readonly: true`: writes are refused and the UI hides them. */
   readonly?: boolean
+  /** Web only: the registry lists an https (http-snapshot) source first, which is read-only. */
+  snapshotFirst?: boolean
   /** Registry `filterLabel`, only meaningful together with `readonly`. */
   filterLabel?: string
 }
