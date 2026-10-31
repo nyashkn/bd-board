@@ -1,11 +1,16 @@
 // Read-only snapshot server for bd-board. The writer (scripts/publish-snapshot.ts) uploads
 // immutable `snap-<sha256 prefix>.jsonl.gz` objects, then moves `manifest.json` with a
 // compare-and-swap. Readers poll GET /manifest (ETag/304) and fetch the snapshot it names.
+// The inbox (POST /inbox) queues comments from viewers; the owner's applier drains it.
+
+import { UUID, parseInboxItem } from './inbox.ts'
 
 export interface Env {
   SNAP: R2Bucket
   READ_TOKEN?: string
   WRITE_TOKEN?: string
+  // Held by viewers; can only queue inbox items, never read or write snapshots.
+  INBOX_TOKEN?: string
 }
 
 const MANIFEST_KEY = 'manifest.json'
@@ -13,6 +18,14 @@ const SNAP_KEY = /^snap-([0-9a-f]{16,64})\.jsonl\.gz$/
 const SHA256 = /^[0-9a-f]{64}$/
 const MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 const MAX_MANIFEST_BYTES = 4 * 1024
+// 16 KiB of body can grow about 6x once JSON-escaped, so the request cap is well above it.
+const MAX_INBOX_BYTES = 128 * 1024
+const INBOX_LIST_MAX = 100
+const INBOX_QUEUE_MAX = 500
+const INBOX_MARKER = 'inbox/_marker'
+const inboxKey = (id: string) => `inbox/${id}.json`
+// Outside the `inbox/` prefix, so a dead-lettered item is never listed as pending again.
+const deadKey = (id: string) => `inbox-dead/${id}.json`
 
 const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(body), {
@@ -211,10 +224,84 @@ async function putManifest(req: Request, env: Env) {
   return json({ ok: true }, 200, { etag: stored.httpEtag })
 }
 
+// The marker changes on every accepted POST, so the applier can poll it with If-None-Match
+// (a cheap Class B read answered 304) and list only when it moved.
+const touchMarker = (env: Env) =>
+  env.SNAP.put(INBOX_MARKER, JSON.stringify({ v: crypto.randomUUID() }), {
+    httpMetadata: { contentType: 'application/json' },
+  })
+
+async function postInbox(req: Request, env: Env) {
+  const declared = declaredLength(req)
+  if (declared === null) return json({ error: 'content-length required' }, 411)
+  if (declared > MAX_INBOX_BYTES) return json({ error: 'too large' }, 413)
+  const text = await req.text()
+  if (text.length > MAX_INBOX_BYTES) return json({ error: 'too large' }, 413)
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return json({ error: 'body is not valid JSON' }, 400)
+  }
+  const item = parseInboxItem(raw)
+  if (typeof item === 'string') return json({ error: item }, 422)
+  // Bound the queue: a leaked viewer token must not be able to grow the bucket without limit.
+  const queued = await env.SNAP.list({
+    prefix: 'inbox/',
+    limit: INBOX_QUEUE_MAX + 2, // plus the marker and one over the cap
+  })
+  if (
+    queued.objects.filter((o) => o.key !== INBOX_MARKER).length >
+    INBOX_QUEUE_MAX
+  )
+    return json({ error: 'inbox is full' }, 429, { 'retry-after': '3600' })
+  // Store only if absent: a retry with the same client_id is accepted and the first copy wins.
+  // The marker is touched either way, in case an earlier attempt stored the item but died before it.
+  await env.SNAP.put(
+    inboxKey(item.client_id),
+    JSON.stringify({ ...item, received_at: new Date().toISOString() }),
+    {
+      onlyIf: { etagDoesNotMatch: '*' },
+      httpMetadata: { contentType: 'application/json' },
+    },
+  )
+  await touchMarker(env)
+  return json({ client_id: item.client_id, queued: true }, 202)
+}
+
+// One page: at most 100 items (the marker shares the prefix and is filtered out). Follow `cursor` while `more`.
+async function listInbox(env: Env, cursor: string | undefined) {
+  const listed = await env.SNAP.list({
+    prefix: 'inbox/',
+    limit: INBOX_LIST_MAX,
+    cursor,
+  })
+  const objects = await Promise.all(
+    listed.objects
+      .filter((o) => o.key !== INBOX_MARKER)
+      .map((o) => env.SNAP.get(o.key)),
+  )
+  const items = await Promise.all(
+    objects.flatMap((o) => (o ? [o.json<unknown>()] : [])),
+  )
+  return json({
+    items,
+    more: listed.truncated,
+    cursor: listed.truncated ? listed.cursor : null,
+  })
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(req.url)
     const { method } = req
+
+    // Viewers hold INBOX_TOKEN. If it equals the write token they could publish snapshots, so refuse everything.
+    if (env.INBOX_TOKEN?.trim() && env.INBOX_TOKEN === env.WRITE_TOKEN)
+      return json(
+        { error: 'misconfigured: INBOX_TOKEN must differ from WRITE_TOKEN' },
+        503,
+      )
 
     if (method === 'GET' && pathname === '/manifest') {
       if (!(await canRead(req, env))) return unauthorized()
@@ -254,6 +341,48 @@ export default {
     if (method === 'PUT' && pathname === '/manifest') {
       if (!(await tokenMatches(req, env.WRITE_TOKEN))) return unauthorized()
       return putManifest(req, env)
+    }
+
+    if (pathname === '/inbox' && method === 'POST') {
+      if (!(await tokenMatches(req, env.INBOX_TOKEN))) return unauthorized()
+      return postInbox(req, env)
+    }
+
+    if (pathname === '/inbox' && method === 'GET') {
+      if (!(await tokenMatches(req, env.WRITE_TOKEN))) return unauthorized()
+      return listInbox(
+        env,
+        new URL(req.url).searchParams.get('cursor') || undefined,
+      )
+    }
+
+    if (pathname === '/inbox/_marker' && method === 'GET') {
+      if (!(await tokenMatches(req, env.WRITE_TOKEN))) return unauthorized()
+      return serve(
+        req,
+        env,
+        INBOX_MARKER,
+        'private, no-cache',
+        'application/json',
+      )
+    }
+
+    if (pathname.startsWith('/inbox/') && method === 'DELETE') {
+      if (!(await tokenMatches(req, env.WRITE_TOKEN))) return unauthorized()
+      const id = pathname.slice('/inbox/'.length)
+      if (!UUID.test(id)) return json({ error: 'bad client_id' }, 400)
+      const key = inboxKey(id.toLowerCase())
+      // ?dead=1: the applier gave up on this item. Keep a copy for the owner, then drop it from the queue.
+      if (new URL(req.url).searchParams.get('dead') === '1') {
+        const item = await env.SNAP.get(key)
+        if (item)
+          await env.SNAP.put(deadKey(id.toLowerCase()), item.body, {
+            httpMetadata: { contentType: 'application/json' },
+          })
+      }
+      // Idempotent: acknowledging an item that is already gone is not an error.
+      await env.SNAP.delete(key)
+      return new Response(null, { status: 204 })
     }
 
     return json({ error: 'not found' }, 404)
