@@ -24,10 +24,13 @@ import { CreateBeadDialog } from '@/components/create-bead-dialog'
 import { ProjectKnowledgePanel } from '@/components/project-knowledge-panel'
 import { LiveUpdatesIndicator } from '@/components/live-updates-indicator'
 import { ReadonlyContext } from '@/components/readonly-badge'
+import { SnapshotNotice } from '@/components/snapshot-notice'
 import { Button } from '@/components/ui/button'
 import { SinceBand, SinceContext } from '@/components/since-band'
 import { connectorFor } from '@/lib/core'
-import { getProjects } from '@/lib/server'
+import { projectsQueryOptions } from '@/lib/query-options'
+import { patchBead } from '@/lib/snapshot'
+import { patchSnapshot, settleWrite } from '@/lib/snapshot-store'
 import { diffSince, latestCommentByBead } from '@/lib/activity'
 import { askingBeads } from '@/lib/bead-questions'
 import { COLUMNS, beadColumn, isEpic } from '@/lib/types'
@@ -50,6 +53,7 @@ import { buildChildrenMap } from '@/lib/tree'
 import { closeSteps, historyIndex } from '@/lib/nav-context'
 import { toErrorMessage } from '@/lib/utils'
 import { useBeadFeed } from '@/hooks/use-bead-feed'
+import { useBoardBeads, useKnowledge } from '@/hooks/use-snapshot'
 import { useSinceLastSeen } from '@/hooks/use-since-last-seen'
 
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
@@ -200,26 +204,33 @@ function BoardPage() {
     }),
   )
 
-  const projectsQuery = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => getProjects(),
-    refetchInterval: 15000,
-    staleTime: 5000,
-  })
+  const projectsQuery = useQuery(projectsQueryOptions())
   // Unknown (still loading) counts as read-only so write controls never flash up.
-  const readonly = projectsQuery.data
+  const projectReadonly = projectsQuery.data
     ? Boolean(projectsQuery.data.find((p) => p.id === project)?.readonly)
     : true
 
-  const feed = useBeadFeed(project, readonly)
+  const feed = useBeadFeed(project, projectReadonly)
 
-  const beadsQuery = useQuery({
-    queryKey: ['beads', project],
-    queryFn: () => connectorFor(project).listBeads({ data: { project } }),
-    refetchInterval: feed.status === 'live' ? 60_000 : 8_000,
+  // The one place that revalidates on entering a project; the feed keeps it fresh, and the
+  // old poll stays as the fallback while the feed is not live.
+  const beadsQuery = useBoardBeads(project, {
+    refetchInterval: feed.status === 'live' ? false : 8_000,
     staleTime: 3000,
-    retry: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: feed.status !== 'live',
   })
+
+  // A project read through an http-snapshot source cannot be written to: same read-only mode.
+  // Until a read succeeds the active connector is unknown, so a first https source counts.
+  const snapshotFirst = Boolean(
+    projectsQuery.data?.find((p) => p.id === project)?.snapshotFirst,
+  )
+  const readonly =
+    projectReadonly ||
+    (beadsQuery.isSuccess
+      ? connectorFor(project).id === 'http-snapshot'
+      : snapshotFirst)
 
   const beads = beadsQuery.data ?? []
   const firstBeads = beadsQuery.isSuccess
@@ -228,17 +239,9 @@ function BoardPage() {
     if (firstBeads) rumMarkCold('cold.beads', { beads: beadCount }, { project })
   }, [firstBeads, beadCount, project])
 
-  // Comments are not in `bd list` and do not bump updated_at, so activity needs the same
-  // `bd export` read the Knowledge tab uses (one extra call, shared cache key, refreshed at most every 30 s).
+  // Comments do not bump updated_at, so activity reads them from the same snapshot.
   const { since, dismiss: dismissSince } = useSinceLastSeen(project)
-  const commentsQuery = useQuery({
-    queryKey: ['project-knowledge', project],
-    queryFn: () =>
-      connectorFor(project).projectKnowledge({ data: { project } }),
-    enabled: since !== null,
-    staleTime: 30_000,
-    retry: false,
-  })
+  const commentsQuery = useKnowledge(project, since !== null)
   const latestComment = useMemo(
     () => latestCommentByBead(commentsQuery.data?.comments ?? []),
     [commentsQuery.data],
@@ -368,26 +371,23 @@ function BoardPage() {
 
   async function applyDrop(activeId: string, toColumn: BeadColumn) {
     if (readonly) return
-    const previous = queryClient.getQueryData<Bead[]>(['beads', project])
-    const bead = (previous ?? beads).find((b) => b.id === activeId)
+    const bead = beads.find((b) => b.id === activeId)
     if (!bead || beadColumn(bead) === toColumn) return
 
-    queryClient.setQueryData<Bead[]>(['beads', project], (old) =>
-      (old ?? []).map((b) =>
-        b.id === activeId ? { ...b, status: toColumn } : b,
-      ),
+    const rollback = await patchSnapshot(queryClient, project, (s) =>
+      patchBead(s, activeId, { status: toColumn }),
     )
     try {
       await connectorFor(project).updateStatus({
         data: { project, id: activeId, status: toColumn },
       })
     } catch (error) {
-      queryClient.setQueryData(['beads', project], previous)
+      rollback()
       toast.error(
         error instanceof Error ? error.message : 'Failed to move bead',
       )
     } finally {
-      queryClient.invalidateQueries({ queryKey: ['beads', project] })
+      settleWrite(queryClient, project)
     }
   }
 
@@ -469,9 +469,11 @@ function BoardPage() {
             />
           ) : null}
 
+          <SnapshotNotice project={project} />
+
           {beadsQuery.isLoading ? (
             <BoardSkeleton />
-          ) : beadsQuery.isError ? (
+          ) : beadsQuery.isError && beadsQuery.data === undefined ? (
             <BoardError
               message={toErrorMessage(beadsQuery.error, 'Failed to load beads')}
               onRetry={() => beadsQuery.refetch()}
@@ -481,7 +483,6 @@ function BoardPage() {
               project={project}
               beadsById={beadsById}
               onOpenKnowledge={openKnowledge}
-              refetchInterval={feed.status === 'live' ? 60_000 : 12_000}
             />
           ) : tab === 'hierarchy' ? (
             <HierarchyView

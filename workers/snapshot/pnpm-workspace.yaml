@@ -1,0 +1,5 @@
+# Keeps this package out of the root workspace: wrangler is an optional peer of the root's
+# nitro, and sharing a workspace would install it into the app's production graph.
+allowBuilds:
+  esbuild: true
+  workerd: true

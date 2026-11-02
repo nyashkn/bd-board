@@ -2,13 +2,17 @@ import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
 import { createServerFn } from '@tanstack/react-start'
 
 import { readArtifactFile } from './artifact-read.ts'
-import { bdAdapter, resolveDir } from './bd.ts'
+import { bdAdapter, probeDoltMode, resolveDir } from './bd.ts'
+import { readHttpSnapshot } from './http-snapshot.ts'
 import {
   parseArtifactInput,
+  parseBeadCommentsInput,
   parseBeadInput,
   parseCommentInput,
+  parseHttpSnapshotInput,
   parseCreateBeadInput,
   parseProjectInput,
+  parseSnapshotInput,
   parseStatusUpdateInput,
   parseUpdateBeadInput,
 } from './server-validation.ts'
@@ -18,6 +22,8 @@ import { toErrorMessage } from './utils.ts'
 
 import type { ArtifactFile } from './artifacts.ts'
 import type { BdStatus } from './bd-errors.ts'
+import type { ProbeReply } from './connectors/select.ts'
+import type { ProjectSnapshot } from './snapshot.ts'
 import type { CommentAuthor } from './comment-author.ts'
 import type {
   AddProjectOutcome,
@@ -25,6 +31,7 @@ import type {
   BeadFeedMessage,
   BeadDetail,
   BeadUpdate,
+  Comment,
   Project,
   ProjectKnowledge,
 } from './types.ts'
@@ -44,6 +51,16 @@ const webGetBeads = createServerFn({ method: 'GET' })
 const webGetBeadDetail = createServerFn({ method: 'GET' })
   .validator(parseBeadInput)
   .handler(({ data }) => bdAdapter.getBeadDetail(data.project, data.id))
+
+const webGetSnapshot = createServerFn({ method: 'GET' })
+  .validator(parseSnapshotInput)
+  .handler(({ data }) => bdAdapter.getSnapshot(data.project, data.background))
+
+const webGetBeadComments = createServerFn({ method: 'GET' })
+  .validator(parseBeadCommentsInput)
+  .handler(({ data }) =>
+    bdAdapter.getBeadComments(data.project, data.id, data.background),
+  )
 
 const webGetProjectKnowledge = createServerFn({ method: 'GET' })
   .validator(parseProjectInput)
@@ -117,6 +134,14 @@ export const webEnableEventsJournal = createServerFn({ method: 'POST' })
     return { ok: true as const }
   })
 
+const webProbeDoltMode = createServerFn({ method: 'GET' })
+  .validator(parseProjectInput)
+  .handler(({ data }) => probeDoltMode(data.project))
+
+const webGetHttpSnapshot = createServerFn({ method: 'GET' })
+  .validator(parseHttpSnapshotInput)
+  .handler(({ data }) => readHttpSnapshot(data.project, data.source, data.peek))
+
 async function getProjectsImpl(): Promise<Project[]> {
   if (isDesktopApp()) return invoke<Project[]>('list_projects')
   return webGetProjects()
@@ -143,6 +168,33 @@ async function getBeadDetailFnImpl({
       id: data.id,
     })
   return webGetBeadDetail({ data })
+}
+
+async function getSnapshotFnImpl({
+  data,
+}: {
+  data: { project: string; background?: boolean }
+}): Promise<ProjectSnapshot> {
+  if (isDesktopApp())
+    return invoke<ProjectSnapshot>('get_project_snapshot', {
+      projectId: data.project,
+      background: data.background === true,
+    })
+  return webGetSnapshot({ data })
+}
+
+async function getBeadCommentsFnImpl({
+  data,
+}: {
+  data: { project: string; id: string; background?: boolean }
+}): Promise<Comment[]> {
+  if (isDesktopApp())
+    return invoke<Comment[]>('get_bead_comments', {
+      projectId: data.project,
+      id: data.id,
+      background: data.background === true,
+    })
+  return webGetBeadComments({ data })
 }
 
 async function readArtifactFnImpl({
@@ -301,6 +353,29 @@ async function enableEventsJournalFnImpl({
   return webEnableEventsJournal({ data })
 }
 
+async function probeDoltModeFnImpl({
+  data,
+}: {
+  data: { project: string }
+}): Promise<ProbeReply> {
+  if (isDesktopApp())
+    return invoke<ProbeReply>('probe_dolt_mode', { projectId: data.project })
+  return webProbeDoltMode({ data })
+}
+
+async function getHttpSnapshotFnImpl({
+  data,
+}: {
+  data: { project: string; source: string; peek?: boolean }
+}): Promise<{ cursor: string; snapshot?: ProjectSnapshot }> {
+  // Server-side fetch only (it holds the token); the desktop shell has no HTTP client yet.
+  if (isDesktopApp())
+    throw new Error(
+      'http-snapshot sources are not available in the desktop app',
+    )
+  return webGetHttpSnapshot({ data: { peek: false, ...data } })
+}
+
 export function subscribeBeadFeed(
   project: string,
   since: number,
@@ -431,6 +506,8 @@ export async function relocateProject(id: string, path: string): Promise<void> {
 export const getProjects = tracked('projects', getProjectsImpl)
 export const getBeads = tracked('list', getBeadsImpl)
 export const getBeadDetailFn = tracked('show', getBeadDetailFnImpl)
+export const getSnapshotFn = tracked('snapshot', getSnapshotFnImpl)
+export const getBeadCommentsFn = tracked('comments', getBeadCommentsFnImpl)
 export const readArtifactFn = tracked('artifact', readArtifactFnImpl)
 export const getProjectKnowledgeFn = tracked(
   'export',
@@ -452,6 +529,8 @@ export const getCommentAuthorFn = tracked(
   'comment_author',
   getCommentAuthorFnImpl,
 )
+export const probeDoltModeFn = tracked('probe', probeDoltModeFnImpl)
+export const getHttpSnapshotFn = tracked('http_snapshot', getHttpSnapshotFnImpl)
 export const getBdStatusFn = tracked('status', getBdStatusFnImpl)
 export const enableEventsJournalFn = tracked(
   'events_journal',

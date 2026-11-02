@@ -3,6 +3,7 @@ import { promisify } from 'node:util'
 import * as fsSync from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { BdAdapter } from './bd-contract.ts'
 import type {
@@ -20,7 +21,22 @@ import type {
 } from './types.ts'
 import { summarizeBeads } from './counts.ts'
 import { parseKnowledgeCommentText } from './knowledge.ts'
+import { coalesced } from './coalesce.ts'
+import { COMMENTS_LIMIT, KNOWLEDGE_LIMIT, deriveChildren } from './snapshot.ts'
+import type { ProjectSnapshot, SnapshotBead } from './snapshot.ts'
 import { loadRegistry } from './registry.ts'
+import {
+  applyProbeConcurrency,
+  BdBufferError,
+  BdTimeoutError,
+  execFileGroup,
+  isReadCall,
+  queued,
+  timeoutFromEnv,
+} from './bd-queue.ts'
+import type { Priority } from './bd-queue.ts'
+import { parseDoltShow } from './connectors/select.ts'
+import type { ProbeReply } from './connectors/select.ts'
 import { bdNotFoundMessage, classifyBdVersion } from './bd-errors.ts'
 import type { BdStatus } from './bd-errors.ts'
 import {
@@ -36,8 +52,7 @@ const execFileAsync = promisify(execFile)
 
 const BD_FALLBACK = '/opt/homebrew/bin/bd'
 const MAX_BUFFER = 64 * 1024 * 1024
-export const COMMENTS_LIMIT = 250
-export const KNOWLEDGE_LIMIT = 500
+export { COMMENTS_LIMIT, KNOWLEDGE_LIMIT }
 
 function bdCandidates(): string[] {
   const candidates: string[] = []
@@ -184,34 +199,73 @@ export function bdErrorMessage(
   return `bd exited with status ${exitCode}`
 }
 
-export async function bdExec(
-  dir: string,
-  args: string[],
-): Promise<{
+type BdResult = {
   bin: string
   env: NodeJS.ProcessEnv
   code: number
   stdout: string
   stderr: string
-}> {
+}
+
+/**
+ * One bd process per project at a time (more on a Dolt server); identical in-flight reads
+ * share a process. Interval polls pass 'background' so user calls go ahead of them.
+ */
+export function bdExec(
+  dir: string,
+  args: string[],
+  timeout = timeoutFromEnv(process.env),
+  priority: Priority = 'user',
+): Promise<BdResult> {
+  return queued(dir, args, () => spawnBd(dir, args, timeout), priority)
+}
+
+async function spawnBd(
+  dir: string,
+  args: string[],
+  timeout: number,
+): Promise<BdResult> {
   const { candidates, env: extra } = await launchFor(dir)
   const env = { ...process.env, ...extra }
 
   for (const candidate of candidates) {
     try {
-      const { stdout, stderr } = await execFileAsync(candidate, args, {
+      const { stdout, stderr } = await execFileGroup(candidate, args, {
         cwd: dir,
         env,
         maxBuffer: MAX_BUFFER,
+        timeout,
       })
       return { bin: candidate, env, code: 0, stdout, stderr }
     } catch (err: unknown) {
       const error = err as {
-        code?: string | number
+        code?: string | number | null
+        signal?: string | null
         stdout?: string
         stderr?: string
       }
 
+      if (err instanceof BdTimeoutError) {
+        throw new Error(
+          `bd ${args[0] ?? ''} timed out after ${timeout / 1000}s and was stopped` +
+            (isReadCall(args)
+              ? ''
+              : '; the command may have been applied, so check before retrying'),
+        )
+      }
+      if (err instanceof BdBufferError) {
+        throw new Error('bd output exceeded buffer')
+      }
+      if (error.signal) {
+        const why = (error.stderr ?? '').trim()
+        throw new Error(
+          `bd ${args[0] ?? ''} killed by ${error.signal}` +
+            (why ? `: ${why}` : '') +
+            (isReadCall(args)
+              ? ''
+              : '; the command may have been applied, so check before retrying'),
+        )
+      }
       if (error.code === 'ENOENT') {
         continue
       }
@@ -234,16 +288,24 @@ export async function bdExec(
   throw new Error(bdNotFoundMessage(candidates, process.env['BD_BIN']))
 }
 
-async function bdRaw(dir: string, args: string[]): Promise<string> {
-  const result = await bdExec(dir, args)
+async function bdRaw(
+  dir: string,
+  args: string[],
+  priority: Priority = 'user',
+): Promise<string> {
+  const result = await bdExec(dir, args, undefined, priority)
   if (result.code !== 0) {
     throw new Error(bdErrorMessage(result.stdout, result.stderr, result.code))
   }
   return result.stdout
 }
 
-async function bdJson<T>(dir: string, args: string[]): Promise<T> {
-  const raw = await bdRaw(dir, args)
+async function bdJson<T>(
+  dir: string,
+  args: string[],
+  priority: Priority = 'user',
+): Promise<T> {
+  const raw = await bdRaw(dir, args, priority)
   const trimmed = raw.trim()
   if (!trimmed) return [] as unknown as T
   return JSON.parse(trimmed) as T
@@ -300,9 +362,12 @@ export function buildCountsFromGroups(
   return buildCounts(groups.map((g) => ({ status: g.group, c: g.count })))
 }
 
-async function counts(dir: string): Promise<ProjectCounts> {
+async function counts(
+  dir: string,
+  priority: Priority = 'user',
+): Promise<ProjectCounts> {
   try {
-    return summarizeBeads(await listBeadsIn(dir))
+    return summarizeBeads(await listBeadsIn(dir, priority))
   } catch {
     return {
       open: 0,
@@ -317,11 +382,16 @@ async function counts(dir: string): Promise<ProjectCounts> {
 
 function projectPolicy(
   entry: RegistryEntry,
-): Pick<Project, 'readonly' | 'filterLabel'> {
-  if (!entry.readonly) return {}
+): Pick<Project, 'readonly' | 'filterLabel' | 'snapshotFirst'> {
+  const snapshotFirst = entry.sources?.[0]?.startsWith('https://') === true
   return {
-    readonly: true,
-    ...(entry.filterLabel ? { filterLabel: entry.filterLabel } : {}),
+    ...(entry.readonly
+      ? {
+          readonly: true,
+          ...(entry.filterLabel ? { filterLabel: entry.filterLabel } : {}),
+        }
+      : {}),
+    ...(snapshotFirst ? { snapshotFirst: true } : {}),
   }
 }
 
@@ -361,7 +431,7 @@ async function discoverProjects(): Promise<Project[]> {
         path?: string
         database_path?: string
         prefix?: string
-      }>(entry.path, ['where', '--json'])
+      }>(entry.path, ['where', '--json'], 'background')
 
       if (!probeResult.path) {
         results.push({
@@ -389,7 +459,7 @@ async function discoverProjects(): Promise<Project[]> {
       const expectedBeads = path.join(entry.path, '.beads')
       const external = probeResult.path !== expectedBeads
 
-      const projectCounts = await counts(entry.path)
+      const projectCounts = await counts(entry.path, 'background')
       results.push({
         id: entry.id,
         ...policy,
@@ -605,31 +675,6 @@ export function buildBeadGraph(
   )
 }
 
-function deriveChildren(beads: Bead[]): Bead[] {
-  const childMap = new Map<string, string[]>()
-  for (const b of beads) {
-    if (b.parent) {
-      const list = childMap.get(b.parent) ?? []
-      list.push(b.id)
-      childMap.set(b.parent, list)
-    }
-  }
-
-  const beadById = new Map(beads.map((b) => [b.id, b]))
-
-  return beads.map((b) => {
-    const childIds = childMap.get(b.id)
-    if (!childIds?.length) return b
-    return {
-      ...b,
-      children: childIds,
-      childBeads: childIds
-        .map((id) => beadById.get(id))
-        .filter((x): x is Bead => x !== undefined),
-    }
-  })
-}
-
 // bd metadata is a flat object; keep string values only (artifacts is JSON text).
 function stringMetadata(value: unknown): Record<string, string> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return
@@ -716,35 +761,33 @@ async function listBeads(projectId: string): Promise<Bead[]> {
   return listBeadsIn(await resolveDir(projectId))
 }
 
-async function listBeadsIn(dir: string): Promise<Bead[]> {
+async function listBeadsIn(
+  dir: string,
+  priority: Priority = 'user',
+): Promise<Bead[]> {
   // blocked/ready are bd's own answer to "what waits" and "what can start"; a failure
   // (old bd) leaves them undefined and the UI falls back to status only.
   const optional = (args: string[]) =>
-    bdJson<Record<string, unknown>[]>(dir, args).catch(() => undefined)
+    bdJson<Record<string, unknown>[]>(dir, args, priority).catch(
+      () => undefined,
+    )
   const [raw, blocked, ready] = await Promise.all([
-    bdJson<Record<string, unknown>[]>(dir, ['list', '--all', '--json']),
+    bdJson<Record<string, unknown>[]>(
+      dir,
+      ['list', '--all', '--json'],
+      priority,
+    ),
     optional(['blocked', '--json']),
     optional(['ready', '--json', '-n', '0']),
   ])
   return buildBeadGraph(raw, { blocked, ready })
 }
 
-async function getBeadDetail(
-  projectId: string,
-  id: string,
-): Promise<BeadDetail> {
-  const dir = await resolveDir(projectId)
-
-  const [rawArr, rawComments] = await Promise.all([
-    bdJson<Record<string, unknown>[]>(dir, ['show', id, '--json']),
-    bdJson<Record<string, unknown>[]>(dir, ['comments', id, '--json']).catch(
-      () => [] as Record<string, unknown>[],
-    ),
-  ])
-
-  const raw = rawArr[0] ?? {}
-  const bead = mapRawBead(raw)
-
+/** Pure: `bd show <id> --json` (first element) plus `bd comments <id> --json` to the detail. */
+export function buildBeadDetail(
+  raw: Record<string, unknown>,
+  rawComments: Record<string, unknown>[],
+): BeadDetail {
   const rawDeps = Array.isArray(raw['dependencies'])
     ? (raw['dependencies'] as Record<string, unknown>[])
     : []
@@ -757,9 +800,125 @@ async function getBeadDetail(
     dependency_type: String(d['dependency_type'] ?? ''),
   }))
 
-  const comments: Comment[] = rawComments.map(mapComment)
+  return {
+    ...mapRawBead(raw),
+    dependencies,
+    comments: rawComments.map(mapComment),
+  }
+}
 
-  return { ...bead, dependencies, comments }
+async function getBeadDetail(
+  projectId: string,
+  id: string,
+): Promise<BeadDetail> {
+  const dir = await resolveDir(projectId)
+
+  // show first: its comment_count says whether `bd comments` is worth a process. The
+  // per-project queue runs one bd at a time anyway, so overlapping them gains nothing.
+  const rawArr = await bdJson<Record<string, unknown>[]>(dir, [
+    'show',
+    id,
+    '--json',
+  ])
+  const raw = rawArr[0] ?? {}
+  const rawComments =
+    mapRawBead(raw).comment_count === 0
+      ? []
+      : await bdJson<Record<string, unknown>[]>(dir, [
+          'comments',
+          id,
+          '--json',
+        ]).catch(() => [] as Record<string, unknown>[])
+  return buildBeadDetail(raw, rawComments)
+}
+
+function parseJsonRows(raw: string | undefined): IdRow[] | null {
+  try {
+    const text = raw?.trim()
+    if (text === undefined) return null
+    return text ? (JSON.parse(text) as IdRow[]) : []
+  } catch {
+    return null
+  }
+}
+
+/** Pure: the three bd outputs (raw text) to a snapshot. `ready`/`blocked` undefined = bd failed. */
+export function buildSnapshot(
+  exported: string,
+  ready: string | undefined,
+  blocked: string | undefined,
+): ProjectSnapshot {
+  const rows = exported
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+  const beads: SnapshotBead[] = rows.map((raw) => ({
+    ...mapRawBead(raw),
+    comments: (Array.isArray(raw['comments'])
+      ? (raw['comments'] as Record<string, unknown>[])
+      : []
+    ).map(mapComment),
+    edges: parseDependencyEdges(raw),
+  }))
+  const readyRows = parseJsonRows(ready)
+  const blockedRows = parseJsonRows(blocked)
+  return {
+    beads,
+    ready: readyRows && readyRows.map((r) => String(r['id'])),
+    blocked:
+      blockedRows &&
+      blockedRows.map((r) => ({
+        id: String(r['id']),
+        blocked_by: Array.isArray(r['blocked_by'])
+          ? (r['blocked_by'] as unknown[]).filter(
+              (x): x is string => typeof x === 'string',
+            )
+          : [],
+      })),
+    cursor: createHash('sha1')
+      .update(`${exported}\0${ready ?? ''}\0${blocked ?? ''}`)
+      .digest('hex')
+      .slice(0, 16),
+  }
+}
+
+/**
+ * Everything the UI reads, from three bd calls run one after another (parallel is slower on the
+ * embedded lock). Concurrent callers for a project share one run, see coalesce.ts.
+ */
+async function getSnapshot(
+  projectId: string,
+  background = false,
+): Promise<ProjectSnapshot> {
+  const dir = await resolveDir(projectId)
+  // shortcut: a run's lane is its first caller's; a user caller joining a background run waits in
+  // that lane. Upgrade if RUM shows it matters.
+  const lane: Priority = background ? 'background' : 'user'
+  return coalesced(dir, async () => {
+    const exported = await bdRaw(dir, ['export'], lane)
+    // ready/blocked are optional: an old bd leaves them undefined and the UI falls back to status.
+    const ready = await bdRaw(dir, ['ready', '--json', '-n', '0'], lane).catch(
+      () => undefined,
+    )
+    const blocked = await bdRaw(dir, ['blocked', '--json'], lane).catch(
+      () => undefined,
+    )
+    return buildSnapshot(exported, ready, blocked)
+  })
+}
+
+async function getBeadComments(
+  projectId: string,
+  id: string,
+  background = false,
+): Promise<Comment[]> {
+  const rows = await bdJson<Record<string, unknown>[]>(
+    await resolveDir(projectId),
+    ['comments', id, '--json'],
+    background ? 'background' : 'user',
+  )
+  return rows.map(mapComment)
 }
 
 export function buildProjectKnowledge(
@@ -949,11 +1108,46 @@ async function enableEventsJournal(projectId: string): Promise<void> {
   await bdRaw(dir, ['config', 'set', 'events-journal', 'true'])
 }
 
+const PROBE_TIMEOUT_MS = 2000
+
+/**
+ * Which Dolt mode is this project in (`bd dolt show --json`), plus its registry `sources`.
+ * Never throws: a failure or a 2 s timeout (queued like any bd call, and the process is killed)
+ * comes back as `{ error, sources }`. With explicit `sources` it does not run bd.
+ */
+export async function probeDoltMode(projectId: string): Promise<ProbeReply> {
+  let sources: string[] = []
+  try {
+    const entry = (await loadRegistry()).find((e) => e.id === projectId)
+    if (!entry) return { error: `unknown project id: ${projectId}` }
+    sources = entry.sources ?? []
+    // Explicit sources decide the order; no bd call is needed (or wanted) to resolve them.
+    if (sources.length)
+      return { error: 'not probed: explicit sources', sources }
+    const r = await bdExec(
+      entry.path,
+      ['dolt', 'show', '--json'],
+      PROBE_TIMEOUT_MS,
+      'background',
+    )
+    if (r.code !== 0) {
+      return { error: bdErrorMessage(r.stdout, r.stderr, r.code), sources }
+    }
+    const probe = parseDoltShow(r.stdout)
+    if (!('error' in probe)) applyProbeConcurrency(entry.path, probe)
+    return { ...probe, sources }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err), sources }
+  }
+}
+
 export const bdAdapter: BdAdapter = {
   discoverProjects,
   listBeads,
   getBeadDetail,
   getProjectKnowledge,
+  getSnapshot,
+  getBeadComments,
   updateBeadStatus,
   updateBead,
   previewDeleteBead,
@@ -970,6 +1164,8 @@ export {
   listBeads,
   getBeadDetail,
   getProjectKnowledge,
+  getSnapshot,
+  getBeadComments,
   updateBeadStatus,
   updateBead,
   buildUpdateBeadArgs,

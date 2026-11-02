@@ -9,6 +9,7 @@ import {
   rumKeystroke,
   rumMarkCold,
   rumNow,
+  rumView,
   sdkInitConfig,
   startRum,
   tracked,
@@ -194,6 +195,15 @@ describe('tracked', () => {
     expect(opts[1].context).toEqual({ ok: false })
     expect(JSON.stringify(vitals)).not.toContain('secret title')
     expect(JSON.stringify(vitals)).not.toContain('demo')
+  })
+
+  it('labels bd.call with the view that was current at call time', async () => {
+    const { sdk, calls } = fakeSdk()
+    activateRum({ config: config(), sdk, desktop: false, version: '1' })
+    rumView('bead-modal')
+    await tracked('show', async () => 1)()
+    const ctx = (calls.at(-1)?.args[1] as { context: object }).context
+    expect(ctx).toEqual({ ok: true, view: 'bead-modal' })
   })
 
   it('full adds the project name', async () => {

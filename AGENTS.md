@@ -5,6 +5,7 @@ This project uses `bd` for task tracking in shared-server mode. Keep tracker dat
 ## Commands
 
 ```bash
+just ci   # the gate: what CI runs; run it before pushing
 pnpm install
 pnpm dev
 pnpm typecheck

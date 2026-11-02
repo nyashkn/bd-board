@@ -20,9 +20,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { useBdStatus } from '@/hooks/use-bd-status'
+import { useBoardBeads } from '@/hooks/use-snapshot'
 import { cn } from '@/lib/utils'
-import { connectorFor } from '@/lib/core'
-import { getProjects } from '@/lib/server'
+import {
+  refetchProjectsOnCursorMove,
+  snapshotQueryOptions,
+} from '@/lib/snapshot-store'
+import { PROJECTS_FALLBACK_MS, projectsQueryOptions } from '@/lib/query-options'
 
 import { getStoredIdentity, setStoredIdentity } from '@/lib/identity'
 import {
@@ -218,20 +222,13 @@ export function ProjectRail() {
   )
 
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => getProjects(),
-    refetchInterval: 15000,
-    staleTime: 5000,
+    ...projectsQueryOptions(),
+    refetchInterval: PROJECTS_FALLBACK_MS,
   })
+  useEffect(() => refetchProjectsOnCursorMove(queryClient), [queryClient])
   const projects = projectsQuery.data ?? []
 
-  const beadsQuery = useQuery({
-    queryKey: ['beads', project],
-    queryFn: () =>
-      connectorFor(project!).listBeads({ data: { project: project! } }),
-    enabled: Boolean(project),
-    staleTime: 3000,
-  })
+  const beadsQuery = useBoardBeads(project)
   const beads = project ? (beadsQuery.data ?? []) : []
   const { ready: readyCount, blocked: blockedCount } = summarizeBeads(beads)
 
@@ -361,9 +358,7 @@ export function ProjectRail() {
                 onDeleteClick={() => setDeletingProjectId(p.id)}
                 onMouseEnter={() =>
                   queryClient.prefetchQuery({
-                    queryKey: ['beads', p.id],
-                    queryFn: () =>
-                      connectorFor(p.id).listBeads({ data: { project: p.id } }),
+                    ...snapshotQueryOptions(p.id),
                     staleTime: 3000,
                   })
                 }

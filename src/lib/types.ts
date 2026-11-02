@@ -140,6 +140,8 @@ export interface Project {
   counts: ProjectCounts
   /** Registry `readonly: true`: writes are refused and the UI hides them. */
   readonly?: boolean
+  /** Web only: the registry lists an https (http-snapshot) source first, which is read-only. */
+  snapshotFirst?: boolean
   /** Registry `filterLabel`, only meaningful together with `readonly`. */
   filterLabel?: string
 }
@@ -216,7 +218,8 @@ export function groupBeadLinks(links: BeadLink[] = []): {
 
 export type BeadFeedMessage =
   | { type: 'live'; seq: number }
-  | { type: 'change'; seq: number; issueIds: string[] }
+  /** `ops` are the journal ops behind the change; absent or empty means unknown. */
+  | { type: 'change'; seq: number; issueIds: string[]; ops?: string[] }
   | { type: 'disabled' }
   | { type: 'unsupported'; message: string }
   | { type: 'error'; message: string }

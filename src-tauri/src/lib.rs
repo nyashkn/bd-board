@@ -2,11 +2,41 @@ use serde::Serialize;
 use std::env;
 use std::process::Command;
 
+mod adapters;
+mod app;
+mod artifacts;
 // pub so tests/ can drive the real commands against a `bd init` fixture.
-pub mod desktop;
+pub mod commands;
+mod domain;
+mod ports;
 pub mod registry;
 pub mod rum;
-pub mod source;
+
+/// Hooks for the integration tests in tests/; not part of the app.
+#[doc(hidden)]
+#[cfg(feature = "dolt-sql")]
+pub mod test_support {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    /// Starts the SQL change probe and sends each feed message, as JSON, to `send`.
+    pub fn dolt_watch(
+        project_id: &str,
+        poll: Duration,
+        send: impl Fn(serde_json::Value) -> bool + Send + 'static,
+    ) -> Result<Arc<AtomicBool>, String> {
+        let db = crate::adapters::dolt_sql::handle_for(project_id)?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let flag = stop.clone();
+        std::thread::spawn(move || {
+            crate::adapters::dolt_sql::watch_loop(&db, &flag, poll, &|m| {
+                send(serde_json::to_value(m).unwrap_or_default())
+            })
+        });
+        Ok(stop)
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +51,8 @@ pub struct DesktopProbe {
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(desktop::FeedWatches::default());
+        .manage(app::FeedWatches::default())
+        .manage(app::DoltWatches::default());
 
     #[cfg(feature = "wdio")]
     let builder = builder
@@ -32,7 +63,8 @@ pub fn run() {
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Started {
                 use tauri::Manager;
-                webview.state::<desktop::FeedWatches>().cancel_all();
+                webview.state::<app::FeedWatches>().cancel_all();
+                webview.state::<app::DoltWatches>().cancel_all();
             }
         })
         .setup(|_| {
@@ -50,28 +82,35 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             desktop_probe,
-            desktop::list_projects,
-            desktop::add_project,
-            desktop::remove_project,
-            desktop::probe_project,
-            desktop::init_project,
-            desktop::list_beads,
-            desktop::get_bead_detail,
-            desktop::read_artifact,
-            desktop::get_project_knowledge,
-            desktop::update_bead_status,
-            desktop::update_bead,
-            desktop::preview_delete_bead,
-            desktop::delete_bead,
-            desktop::create_bead,
-            desktop::add_comment,
-            desktop::comment_author,
-            desktop::rename_project,
-            desktop::check_project_path,
-            desktop::relocate_project,
-            desktop::watch_bead_feed,
-            desktop::unwatch_bead_feed,
-            desktop::enable_events_journal,
+            commands::list_projects,
+            commands::add_project,
+            commands::remove_project,
+            commands::probe_project,
+            commands::probe_dolt_mode,
+            commands::init_project,
+            commands::list_beads,
+            commands::get_bead_detail,
+            commands::get_project_snapshot,
+            commands::get_bead_comments,
+            commands::dolt_sql_snapshot,
+            commands::dolt_sql_comments,
+            commands::watch_dolt_feed,
+            commands::unwatch_dolt_feed,
+            commands::read_artifact,
+            commands::get_project_knowledge,
+            commands::update_bead_status,
+            commands::update_bead,
+            commands::preview_delete_bead,
+            commands::delete_bead,
+            commands::create_bead,
+            commands::add_comment,
+            commands::comment_author,
+            commands::rename_project,
+            commands::check_project_path,
+            commands::relocate_project,
+            commands::watch_bead_feed,
+            commands::unwatch_bead_feed,
+            commands::enable_events_journal,
             rum::rum_config,
         ])
         .build(tauri::generate_context!())
@@ -79,7 +118,8 @@ pub fn run() {
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
                 use tauri::Manager;
-                app.state::<desktop::FeedWatches>().cancel_all();
+                app.state::<app::FeedWatches>().cancel_all();
+                app.state::<app::DoltWatches>().cancel_all();
             }
         });
 }
@@ -102,7 +142,7 @@ fn desktop_probe() -> Result<DesktopProbe, String> {
 }
 
 fn find_bd_binary() -> Result<std::path::PathBuf, String> {
-    let candidates = desktop::bd_candidates();
+    let candidates = app::bd_candidates();
     for candidate in candidates {
         if let Ok(output) = Command::new(&candidate).arg("--version").output() {
             if output.status.success() {
@@ -114,7 +154,7 @@ fn find_bd_binary() -> Result<std::path::PathBuf, String> {
 }
 
 fn resolve_bd_version() -> Result<String, String> {
-    let candidates = desktop::bd_candidates();
+    let candidates = app::bd_candidates();
     for candidate in candidates {
         if let Ok(output) = Command::new(&candidate).arg("--version").output() {
             if output.status.success() {
