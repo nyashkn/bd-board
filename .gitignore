@@ -7,6 +7,7 @@ dist-ssr
 .nitro
 .tanstack
 .wrangler
+.dev.vars*
 .output
 .vinxi
 __unconfig*
@@ -15,11 +16,7 @@ src-tauri/target/
 src-tauri/gen/
 
 # Local tracker and agent state
-.beads/*
-!.beads/issues.jsonl
-!.beads/config.yaml
-!.beads/metadata.json
-!.beads/.gitignore
+.beads/
 .dolt/
 *.db
 .beads-credential-key
@@ -27,4 +24,3 @@ src-tauri/gen/
 .claude/
 .codex/
 logs/
-.beads.gate.lock

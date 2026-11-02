@@ -81,6 +81,44 @@ export function parseProjectInput(input: unknown): { project: string } {
   }
 }
 
+/** `background`: a refresh nobody waits on, so it yields to user calls in the bd queue. */
+export function parseSnapshotInput(input: unknown): {
+  project: string
+  background: boolean
+} {
+  return {
+    ...parseProjectInput(input),
+    background: record(input)['background'] === true,
+  }
+}
+
+export function parseHttpSnapshotInput(input: unknown): {
+  project: string
+  source: string
+  peek: boolean
+} {
+  const o = record(input)
+  const source = o['source']
+  if (typeof source !== 'string' || !source.startsWith('https://'))
+    throw new Error('source is invalid')
+  return {
+    ...parseProjectInput(input),
+    source,
+    peek: o['peek'] === true,
+  }
+}
+
+export function parseBeadCommentsInput(input: unknown): {
+  project: string
+  id: string
+  background: boolean
+} {
+  return {
+    ...parseBeadInput(input),
+    background: record(input)['background'] === true,
+  }
+}
+
 export function parseBeadInput(input: unknown): {
   project: string
   id: string

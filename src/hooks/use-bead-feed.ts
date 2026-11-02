@@ -4,11 +4,16 @@ import { toast } from 'sonner'
 
 import { rumAction } from '@/lib/rum'
 import { connectorFor } from '@/lib/core'
+import { createRefresher } from '@/lib/snapshot-refresh'
+import {
+  refreshComments,
+  refreshSnapshot,
+  setFeedLive,
+} from '@/lib/snapshot-store'
 import { toErrorMessage } from '@/lib/utils'
 
 import type { BeadFeedMessage, BeadFeedStatus } from '@/lib/types'
 
-const FEED_DEBOUNCE_MS = 300
 const FEED_RETRY_MS = 15_000
 
 function loadSeq(project: string): number {
@@ -51,39 +56,34 @@ export function useBeadFeed(
     setStatus('connecting')
     setMessage(undefined)
     let cancelled = false
-    const pending = new Set<string>()
-    let debounceTimer: ReturnType<typeof setTimeout> | undefined
     let retryTimer: ReturnType<typeof setTimeout> | undefined
 
-    const invalidateBoard = () => {
-      void queryClient.invalidateQueries({ queryKey: ['beads', project] })
-      void queryClient.invalidateQueries({
-        queryKey: ['project-knowledge', project],
-      })
-      void queryClient.invalidateQueries({ queryKey: ['artifact', project] })
-    }
+    const refresher = createRefresher({
+      full: () => {
+        // Palette index and artifact views follow the board; they refetch only while observed.
+        void queryClient.invalidateQueries({
+          queryKey: ['beads', project],
+          refetchType: 'none',
+        })
+        void queryClient.invalidateQueries({ queryKey: ['artifact', project] })
+        return refreshSnapshot(queryClient, project)
+      },
+      comments: (ids) => refreshComments(queryClient, project, ids),
+    })
 
     const handle = (msg: BeadFeedMessage) => {
+      if (cancelled) return
+      setFeedLive(project, msg.type === 'live' || msg.type === 'change')
       switch (msg.type) {
         case 'live':
           saveSeq(project, msg.seq)
           setStatus('live')
           setMessage(undefined)
-          invalidateBoard()
+          refresher.full()
           break
         case 'change':
           saveSeq(project, msg.seq)
-          for (const id of msg.issueIds) pending.add(id)
-          clearTimeout(debounceTimer)
-          debounceTimer = setTimeout(() => {
-            invalidateBoard()
-            for (const id of pending) {
-              void queryClient.invalidateQueries({
-                queryKey: ['bead', project, id],
-              })
-            }
-            pending.clear()
-          }, FEED_DEBOUNCE_MS)
+          refresher.change(msg)
           break
         case 'disabled':
           setStatus('disabled')
@@ -139,9 +139,9 @@ export function useBeadFeed(
     return () => {
       cancelled = true
       unsubscribe()
-      clearTimeout(debounceTimer)
+      refresher.dispose()
+      setFeedLive(project, false)
       clearTimeout(retryTimer)
-      pending.clear()
     }
   }, [project, attempt, queryClient, readonly])
 

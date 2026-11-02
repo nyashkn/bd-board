@@ -23,7 +23,13 @@ Browser and desktop end-to-end suites: `pnpm e2e:browser`, `pnpm e2e` (after `pn
 
 ## Quality Gates
 
-Run the full local gate before opening a pull request:
+Install [just](https://just.systems) (`brew install just`). The gate is `just ci`: it runs what CI runs (frontend and Rust), so run it before opening a pull request:
+
+```bash
+just ci
+```
+
+`just validate` adds the prod audit and the feed smoke test (needs `bd`). Without just, run the pnpm gate:
 
 ```bash
 pnpm validate

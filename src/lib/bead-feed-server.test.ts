@@ -11,6 +11,7 @@ describe('bead-feed-server', () => {
         kind: 'record',
         seq: 7,
         issueIds: ['a', 'b'],
+        op: 'dep_add',
       })
     })
 

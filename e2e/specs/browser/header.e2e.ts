@@ -1,10 +1,10 @@
-import { fakeProject, resetBrowserApp } from '../../helpers.js'
+import { fakeProject, fakeSnapshot, resetBrowserApp } from '../../helpers.js'
 
 describe('project header', () => {
   beforeEach(async () => {
     await resetBrowserApp('/p/tako', {
       list_projects: [fakeProject('tako', 'tako')],
-      list_beads: [],
+      get_project_snapshot: fakeSnapshot(),
       desktop_probe: null,
     })
     await $('nav[aria-label="Projects"] li a').waitForExist({ timeout: 20000 })
@@ -52,7 +52,7 @@ describe('home page header', () => {
   beforeEach(async () => {
     await resetBrowserApp('/', {
       list_projects: [],
-      list_beads: [],
+      get_project_snapshot: fakeSnapshot(),
       desktop_probe: null,
     })
     await $('nav[aria-label="Projects"]').waitForExist({ timeout: 20000 })
@@ -72,7 +72,7 @@ describe('home page header with project navigation', () => {
   beforeEach(async () => {
     await resetBrowserApp('/', {
       list_projects: [fakeProject('tako', 'tako')],
-      list_beads: [],
+      get_project_snapshot: fakeSnapshot(),
       desktop_probe: null,
       check_project_path: { kind: 'valid', external: true },
     })

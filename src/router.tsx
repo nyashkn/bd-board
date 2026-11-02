@@ -1,6 +1,12 @@
 import { createRouter as createTanStackRouter } from '@tanstack/react-router'
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query'
 import { routeTree } from './routeTree.gen'
+import { isTauri } from '@tauri-apps/api/core'
+import {
+  idbStorage,
+  persistSnapshots,
+  persistenceAllowed,
+} from './lib/snapshot-persist'
 import { rumError } from './lib/rum'
 import { getContext } from './integrations/tanstack-query/root-provider'
 
@@ -12,6 +18,8 @@ if (typeof window !== 'undefined' && import.meta.env.VITE_WDIO === '1') {
 
 export function getRouter() {
   const context = getContext()
+  if (typeof window !== 'undefined' && persistenceAllowed(isTauri()))
+    persistSnapshots(context.queryClient, idbStorage())
 
   const router = createTanStackRouter({
     routeTree,

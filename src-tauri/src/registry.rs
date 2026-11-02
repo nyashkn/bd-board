@@ -1,3 +1,4 @@
+use crate::domain::dolt::{parse_mysql_url, CredentialsRef};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -17,9 +18,32 @@ pub struct RegistryEntry {
         skip_serializing_if = "Option::is_none"
     )]
     pub filter_label: Option<String>,
+    /// Optional, ordered: connector URLs (`bd:`, `mysql://`, `https://`) tried first to last.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<String>,
+    /// Optional: environment variable NAMES, never values. A string names the http-snapshot
+    /// reader token (`BD_BOARD_SNAPSHOT_*`, read by the web server); an object names the SQL user
+    /// and password of a `mysql://` source (`BD_BOARD_DOLT_*` or `DOLT_REMOTE_USER` /
+    /// `DOLT_REMOTE_PASSWORD`). Each connector accepts only its own form.
+    #[serde(
+        default,
+        alias = "credentialsRef",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub credentials_ref: Option<CredentialsRef>,
 }
 
+/// The URL schemes a `sources` entry may use (see src/lib/connectors/select.ts).
+const SOURCE_SCHEMES: [&str; 3] = ["bd:", "mysql://", "https://"];
+
 impl RegistryEntry {
+    /// Read-only in the UI and for every sink: marked so, or reading only from SQL (listing
+    /// sources without `bd:` means no local bd to write through).
+    pub fn is_readonly(&self) -> bool {
+        self.readonly
+            || (!self.sources.is_empty() && !self.sources.iter().any(|s| s.starts_with("bd:")))
+    }
+
     /// The filter label that applies: only a readonly project is filtered.
     pub fn effective_filter_label(&self) -> Option<String> {
         if self.readonly {
@@ -69,7 +93,7 @@ pub fn load() -> Result<Registry, String> {
     parse_checked(registry)
 }
 
-/// Rejects what serde cannot: a blank filterLabel. Wrong types already fail in serde.
+/// Rejects what serde cannot: a blank filterLabel or a source with an unknown scheme. Wrong types already fail in serde.
 fn parse_checked(mut registry: Registry) -> Result<Registry, String> {
     if registry.version != 1 {
         return Err(format!(
@@ -79,6 +103,34 @@ fn parse_checked(mut registry: Registry) -> Result<Registry, String> {
     }
 
     for (i, entry) in registry.projects.iter_mut().enumerate() {
+        // Never echo the value: a mysql:// URL can carry credentials.
+        if let Some(n) = entry
+            .sources
+            .iter()
+            .position(|s| !SOURCE_SCHEMES.iter().any(|p| s.starts_with(p)))
+        {
+            return Err(format!(
+                "registry project #{}: \"sources\" entry #{} must be a bd:, mysql:// or https:// URL",
+                i + 1,
+                n + 1
+            ));
+        }
+        for (n, url) in entry.sources.iter().enumerate() {
+            if url.starts_with("mysql://") {
+                parse_mysql_url(url).map_err(|e| {
+                    format!(
+                        "registry project #{}: \"sources\" entry #{}: {e}",
+                        i + 1,
+                        n + 1
+                    )
+                })?;
+            }
+        }
+        // Never echo the value: someone may have pasted a token or password here.
+        if let Some(refs) = &entry.credentials_ref {
+            refs.check()
+                .map_err(|e| format!("registry project #{}: {e}", i + 1))?;
+        }
         if let Some(label) = entry.filter_label.as_mut() {
             *label = label.trim().to_string();
             if label.is_empty() {
@@ -175,6 +227,8 @@ pub fn add(path: &std::path::Path, label: Option<String>) -> Result<RegistryEntr
         label: final_label,
         readonly: false,
         filter_label: None,
+        sources: vec![],
+        credentials_ref: None,
     };
 
     registry.projects.push(entry.clone());
@@ -244,6 +298,34 @@ pub fn find(id: &str) -> Result<RegistryEntry, String> {
         .ok_or_else(|| format!("unknown project id: {id}"))
 }
 
+pub(crate) fn resolve_dir(project_id: &str) -> Result<PathBuf, String> {
+    let entry = find(project_id)?;
+    let path = PathBuf::from(&entry.path);
+    if !path.exists() {
+        return Err(format!(
+            "project directory no longer exists: {}",
+            entry.path
+        ));
+    }
+    Ok(path)
+}
+
+/// Defence in depth: every write goes through here, so a readonly project refuses before any process runs.
+pub(crate) fn resolve_writable_dir(project_id: &str) -> Result<PathBuf, String> {
+    check_writable(&find(project_id)?)?;
+    resolve_dir(project_id)
+}
+
+pub(crate) fn check_writable(entry: &RegistryEntry) -> Result<(), String> {
+    if entry.is_readonly() {
+        return Err(format!(
+            "project \"{}\" is read-only; writes are refused",
+            entry.label
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,6 +351,73 @@ mod tests {
         .unwrap();
         assert!(r.projects[0].readonly);
         assert_eq!(r.projects[0].effective_filter_label(), Some("wo".into()));
+    }
+
+    #[test]
+    fn credentials_ref_is_kept_and_must_be_a_snapshot_variable_name() {
+        let ok = r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","credentials_ref":"BD_BOARD_SNAPSHOT_TOKEN"}]}"#;
+        let r = parse(ok).unwrap();
+        assert_eq!(
+            r.projects[0].credentials_ref,
+            Some(CredentialsRef::Token("BD_BOARD_SNAPSHOT_TOKEN".into()))
+        );
+        assert!(serde_json::to_string(&r)
+            .unwrap()
+            .contains("credentials_ref"));
+        let bad = r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","credentials_ref":"s3cret-token"}]}"#;
+        let err = parse(bad).err().unwrap();
+        assert!(!err.contains("s3cret"));
+        for name in [
+            "AWS_SECRET_ACCESS_KEY",
+            "BD_BOARD_SNAPSHOT_lower",
+            "BD_BOARD_SNAPSHOT_",
+        ] {
+            let json = format!(
+                r#"{{"version":1,"projects":[{{"id":"a","path":"/p","label":"A","credentials_ref":"{name}"}}]}}"#
+            );
+            let err = parse(&json).err().unwrap();
+            if name != "BD_BOARD_SNAPSHOT_" {
+                assert!(!err.contains(name), "error echoed {name}");
+            }
+        }
+    }
+
+    #[test]
+    fn credentials_ref_object_is_the_sql_login_and_only_its_own_names_pass() {
+        let json = |r: &str| {
+            format!(
+                r#"{{"version":1,"projects":[{{"id":"a","path":"/p","label":"A","sources":["mysql://dolt-hub.example:3306/mydb?tls=true"],"credentials_ref":{r}}}]}}"#
+            )
+        };
+        let ok = parse(&json(
+            r#"{"user":"DOLT_REMOTE_USER","password":"BD_BOARD_DOLT_HUB_PASSWORD"}"#,
+        ))
+        .unwrap();
+        assert!(ok.projects[0]
+            .credentials_ref
+            .as_ref()
+            .and_then(CredentialsRef::login)
+            .is_some());
+        // the camelCase spelling of the old dolt-sql docs still loads
+        let alias = json(r#"{"password":"DOLT_REMOTE_PASSWORD"}"#)
+            .replace("credentials_ref", "credentialsRef");
+        assert!(parse(&alias).is_ok());
+        for bad in [
+            r#"{"password":"AWS_SECRET_ACCESS_KEY"}"#,
+            r#"{"user":"AWS_SECRET_ACCESS_KEY"}"#,
+            // the other connector's name is not valid for this one
+            r#"{"password":"BD_BOARD_SNAPSHOT_TOKEN"}"#,
+            r#"{"pass":"DOLT_REMOTE_PASSWORD"}"#,
+        ] {
+            let err = parse(&json(bad)).err().unwrap_or_default();
+            assert!(
+                !err.is_empty() && !err.contains("AWS_SECRET"),
+                "{bad}: {err}"
+            );
+        }
+        // and the snapshot token form is not accepted for it either
+        let err = parse(&json(r#""AWS_SECRET_ACCESS_KEY""#)).err().unwrap();
+        assert!(!err.contains("AWS_SECRET"));
     }
 
     #[test]
@@ -307,5 +456,54 @@ mod tests {
         assert_eq!(v["projects"][0]["filterLabel"], "wo");
         assert!(v["projects"][1].get("readonly").is_none());
         assert!(v["projects"][1].get("filterLabel").is_none());
+    }
+
+    #[test]
+    fn sources_default_empty_and_round_trip_in_order() {
+        let r = parse(r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A"}]}"#).unwrap();
+        assert!(r.projects[0].sources.is_empty());
+        assert!(serde_json::to_value(&r).unwrap()["projects"][0]
+            .get("sources")
+            .is_none());
+
+        let r = parse(
+            r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","sources":["mysql://127.0.0.1:3307/db","bd:"]}]}"#,
+        )
+        .unwrap();
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(
+            v["projects"][0]["sources"],
+            serde_json::json!(["mysql://127.0.0.1:3307/db", "bd:"])
+        );
+    }
+
+    #[test]
+    fn rejects_bad_sources() {
+        for bad in [r#"["ftp://x"]"#, r#""bd:""#, r#"[3]"#] {
+            let json = format!(
+                r#"{{"version":1,"projects":[{{"id":"a","path":"/p","label":"A","sources":{bad}}}]}}"#
+            );
+            assert!(parse(&json).is_err(), "{bad}");
+        }
+
+        let leak = r#"{"version":1,"projects":[{"id":"a","path":"/p","label":"A","sources":["postgres://u:secret@h/d"]}]}"#;
+        let err = parse(leak).err().unwrap();
+        assert!(err.contains("entry #1") && !err.contains("secret"), "{err}");
+    }
+
+    #[test]
+    fn writes_are_refused_for_readonly_projects_only() {
+        let entry = |readonly| RegistryEntry {
+            id: "p".into(),
+            path: "/p".into(),
+            label: "P".into(),
+            readonly,
+            filter_label: None,
+            sources: vec![],
+            credentials_ref: None,
+        };
+        assert!(check_writable(&entry(false)).is_ok());
+        let err = check_writable(&entry(true)).unwrap_err();
+        assert!(err.contains("read-only"));
     }
 }

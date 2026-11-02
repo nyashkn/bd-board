@@ -2,12 +2,18 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 
 import { connectorFor } from '@/lib/core'
-import { getProjects } from '@/lib/server'
+import {
+  projectKnowledgeQueryOptions,
+  projectsQueryOptions,
+} from '@/lib/query-options'
 import { askingBeads } from '@/lib/bead-questions'
+import { selectBoard, selectKnowledge } from '@/lib/snapshot'
+import { snapshotKey } from '@/lib/snapshot-store'
 import { buildDocs, indexComments, replaceAsking } from '@/lib/palette-search'
 import { rumDuration, rumNow } from '@/lib/rum'
 
 import type { IndexedText, PaletteDoc } from '@/lib/palette-search'
+import type { ProjectSnapshot } from '@/lib/snapshot'
 
 const MAX_PROJECTS = 24
 const MAX_COMMENT_PROJECTS = 12
@@ -28,16 +34,15 @@ export interface PaletteData {
 }
 
 /**
- * Everything the palette searches, read through the same query keys the board uses (so beads
- * already on screen cost nothing). Comments come from the read-only project export, lazily:
- * only once the palette is open and the beads are in, two projects at a time, at most 12.
+ * Everything the palette searches. A project whose snapshot is cached (the open one) is read
+ * from it and costs no bd call; the others use their own `['beads', id]` query (30 s staleTime).
+ * Comments come from the snapshot when cached, else the read-only project export, lazily: only
+ * once the palette is open and the beads are in, two projects at a time, at most 12.
  */
 export function usePaletteData(open: boolean, current?: string): PaletteData {
   const queryClient = useQueryClient()
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => getProjects(),
-    staleTime: 5000,
+    ...projectsQueryOptions(),
     enabled: open,
   })
 
@@ -55,7 +60,15 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
   const beads = useQueries({
     queries: projects.map((p) => ({
       queryKey: ['beads', p.id],
-      queryFn: () => connectorFor(p.id).listBeads({ data: { project: p.id } }),
+      // A project whose snapshot is cached (the open one) costs no bd call.
+      queryFn: () => {
+        const snapshot = queryClient.getQueryData<ProjectSnapshot>(
+          snapshotKey(p.id),
+        )
+        return snapshot
+          ? selectBoard(snapshot)
+          : connectorFor(p.id).listBeads({ data: { project: p.id } })
+      },
       staleTime: 30_000,
       retry: false,
       enabled: open,
@@ -94,12 +107,14 @@ export function usePaletteData(open: boolean, current?: string): PaletteData {
       for (let id = queue.shift(); id && !stopped(); id = queue.shift()) {
         try {
           const project = id
-          const knowledge = await queryClient.fetchQuery({
-            queryKey: ['project-knowledge', project],
-            queryFn: () =>
-              connectorFor(project).projectKnowledge({ data: { project } }),
-            staleTime: 60_000,
-          })
+          const cached = queryClient.getQueryData<ProjectSnapshot>(
+            snapshotKey(project),
+          )
+          const knowledge = cached
+            ? selectKnowledge(cached)
+            : await queryClient.fetchQuery(
+                projectKnowledgeQueryOptions(project),
+              )
           if (stopped()) return
           const t0 = rumNow()
           const index = indexComments(project, knowledge.comments)

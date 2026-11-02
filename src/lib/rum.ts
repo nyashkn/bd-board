@@ -104,8 +104,12 @@ export function rumError(error: unknown, ctx?: Ctx): void {
   emit(['error', error, ctx])
 }
 
+/** Latest view name: the caller label on `bd.call.*` (low cardinality, safe in every profile). */
+let currentView = ''
+
 export function rumView(name: string): void {
   if (mode === 'off') return
+  currentView = name
   emit(['view', name])
 }
 
@@ -132,15 +136,16 @@ async function trace<TArgs extends unknown[], TResult>(
   args: TArgs,
 ): Promise<TResult> {
   const t0 = performance.now()
+  const caller: Ctx = currentView ? { view: currentView } : {}
   const first = args[0] as { data?: { project?: unknown } } | undefined
   const project = first?.data?.project
   const detail = typeof project === 'string' ? { project } : undefined
   try {
     const out = await fn(...args)
-    rumDuration(`bd.call.${cmd}`, t0, { ok: true }, detail)
+    rumDuration(`bd.call.${cmd}`, t0, { ok: true, ...caller }, detail)
     return out
   } catch (err) {
-    rumDuration(`bd.call.${cmd}`, t0, { ok: false }, detail)
+    rumDuration(`bd.call.${cmd}`, t0, { ok: false, ...caller }, detail)
     throw err
   }
 }
@@ -299,6 +304,7 @@ export function resetRumForTests(): void {
   sdk = null
   queue = []
   started = false
+  currentView = ''
   marked.clear()
   ringN = 0
   clearTimeout(ringTimer)

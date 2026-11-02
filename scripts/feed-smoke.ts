@@ -18,7 +18,7 @@ process.env['BEADS_WORKSPACE_ROOT'] = path.join(root, 'beads-root')
 
 type BeadFeedMessage =
   | { type: 'live'; seq: number }
-  | { type: 'change'; seq: number; issueIds: string[] }
+  | { type: 'change'; seq: number; issueIds: string[]; ops?: string[] }
   | { type: 'disabled' }
   | { type: 'unsupported'; message: string }
   | { type: 'error'; message: string }
@@ -133,6 +133,10 @@ async function main() {
       console.log(
         `  ✓ change received for ${id} (seq ${'seq' in changeMsg ? changeMsg.seq : '?'})`,
       )
+
+      if (changeMsg.type === 'change' && !changeMsg.ops?.length) {
+        throw new Error('change message carries no ops')
+      }
 
       const bad = msgs.find(
         (m) => m.type === 'error' || m.type === 'unsupported',

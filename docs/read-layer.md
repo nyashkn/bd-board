@@ -1,6 +1,6 @@
 # Read layer: one core, pluggable connectors
 
-Status: proposal (spike). Tracked by epic `bdb-84h` in the project's beads tracker. Full measurement grid: [reports/read-layer-poc.md](reports/read-layer-poc.md).
+Shipped (2026-10-31). Epic `bdb-84h`. Full measurement grid: [reports/read-layer-poc.md](reports/read-layer-poc.md).
 
 ## Problem
 
@@ -12,7 +12,7 @@ Evidence, desktop RUM over two days:
 - INP on the bead modal is 2.8 to 3.6 s, with 0 long tasks and 0 errors.
 - In a window that includes one bead-modal view, RUM records about 11 `projects`, 5 `list` and 3.5 `export` calls, against about 2 `show`.
 
-Evidence from the code, verified by reading the source on the spike branch:
+Evidence from the code before this work (each row was addressed; see [What changed vs the plan](#what-changed-vs-the-plan)):
 
 | Finding                                                                                                                                                                                                                   | Where                                                                                                  |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -92,6 +92,82 @@ bd 1.3.2 itself rejects the scheme (`unknown url scheme: 's3'`). A bucket remote
 
 Free tier: one client polling the manifest every 30 s uses 86,400 Class B operations a month (0.9% of 10 M). An inbox that is listed every 30 s uses 86,400 Class A operations (8.6% of 1 M).
 
+## RUM before and after
+
+Source: the desktop service (`bd-board-desktop`) in the `_rumdata` stream. Durations are the SDK's nanoseconds, shown in ms. The new desktop build (snapshot store, bd queue, persisted cache) was installed at 2026-10-31 00:34 UTC (03:34 Africa/Nairobi).
+
+- **Window A (before):** 2026-10-29 00:34 UTC to 2026-10-31 00:34 UTC.
+- **Window B (after):** 2026-10-31 00:34 UTC to 13:16 UTC, on build 824143e (snapshot store, bd queue, persisted cache, connectors; before #35 and #37). Use was light: 3 bead-modal views in 12 hours, and the app sat idle with a bead open overnight. Web-service events after the cutover are headless test runs against a local dev server and are excluded.
+
+| Metric                        | A: p50 / p95, N                                                                                              | B: p50 / p95, N                                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `bd.call.projects`            | 1269 / 1922 ms, N=124                                                                                        | 1067 / 1241 ms, N=659                                                                                  |
+| `bd.call.list`                | 1031 / 3826 ms, N=56                                                                                         | 943 ms, N=1, too few samples                                                                           |
+| `bd.call.export`              | 1426 / 4284 ms, N=39                                                                                         | 509 ms, N=1, too few samples                                                                           |
+| `bd.call.show`                | 736 / 5976 ms, N=15, too few samples                                                                         | none: bead opens read the snapshot                                                                     |
+| `bd.call.comment_author`      | 1072 / 5252 ms, N=9, too few samples                                                                         | 125 / 206 ms, N=3, too few samples                                                                     |
+| `bd.call.status`              | 5250 / 6198 ms, N=4, too few samples                                                                         | 200 / 230 ms, N=3, too few samples                                                                     |
+| `bd.call.snapshot` (bd-cli)   | not emitted                                                                                                  | 953 / 1014 ms, N=5, too few samples                                                                    |
+| `bd.call.dolt_snapshot`       | not emitted                                                                                                  | 190 / 226 ms, N=13, too few samples                                                                    |
+| `bd.call.dolt_comments`       | not emitted                                                                                                  | 5 / 19 ms, N=16, too few samples                                                                       |
+| `bd.call.probe`               | not emitted                                                                                                  | 96 / 138 ms, N=2, too few samples                                                                      |
+| INP, bead-modal view          | 1568 / 2848 ms, N=21                                                                                         | 664 / 664 ms, N=8, too few samples                                                                     |
+| `bd.call` per bead-modal view | 7 views: projects 9.7, list 4.6, export 3.0, show 2.0, comment_author 1.1, status 0.3 (N=7, too few samples) | 3 views: projects 218, dolt_comments 4.7, dolt_snapshot 2.3, comment_author 1.0 (N=3, too few samples) |
+| Long tasks                    | 0                                                                                                            | 0                                                                                                      |
+| Errors                        | 0                                                                                                            | 0                                                                                                      |
+
+In window B, `bd.call` by the `view` attribute was bead-modal 678, projects 11, board 9, none 4, knowledge 1. Window A has no `view` attribute, so A is grouped by the RUM view name that was active when the call finished (`view_name`).
+
+**What window B shows:**
+
+- **`show` is gone and `list`/`export` almost so.** A bead open no longer calls `bd`. For server-mode projects the whole read is one `dolt_snapshot` of about 0.2 s.
+- **Bead-modal INP p95 fell from 2.8 s to about 0.7 s.** It is still above the 300 ms target, and N=8 is too small to judge.
+- **The `projects` poll was nearly all the remaining `bd` traffic:** 659 calls at about 1 s each, one every 15 s while a bead stayed open overnight. Opening a bead did not cause them.
+
+**Build de91f58 (#35, #37), installed 2026-10-31 13:15 UTC:** the projects list now refetches only when a snapshot cursor moves (at most every 15 s) or every 60 s. In its first 5 minutes it made 3 `projects` calls (at start, then about once a minute) where the previous build made about 20, with no errors.
+
+### Queries
+
+Run per window with the window bounds as the search time range (`start`, `end`); `<service>` is `bd-board-desktop`.
+
+```sql
+-- bd.call.* p50/p95/count per label
+SELECT replace(vital_name, 'bd.call.', '') AS label, count(*) AS n,
+       approx_percentile_cont(vital_duration / 1000000, 0.5) AS p50,
+       approx_percentile_cont(vital_duration / 1000000, 0.95) AS p95
+FROM "_rumdata" WHERE service = '<service>' AND type = 'vital' AND vital_name LIKE 'bd.call.%'
+GROUP BY label ORDER BY label;
+
+-- INP on the bead modal view
+SELECT count(*) AS n,
+       approx_percentile_cont(view_interaction_to_next_paint / 1000000, 0.5) AS p50,
+       approx_percentile_cont(view_interaction_to_next_paint / 1000000, 0.95) AS p95
+FROM "_rumdata" WHERE service = '<service>' AND type = 'view' AND view_name = 'bead-modal'
+  AND view_interaction_to_next_paint IS NOT NULL;
+
+-- bead-modal views, and the bd.call made inside them (divide for calls per view)
+SELECT count(distinct view_id) AS n FROM "_rumdata" WHERE service = '<service>' AND view_name = 'bead-modal';
+SELECT replace(vital_name, 'bd.call.', '') AS label, count(*) AS n
+FROM "_rumdata" WHERE service = '<service>' AND type = 'vital' AND vital_name LIKE 'bd.call.%'
+  AND view_name = 'bead-modal' GROUP BY label ORDER BY label;
+
+-- bd.call by the new `view` attribute (empty before bead .1)
+SELECT context_view AS cv, count(*) AS n FROM "_rumdata"
+WHERE service = '<service>' AND type = 'vital' AND vital_name LIKE 'bd.call.%' GROUP BY cv ORDER BY n DESC;
+
+-- long tasks, errors
+SELECT count(*) AS n FROM "_rumdata" WHERE service = '<service>' AND type = 'long_task';
+SELECT count(*) AS n FROM "_rumdata" WHERE service = '<service>' AND type = 'error';
+```
+
+### Re-run
+
+Tracked by `bdb-84h.9`. Re-run after at least one day of active use on build de91f58; until window B has about 20 samples per cell the table says "too few samples". `scripts/o2/rum-before-after.py` runs these queries and prints the table. It reads `O2_URL`, `O2_ORG`, `O2_USER` and `O2_PASS` from the environment, and optionally `CUTOVER_UTC` and `SERVICE`:
+
+```bash
+python3 scripts/o2/rum-before-after.py
+```
+
 ## What other systems do
 
 Only the parts that transfer are listed here.
@@ -118,119 +194,125 @@ flowchart LR
   UI[React UI] --> Core[core: snapshot store + refresh + selectors]
   Core -->|connectorFor project| Sel{selection}
   Sel --> BDC[bd-cli connector<br/>TS server fn / Rust command]
-  Sel --> SQL[dolt-sql connector<br/>Rust, one pooled connection]
-  Sel --> HTTP[http-snapshot connector<br/>read-only, optional]
+  Sel --> SQL[dolt-sql connector<br/>desktop only, one pooled read-only connection]
+  Sel --> HTTP[http-snapshot connector<br/>web only, read-only]
   BDC -->|reads: export, ready, blocked, show<br/>change: events tail| BD[(bd: embedded or server)]
   SQL -->|reads: bulk SQL, HASHOF, DOLT_DIFF| DS[(dolt sql-server)]
-  HTTP -->|manifest ETag/304 + immutable snapshot| R2[(object store)]
+  HTTP -->|manifest ETag/304 + immutable snapshot| R2[(Worker + object store)]
   BDC & SQL -->|all writes| BDW[bd CLI]
+  HTTP -.->|queued comment| INBOX[(Worker inbox)]
+  INBOX -.->|scripts/apply-inbox.ts: bd comments add| BDW
 ```
 
 ### The core: one place, in the client
 
-The snapshot cache lives in the client's query cache (the browser or WebView side), not in each backend. This answers "must exist in both backends": it doesn't. The backends get only two small things: a `snapshot` call and a per-project `bd` queue.
+The snapshot cache lives in the client's query cache (the browser or WebView side), not in each backend. The backends add only a `snapshot` call and a per-project `bd` queue.
 
 1. **`snapshot(project)` returns `{ beads, ready, blocked, cursor }`.** Beads carry their comments, labels and edges.
    - **bd-cli:** `export`, then `ready`, then `blocked`, one after another, because parallel calls are slower on the embedded lock. That is about 800 ms embedded and about 270 ms in server mode.
-   - **dolt-sql:** a few bulk queries for beads; ready and blocked still come from `bd`.
-2. **One `bd` process per project at a time, in both backends.** Rust runs every `bd` call on the blocking pool (`spawn_blocking`) behind a per-project mutex. Node uses a per-project promise chain. Concurrent `snapshot` calls for the same project share one in-flight result: an in-flight map in Node, and the mutex plus "is a refresh already running" in Rust. This also covers several web tabs hitting one embedded lock.
+   - **dolt-sql:** one bulk SQL read for beads; ready and blocked still come from `bd`.
+   - The `cursor` is a hash of the `bd` outputs (the feed sequence would cost another call).
+2. **One `bd` queue per project, in both backends** (`src/lib/bd-queue.ts`, `adapters/bd_cli/queue.rs`).
+   - **Concurrency:** 1 call at a time, 4 once the probe shows a reachable Dolt server. Writes pass a limit-1 FIFO in front, so they land in arrival order.
+   - **Single-flight:** identical reads share one process. A caller never receives a read that began before its call, because a write may have landed in between.
+   - **Lanes:** two FIFO lanes, user calls before background polls and the probe. Nothing is preempted.
+   - **Timeouts:** every spawn has a 60 s timeout (`BD_BOARD_BD_TIMEOUT_MS`). On expiry the child's process group gets SIGTERM, then SIGKILL after 2 s. On quit, running children are not killed: a write runs to completion.
 3. **The refresh is driven by the feed.**
-   - **While the feed is live:** writes patch the cache optimistically and do not refetch, and the feed's change event drives the refresh.
-   - **What a change event fetches:** an event whose `op` touches only comments fetches `bd comments <id>` and patches that bead. Any other or unknown op runs a full snapshot.
-   - **Pacing:** refreshes are single-flight (one running plus one trailing) and debounced 300 ms. The next refresh may start no sooner than the last one took, which keeps the lock under 50% busy during agent bursts.
-   - **TanStack Query details:** use `cancelRefetch: false` so an in-flight `bd` process is never duplicated, and `cancelQueries` before optimistic patches.
-   - **While the feed is not live** (disabled, error or unsupported): keep today's fallback poll.
-4. **Selectors.** These are pure functions over the snapshot: the board list, bead detail, knowledge entries and `:::question` state (already parsed client-side in `bead-questions.ts`).
-   - **Board list:** filtered like `list`, so export-only types such as `gate` stay hidden.
-   - **Bead detail:** `parent` comes from the parent-child edge, and edge targets get their title, status and type joined by id.
-   - **Opening a bead costs no `bd` call.** Parity with `show` is pinned by a test, not checked at runtime.
-5. **Writes.** Writes go through `connectorFor(project)`. Every local connector writes through the `bd` CLI, because bd owns the schema, its hooks and the auto-commit. There are no SQL writes.
+   - **Feed live:** writes patch the cache optimistically and do not refetch. The feed's `change` message carries the journal `ops` behind it. A comment-only change fetches `bd comments <id>` and patches that bead; any other or unknown op runs a full snapshot.
+   - **Pacing:** single-flight (one running plus one trailing), debounced 300 ms, and the next refresh starts no sooner than the last one took. That keeps the lock under 50% busy during agent bursts.
+   - **TanStack Query:** a feed-driven refresh uses `cancelRefetch: true`, because a fetch already in flight may predate the change and joining it would mark stale data fresh. `cancelQueries` runs before optimistic patches, and `settleWrite` re-runs a cancelled refresh. Refreshes of a loaded snapshot and comment patches use the `background` lane; the first load is a user call.
+   - **Feed not live** (disabled, error, unsupported): the old fallback poll. http-snapshot has no feed; it polls the manifest.
+4. **Selectors** are pure functions over the snapshot: the board list (filtered like `list`, so export-only types such as `gate` stay hidden), bead detail (`parent` from the parent-child edge, edge targets joined by id), knowledge entries and `:::question` state. **Opening a bead costs no `bd` call**; parity with `show` is pinned by a test.
+5. **Persistence.** Snapshot queries (only those) are saved to IndexedDB, so a cold start paints the last board before any `bd` call returns. The restored data is stale and the normal background refresh revalidates it. At most 8 projects (LRU), 24 h max age, `buster` = the core schema version.
+6. **Writes** go through `connectorFor(project)`. Every local connector writes through the `bd` CLI, because bd owns the schema, its hooks and the auto-commit. There are no SQL writes.
 
 The palette's cross-project comment index keeps its own 60 s staleTime, because the feed only covers the open project.
 
+**Desktop layout.** `src-tauri/src` is split into `domain` (no outside imports), `ports` (`BeadSource` for reads, `BeadSink` for writes), `adapters` (`bd_cli`, `dolt_sql`), `app` and `commands`. Dependencies point one way (commands → app → ports ← adapters); `tests/architecture.rs` enforces it. Tauri commands are `async` and run `bd` on the blocking pool, so the UI thread no longer waits on a spawn. `just ci` (frontend gate plus format, clippy and `cargo test`) is the gate.
+
 ### Connectors
 
-| Connector       | Ingress (reads, change signal)                                                                                                         | Egress (writes)                          | Where                                            | When                                                                                       |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| `bd-cli`        | `export`, then `ready`, then `blocked`; `bd events tail --follow` (existing feed)                                                      | `bd` CLI                                 | TS server fn and Rust command (both exist today) | Default, zero config, any project. Already 4-5x faster on server-mode projects.            |
-| `dolt-sql`      | bulk queries on one pooled connection; `HASHOF('HEAD')` change probe (0.1 ms); optional `DOLT_DIFF` delta. Ready and blocked via `bd`. | `bd` CLI                                 | Rust only (desktop)                              | Projects already in server, shared or proxied mode. Gated on RUM after the snapshot store. |
-| `http-snapshot` | `manifest.json` with If-None-Match → 304; immutable `snap-<commit>.jsonl.gz`                                                           | none (read-only) or a Worker inbox later | TS client                                        | Viewers without Dolt or `bd` (web build, phone). Deferred.                                 |
+| Connector       | Ingress (reads, change signal)                                                                                                                     | Egress (writes)                                                                                                                 | Where                                               | Safety                                                                                                                                                                                                                                                                    |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bd-cli`        | `export`, then `ready`, then `blocked`; `bd events tail --follow` (the feed)                                                                       | `bd` CLI                                                                                                                        | Web (TS server fn) and desktop (Rust command)       | Default, zero config, any project. Per-project queue, timeouts and lanes (above).                                                                                                                                                                                         |
+| `dolt-sql`      | one bulk read on one pooled connection per project; `HASHOF('HEAD')` probe every second; `DOLT_DIFF` names the beads of a comment-only change      | `bd` CLI (SQL is read-only)                                                                                                     | Desktop only (Cargo feature `dolt-sql`, default on) | Read-only. `credentials_ref` names only `DOLT_REMOTE_USER`/`DOLT_REMOTE_PASSWORD` or `BD_BOARD_DOLT_*` variables. A non-loopback host needs TLS (`tls=true`), checked before any credential is read. No user or password in the URL.                                      |
+| `http-snapshot` | `manifest.json` with If-None-Match → 304, then an immutable `snap-<sha256 prefix>.jsonl.gz` verified against the manifest sha256; polls every 30 s | None. Comments can be queued on the Worker inbox (`POST /inbox`) and applied on the owner's machine by `scripts/apply-inbox.ts` | Web only (the token stays server-side)              | Read-only; every write is refused. Token from `credentials_ref`, a plain `BD_BOARD_SNAPSHOT_*` name. `https` only (plain `http` for localhost); redirects are errors, so the token never follows one. The inbox token can only queue; the UI does not call the inbox yet. |
 
-dolt-sql is the fast path for server-mode projects, but its marginal win is smaller than the headline numbers suggest:
+**dolt-sql details.** Its win is smaller than the headline numbers: server-mode `bd` already refreshes in about 270 ms and a warm bead open costs no call. What it adds is a near-free change probe and remote servers, where each `bd` process pays several RTTs. Against a temp local server, the SQL read takes about 1.4 ms (median) and a change shows in about 1.05 s with a 1 s poll, against about 225 ms for `bd export` + `ready` + `blocked`.
 
-- **What it actually saves.** Server-mode `bd` already serves a full refresh in about 270 ms, and with the snapshot store a bead opens with no call at all. The real gains are a near-free change probe and remote servers, where each `bd` process pays several RTTs.
-- **Schema drift.** It reads bd's tables directly, so a bd schema change could return wrong data without failing. Its tests must compare against `bd export` output, and it must check `schema_version` from the probe and refuse unknown versions, falling back to bd-cli.
-- **Credentials.** It must resolve them the way bd does: `BEADS_DOLT_PASSWORD`, then bd's credentials file and TLS settings. An app launched from Finder does not inherit shell variables.
+- **Reads.** The tables `issues`, `dependencies`, `labels` and `comments`, plus `schema_migrations`, in one multi-statement round trip inside a read-only transaction (about one RTT per refresh on a remote hub). It returns every row, closed beads and gates too, like `bd export`; wisps are not read.
+- **Same output as bd-cli.** Rows become `bd export` lines and go through the same `build_snapshot`. `src-tauri/tests/dolt_sql.rs` starts a temp `dolt sql-server` over a bd 1.3.2 fixture and compares bead lists field for field.
+- **Readiness.** Local server-mode projects keep `ready` and `blocked` on `bd`. A project with no local bd (an explicit `mysql://` source without `bd:`) gets them empty and `readiness_unavailable: true`, which the UI shows. The `ready_issues` and `blocked_issues` views disagree with `bd ready` / `bd blocked` on 1.3.2, so the reader does not use them.
+- **Schema drift.** On connect it requires `MAX(version)` of `schema_migrations` to be one it was checked against (66, bd 1.3.2), and otherwise fails with `source misconfigured (dolt-sql)`. That is deliberately not a fallback trigger, so a bd upgrade is noticed. Widen `SUPPORTED_SCHEMA_VERSIONS` only after re-running the parity test.
+- **Read-only.** The session is `READ ONLY`, but in Dolt 2.5.1 that blocks INSERT, UPDATE and DELETE and **not** DDL or `CALL`. The real guards: the adapter only builds `SELECT` text (a unit test pins every statement), and the login should be a SELECT-only database user ([remote-projects.md](remote-projects.md#reading-a-hub-over-sql-dolt-sql)). A project that lists only `mysql://` sources is read-only in the UI and in every write command.
+- **Credentials.** Where the login comes from depends on where the target came from. An explicit `mysql://` source uses `credentials_ref`, else the `[host:port]` entry of the beads credentials file, else no password. Only the server `bd dolt show` reported is resolved the way bd does (`BEADS_DOLT_*`). Any other variable name is refused at registry load and again at resolve time, so a registry entry cannot aim an arbitrary secret at an arbitrary host. A keychain reference is not implemented.
+- **Failure.** Connect, read and write timeouts are 2 s. `source unavailable (dolt-sql): …` (refused, timed out, TLS handshake, not in server mode) is connection-class and falls to the next source. `source misconfigured (dolt-sql): …` (bad login, unknown schema, remote without TLS) is shown, not skipped. Neither contains a host, user, password or URL. With no source left the board keeps the last snapshot and says "Hub unreachable, showing last snapshot (age)".
+- **Driver.** The sync `mysql` crate with rustls adds about 4.2 MB to the release binary (12.0 to 16.2 MB), so it sits behind the `dolt-sql` feature.
 
-Remote Dolt over a bucket (R2, S3, GCS) is not a connector. It is a project setup step: the machine keeps a local replica (`bd init --remote …`, then `bd sync` on a timer). bd-board reads that replica through bd-cli or dolt-sql like any local project. Its costs:
+**http-snapshot and the Worker.** The Worker and the writer ([README](../workers/snapshot/README.md)) are built and tested locally and **not deployed**. The Worker has separate read, write and inbox tokens and fails closed when one is unset. The inbox (`comment.add` only, validated, deduplicated by `client_id`, applied exactly once with an `(inbox)` author suffix) exists as a Worker queue, an applier script and `queueComment` in `src/lib/connectors/inbox.ts`. No UI calls it, so the bead modal's comment box is still read-only on http-snapshot projects.
 
-- Bucket credentials on every machine.
-- `bd sync` exits 2 on conflicts, which happen whenever two replicas edit the same bead between syncs.
-- Every bd schema upgrade must be migrated on one designated machine only (`bd migrate --help` warns that separate migrations on two clones fork the schema).
-- Something other than bd-board has to run the sync timer.
+**Remote Dolt over a bucket** (R2, S3, GCS) is not a connector ([remote-projects.md](remote-projects.md)). It is a project setup step: the machine keeps a local replica (`bd init --remote …`, then `bd sync` on a timer) that bd-cli or dolt-sql reads like any local project. Costs: bucket credentials on every machine; `bd sync` exits 2 when two replicas edit the same bead between syncs; schema upgrades must be migrated on one designated machine only; something other than bd-board runs the sync timer. It does not serve a phone or a web viewer.
 
-It does not serve a phone or a web viewer.
+**Migration** stays manual. bd-board only detects the mode. For embedded projects it offers a "Copy prompt" with the migration steps, the measured speed-up and three options: a local shared-server, a bucket remote and a remote deployed server ([procedure](remote-projects.md#a-make-a-project-faster-embedded-to-shared-server)). The docs recommend shared-server (one bd-managed server for all projects), which is not experimental in bd 1.3.2. bd-board's own tracker runs that way, with a Dolt remote on object storage.
 
 ### Automatic selection
 
-`connectorFor(project)` resolves once per project per session, caches the answer and re-resolves on error:
+`connectorFor(project)` is synchronous and returns a per-project router. On its first call the router builds an ordered candidate list, probes once per session, and uses the first candidate whose kind has a registered factory (`registerConnectorKind`). bd-cli is registered everywhere, http-snapshot in the web build only and dolt-sql in the desktop build only; the router skips a kind that is not registered.
 
-1. **Explicit source.** If the registry entry has a `source` URL, its scheme decides: `bd:` → bd-cli, `mysql://host:port/db` → dolt-sql, `https://…/manifest.json` → http-snapshot.
-2. **Probe.** Run `bd dolt show --json` once, with a hard timeout of about 2 s. If it reports `embedded: false`, `connection_ok: true` and a known `schema_version`, use dolt-sql on desktop with the reported host, port and database. Otherwise use bd-cli.
-3. **Fallback chain.** A dolt-sql connection, query or schema error falls back to bd-cli for that session, with a RUM event. http-snapshot has no fallback; it shows its error.
+1. **Explicit `sources`.** An optional ordered list on the registry entry, tried first to last: `bd:` → bd-cli, `mysql://host:port/db` → dolt-sql, `https://…` → http-snapshot. Any other scheme fails registry load. bd is not probed.
+2. **Default order** (no `sources`): local embedded bd, then a Dolt sql-server, then bd-cli. The probe is `bd dolt show --json` with a 2 s timeout. `embedded: true` → [bd-cli]; `embedded: false` with `connection_ok` → [dolt-sql at the reported host, port and database, bd-cli]; a probe error or timeout → [bd-cli].
+3. **Live fallback.** A connection-class error (refused, reset, unreachable; not "not found" or validation) marks that candidate unhealthy for the session, emits one `connector.fallback` RUM action (kinds only), retries on the next candidate and stays there. **Writes are never retried** (they may have committed): the candidate is marked and the error rethrown. A failed probe is retried once after 30 s. With no candidate left the original error is rethrown. The live feed picks a connector but does not fail over.
 
-bd-board never starts, stops or supervises a Dolt server, and never migrates a project between modes. In shared and proxied mode, bd itself autostarts the server.
+The probe reply carries the entry's `sources`, so the client needs no extra read. On desktop the Rust side, not the webview, decides which server dolt-sql talks to (the first `mysql://` entry of `sources`, else the server `bd dolt show` reports). bd-board never starts, stops or supervises a Dolt server and never migrates a project between modes.
 
-## The original five-step plan
+## What changed vs the plan
 
-| #   | Plan step                                                                         | Verdict                         | Change                                                                                                                                                                                                                                                                       |
-| --- | --------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Async Rust commands, show+comments in parallel, skip comments at 0                | Keep, but serialize per project | Use `async` plus `spawn_blocking` behind a per-project mutex. Async alone would run `bd` calls in parallel and slow embedded mode (lock). show+comments in parallel only helps in server mode, so do it there. Skipping comments at 0 is a small win; keep it.               |
-| 2   | Modal stops refetching `project-knowledge` (staleTime Infinity, feed invalidates) | Keep, widen                     | Also gate the always-mounted `KnowledgeDetailModal` observer with `enabled`, and give the three `['projects']` observers one shared options object. These are the real sources of the extra `projects` and `export` calls. Keep the fallback poll when the feed is not live. |
-| 3   | Per-project in-memory snapshot, built in both backends                            | Keep, move to the client        | One cache in the client. Backends add only a `snapshot` call, the per-project queue and in-flight coalescing. M, not L.                                                                                                                                                      |
-| 4   | Persist the React Query cache                                                     | Keep, small, after 3            | A raw snapshot is about 0.9 MB per project, which is too big for localStorage across projects. Persist to IndexedDB with `buster` = core schema version.                                                                                                                     |
-| 5   | R2 snapshot + Worker + inbox                                                      | Narrow and defer                | Machines that run `bd` can use a Dolt bucket remote (a bd setup step, no bd-board code). A Worker snapshot is only for viewers without Dolt.                                                                                                                                 |
-| +   | `cargo test` in CI                                                                | New, first                      | CI runs fmt and clippy only, so Rust changes in step 1 would land untested.                                                                                                                                                                                                  |
-| +   | Caller label on `bd.call`                                                         | New, ships with 1-2             | A `source` attribute in `tracked()`, then a before/after RUM query. Not a gate.                                                                                                                                                                                              |
-| +   | dolt-sql connector                                                                | New, gated                      | The fast path for server-mode projects. Build it after the snapshot store, if RUM still shows refresh or remote cost.                                                                                                                                                        |
-
-Recommended order:
-
-1. `cargo test` in CI.
-2. Step 1 (per-project queue + `spawn_blocking`) together with step 2 (query hygiene) and the caller label. All small.
-3. The seam (the scaffold PR from this spike).
-4. Snapshot store in the client, with the feed-driven refresh and the parity test.
-5. Persisted cache (IndexedDB).
-6. RUM after. Re-decide steps 7-9 on the numbers.
-7. Probe and auto-selection, then the dolt-sql connector.
-8. Remote setup docs (bucket remote, manual server migration).
-9. http-snapshot only if a no-Dolt viewer is needed.
+| Plan step                                                             | Shipped as                                                                                                                                                                             | PR            |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `cargo test` in CI (new, first)                                       | `cargo test` in CI, then `just ci` as the single gate                                                                                                                                  | #24, #31      |
+| 1. Async Rust commands, show+comments in parallel, skip comments at 0 | `async` commands plus `spawn_blocking` behind a per-project queue (serialized, not parallel, because of the embedded lock); spawn timeouts; later lanes, serialized writes and signals | #20, #26      |
+| 2. Modal stops refetching `project-knowledge`                         | Query hygiene, widened: the always-mounted knowledge observer is gated and the three `['projects']` observers share one options object                                                 | #18           |
+| Caller label on `bd.call` (new)                                       | `view` attribute on every `bd.call.*` vital                                                                                                                                            | #19           |
+| The seam (new)                                                        | `Connector` interface with bd-cli as the only connector                                                                                                                                | #13           |
+| 3. Per-project snapshot, built in both backends                       | One client-side snapshot store and feed-driven refresh; bead open with zero `bd` calls on a warm cache                                                                                 | #27           |
+| 4. Persist the React Query cache                                      | Snapshot queries only, in IndexedDB, with a `buster`                                                                                                                                   | #28           |
+| Probe and auto-selection (new)                                        | Ordered `sources`, probe, live read fallback, writes never retried                                                                                                                     | #22           |
+| dolt-sql connector (new)                                              | Built: read-only, desktop only, parity-tested against `bd export`                                                                                                                      | #33           |
+| 5. R2 snapshot + Worker + inbox (narrowed)                            | Built but **not deployed**: writer and token-gated Worker; read-only `http-snapshot` connector; write-back inbox (Worker queue and applier, no UI)                                     | #23, #30, #29 |
+| Remote setup docs, migration                                          | [remote-projects.md](remote-projects.md); migration copy-prompt                                                                                                                        | #21, #25      |
+| Not in the plan                                                       | `desktop.rs` split into domain, ports, adapters, app and commands, with an architecture test                                                                                           | #24           |
 
 ## Risks
 
-- **Migration.** Moving a project from embedded to server mode has no `bd` command in 1.3.2. Every live `bd` process and agent on that project must stop, and backup targets and remotes must be re-checked. It stays a manual, owner-approved, per-project step. bd-board only detects the mode.
-- **Lock contention with agents.** Every bd-board refresh holds the embedded lock and slows the agents' own `bd` writes. The per-project queue, the minimum gap between refreshes and op-based patches keep the lock under 50% busy. Measure this during a real agent burst.
+- **Lock contention with agents.** Every bd-board refresh holds the embedded lock and slows the agents' own `bd` writes. The queue, the minimum gap between refreshes and op-based patches are meant to keep it under 50% busy. Not yet measured during a real agent burst.
+- **Migration.** Moving a project from embedded to server mode has no `bd` command in 1.3.2. It stays a manual, owner-approved, per-project step; bd-board only detects the mode.
 - **Snapshot size.** Export grows with comments. At 274 KB gzipped (0.9 MB raw) for 234 beads it is fine. Above a few thousand beads, refresh by delta (`DOLT_DIFF`, or feed ids followed by `show`).
-- **Field parity.** Export includes hidden types, has no `parent`, and lacks edge-target fields. A test pins snapshot-derived detail against `show` on a generic fixture.
-- **Stale reads.** A snapshot can lag a write by one refresh. Writes patch the cache optimistically until the feed confirms.
-- **Bucket remotes are multi-writer.** Two replicas that edit the same bead between syncs conflict (`updated_at` changes on every write), and `bd sync` exits 2. A human has to resolve it.
-- **Worker surface.** A deployed Worker is internet-reachable. It needs a token, which is one more secret to rotate. That is a reason to defer it.
-- **Hung `bd` calls.** One call in the POC hung for more than 120 s. Every spawn needs a timeout, or one hung process blocks the per-project queue.
+- **Stale reads.** A snapshot can lag a write by one refresh, and a persisted snapshot is stale until the first refresh returns. Writes patch the cache optimistically until the feed confirms.
+- **bd upgrades.** dolt-sql refuses an unchecked schema version, and the parity test must be re-run on each new bd. Field parity of snapshot-derived detail against `show` is pinned by a test on a generic fixture.
+- **Bucket remotes are multi-writer.** Two replicas that edit the same bead between syncs conflict, and a human resolves it.
+- **Worker surface.** A deployed Worker is internet-reachable and needs three tokens to manage (read, write, inbox). The inbox has a queue bound of 500 but no per-token rate limit; add a Cloudflare rule if it is deployed.
+- **Remote dolt-sql.** A hub login that is not SELECT-only can run DDL or `CALL` on the session, because Dolt's read-only mode does not block them.
 
 ## Decisions
 
-- **Migration (owner, 2026-10-30).** bd-board only detects server mode. It uses dolt-sql where a server already exists and never migrates a project. Migration stays a manual, per-project step. For embedded projects, bd-board offers a "Copy prompt" that gives an agent the migration steps, the measured speed-up and three options: local shared-server, a bucket remote (S3, R2 or GCS) and a remote deployed server.
-- **Recommended mode (owner, 2026-10-30).** The docs and the prompt recommend shared-server: one bd-managed server for all projects. It is not experimental in bd 1.3.2.
+- **Migration (owner, 2026-10-30).** bd-board only detects server mode, uses dolt-sql where a server already exists, and never migrates a project.
+- **Recommended mode (owner, 2026-10-30).** The docs and the prompt recommend shared-server.
 
-## Open questions (owner)
+## Open items
 
-- Is a no-Dolt viewer (web or phone) in scope? If not, http-snapshot, the R2 writer, the Worker and the inbox are dropped.
+Follow-ups are tracked in bead `bdb-84h.20`; the RUM re-run in `bdb-84h.9`.
+
+- **Is a no-Dolt viewer (web or phone) in scope?** If not, http-snapshot, the Worker, the writer and the inbox can be dropped. Deploying the Worker is the owner's call.
+- **Inbox UI.** Whether the bead modal's comment box should queue through the inbox on http-snapshot projects.
+- **RUM re-run** (`bdb-84h.20`): 12 hours of window B confirm that a bead open emits no `show`, but only 3 bead opens happened. Re-run on build de91f58 after a day of active use to judge the 300 ms target (N≥20).
 
 ## Not verified
 
-- **The source of the RUM call counts.** They are inferred from code, and the labelled trace is pending.
-- **Real-network behaviour.** Remote numbers are simulated (no jitter, loss or TLS). Remote SQL write-to-visible was not measured.
-- **`bd serve` behaviour.**
-- **Unsafe connections.** Whether `HASHOF('HEAD')` and `DOLT_DIFF` are safe on a connection that `bd` also writes through, and whether uncommitted `WORKING` rows ever appear (bd auto-commits, so it is not expected).
-- **Bulk-query correctness.** Whether one bulk SQL read matches `bd export` field for field. The dolt-sql connector must test against bd's output, not against the schema.
-- **Main-thread time.** The main-thread time saved by async commands is expected from the Tauri docs but not profiled.
+- **The 300 ms p95 target.** There are no desktop samples from the new build yet.
+- **Why the old build called what it did.** The RUM call counts were inferred from code; the `view` label now makes this checkable.
+- **Real-network behaviour.** Remote numbers are simulated (no jitter or loss), and no remote SQL write-to-visible time was measured.
+- **Safety of `HASHOF('HEAD')` and `DOLT_DIFF`** on a connection that `bd` also writes through, and whether uncommitted `WORKING` rows ever appear (bd auto-commits, so none are expected).
+- **`bd serve`.** Not measured; it refuses workspaces under temporary directories.
+- **Main-thread time saved by async commands.** Expected from the Tauri docs, not profiled.
+- **Lock contention in a real agent burst.**
+- **The deployed Worker and the writer** against real R2 in steady use: the edge numbers above are from a POC, not from the shipped Worker.

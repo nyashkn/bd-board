@@ -1,5 +1,6 @@
 import {
   fakeProject,
+  fakeSnapshot,
   resetBrowserApp,
   waitForSidebarWidth,
 } from '../../helpers.js'
@@ -10,7 +11,7 @@ describe('sidebar collapse inside a project', () => {
   beforeEach(async () => {
     await resetBrowserApp('/p/tako', {
       list_projects: [fakeProject('tako', 'tako')],
-      list_beads: [],
+      get_project_snapshot: fakeSnapshot(),
       desktop_probe: null,
       get_project_knowledge: { entries: [] },
     })
